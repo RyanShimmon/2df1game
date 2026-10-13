@@ -1,1 +1,126 @@
-# 2df1game
+# V10 — Grand Prix
+
+Version **1.0.0**.
+
+A local browser game with top-down V10 racing, 22 cars, five tyre types, dynamic weather, qualifying and a saved career. Requires Node.js 18 or newer; no dependency installation is needed.
+
+## Play
+
+```sh
+npm run dev
+```
+
+Open http://127.0.0.1:5173. Use `PORT=5174 npm run dev` for a separate preview/save. Career data is stored in browser localStorage, scoped to host and port.
+
+| Control               | Action                                                   |
+| --------------------- | -------------------------------------------------------- |
+| W / Up                | Accelerate                                               |
+| S / Down              | Brake                                                    |
+| A / D or Left / Right | Steer                                                    |
+| B                     | Request/cancel a pit stop, including in qualifying       |
+| P                     | In manual limiter mode, toggle the 80 km/h limiter                               |
+| R                     | Reverse in the pit lane if you overshoot the box         |
+| 1 / 2 / 3 / 4 / 5     | Next compound: soft / medium / hard / intermediate / wet |
+| F                     | Cycle save / balanced / push                             |
+| M                     | Toggle circuit overview                                  |
+| T                     | Cycle next pit compound (S/M/H/I/W)                       |
+| Escape                | Pause / resume                                           |
+
+Touch pedals, steering and reverse are available on touch devices. Sound is opt-in. Switching away from the browser pauses the game.
+
+## Driving and strategy
+
+Power builds progressively toward 330 km/h. Steering and sliding reduce acceleration and scrub speed; a clean corner exit helps carry momentum onto the straight. A controlled low-fuel acceleration test takes approximately nine seconds to reach 330. Career starter cars are slower; upgrades improve power, grip, tyre conservation and service time. Wider red-and-white inside kerbs identify corner apexes. The track has no painted centre line or driving-line assist.
+
+Soft tyres are fastest but last roughly 9 race laps; mediums 13; hards 19. Actual life depends on driving, upgrades and water. Out laps and pit travel are gentler on tyres. A complete dry qualifying outing generally leaves about 80–85% soft condition, allowing the same physical set to be used for another session.
+
+Fuel is expressed in fuel laps. Balanced driving uses approximately 1.1 per circuit lap. Save reduces pace, fuel use and wear; push trades resources for speed. Fuel weight reduces pace. There is no battery or race refuelling.
+
+Dry races require two different dry compounds. Using intermediate or wet tyres waives that requirement. Qualifying compounds do not count toward race tyre usage.
+
+## Weather
+
+Quick race offers dry, showers, wet-to-dry and late-rain patterns. Career weather is assigned by weekend. Each Grand Prix starts a new forecast timeline while retaining the surface water and tyre condition from qualifying. Forecast, rainfall, track wetness and penalties appear in the HUD. A scrolling six-minute timebar along the bottom shows rainfall and predicted surface water, using the live drainage model.
+
+Rain adds water to 32 track sectors. Different drainage rates and a drying racing line affect local grip. Rain stops before the road becomes dry: water disappears gradually. Slicks lose grip in rain; intermediates are best in damp conditions; wets are best in deeper water. Intermediates and wets wear faster on a drying road. AI drivers react to crossover conditions and retain the same finite inventory as the player.
+
+Weather uses deterministic evolving profiles rather than external weather data. It is an arcade water/grip model, with rendered wet asphalt and rain, not a full fluid simulation.
+
+## Pit stops
+
+Request a stop before crossing the pit-entry point. A late request waits for the next lap rather than teleporting back to entry. Steering through the lane is assisted; the player controls acceleration, braking and reverse.
+
+The highlighted outline marks your team's pit box. Brake to a full stop inside it to begin service. Passing over the box at speed does **not** start the stop. If you miss it, brake and hold R to reverse. You cannot exit the lane without service, and throttle/reverse are ignored until the tyre change finishes. Team boxes are spaced along the lane, with cars moving into an outside bay to stop. A busy teammate's box delays service.
+
+P enables the 80 km/h limiter. Speeding incurs five seconds, served during the stop. Tyre service is random between 2.3 and 5.5 seconds. Each crew upgrade lowers the maximum by 0.5 seconds, to 3.5 seconds at level four; the minimum stays 2.3 seconds. Penalty service is additional. Pit loss includes lane travel, your braking and service. Race stops mount an actual available tyre set without refreshing its wear. Qualifying stops also refuel to a new outing load.
+
+## Track limits and contact
+
+Leaving the circuit triggers a warning once per continuous excursion; returning fully to the track rearms detection. Three warnings are allowed. The fourth infringement adds five seconds; another four infringements add another five. Qualifying excursions delete the affected flying lap. The HUD shows warnings and total penalty seconds, with engineer messages for each incident.
+
+AI passing choices stay committed for a short period and lateral movement is capped. Oriented car bounds resolve overlaps gradually while retaining AI position/offset changes, instead of snapping cars back to the centreline. Damage and punctures are not yet simulated.
+
+## Career and weekends
+
+Name your driver and choose one of 11 teams. Every team starts with £7,000 and a slower development car. Sign one sponsor per race, earn position money and upgrade your car. The top ten score 25/18/15/12/10/8/6/4/2/1. A six-round season pays an additional £150 per season point.
+
+Career race distance is fixed by the weekend, not selected by the player:
+
+| Weekend | Circuit | Laps | Weather |
+| --- | --- | --- | --- |
+| Northline Opener | Northline Motor Park | 24 | Showers |
+| Velocity Trophy | Velocity International | 24 | Wet → dry |
+| Sunset Grand Prix | Sunset Speedway | 20 | Dry |
+| Harbour Sprint | Harbour Street Circuit | 14 | Late rain |
+| Crossover Challenge | Crossover Park | 24 | Showers |
+| Alpine Finale | Alpine Ridge | 24 | Late rain |
+
+The quick-race circuit selector offers all 12 circuits. Existing active weekends retain their saved track (older weekends remain at Northline). New career weekends use the varied calendar. Reset career clears identity, cash, upgrades, sponsor, points, history and the active weekend after confirmation.
+
+Each career round requires Q1 → Q2 → Q3 knockouts: 22 → 16 → 10 cars. Stage clocks are 18, 15 and 13 minutes; best times reset between stages. Grid positions 17–22 come from Q1, 11–16 from Q2, and 1–10 from Q3. Equal times favour the earlier lap. All cars start in their pit garages. Press W / ↑ to leave whenever you choose; AI drivers leave at independently random times and wait again after each run. Each outing includes an out lap, one timed lap and an in lap. Additional laps cannot count until you return to your box and complete service. Fuel covers those three laps in Push mode, including the pit detour. Service refuels the car; a tyre change is optional and KEEP FITTED is the default. Actual set wear and distance persist. After service, release the throttle and press forward again to leave. You can finish the run early or end the stage to simulate the remainder. Eliminated players can simulate the remaining qualifying. No valid time means the back of that stage; the prototype allows a race start rather than modelling stewards' 107% waivers. Inter-session waiting breaks are skipped.
+
+Dry allocation is 13 sets: H1–H2, M1–M3, S1–S8, plus I1–I5 and W1–W2. Since practice is not playable, H2, M3 and S5–S8 are returned before Q1. S4 is reserved for Q3; Q3 participants return it afterwards, while eliminated drivers retain it for the race. Every physical set stores wear, distance and used status. Starting set choice is free among remaining sets. The pit selector chooses exact sets; compound keys choose the freshest available set of that type.
+
+Weekend state, weather, tyres, timing and grid save automatically. Reloading returns to the garage while preserving consumed tyres and completed laps. Finishing or retiring the race settles the round and starts a fresh allocation next weekend. Quick race uses unlimited replacement tyres. Remaining AI qualifying runs use a deterministic pace estimate; races and player qualifying runs use the driving model. Upgrades are locked after the weekend starts.
+
+## Verify
+
+```sh
+npm run check
+npm test
+```
+
+Tests cover player/AI races, tyre strategy, weather/drainage, tyre crossover grip, manual pit stops and overshoots, qualifying pit/refuelling, track-limit warnings, collision continuity, progressive acceleration, apex placement, scheduled distances, finite tyre inventories, knockouts, saves, career reset, sponsors and upgrades.
+
+Palette interpretations use the recognisable 2026 team colours, not licensed car models. Reference: [2026 teams](https://www.formula1.com/en/teams). Sporting-format reference: [FIA 2026 rules, B2.4 and B6](https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_b_sporting_-_iss_06_-_2026-04-28.pdf). Opponent performance is game balance. Fonts are optional network downloads with system fallbacks.
+
+The qualifying tower lists every driver’s PITS / OUT LAP / TIMED LAP / IN LAP state. A pinned cutoff card names the last advancing driver and shows your required improvement or buffer ahead of elimination; the boundary is marked in the scrollable results. Q3 shows the gap to pole.
+
+Qualifying fuel is fixed at the defined three-lap amount. Its next-stop selector adds a coloured Current choice before Soft, selected by default to keep the fitted tyres. Replacement compounds automatically choose the best-condition available physical set; there is no duplicate next-set dropdown. Service hold displays its remaining seconds.
+
+Selecting a sponsor locks the contract for that weekend and replaces the choices with its conditions and payout, preserving the current scroll position. Pit speed limiting defaults to automatic; the Settings preference persists across reloads. Wet asphalt retains a uniform surface tint without a centre stripe. Contacts transfer momentum along the impact normal, and AI retains lateral impact motion while avoiding occupied passing space.
+
+Off-track rolling resistance falls at low speed, allowing a fuelled car to accelerate and steer back onto the circuit even on wet slicks. Long excursions reacquire lap progress on rejoining. Player physics reads local surface water every step; grip limits lateral force without cancelling the skid threshold. Slicks slide heavily during fast wet cornering but retain low-speed control. Car poses interpolate between 60 Hz simulation steps, with a smoothed camera lookahead to prevent high-speed visual judder.
+
+Pit entry and exit markings now share the exact assisted-route endpoints, and the merge guide remains visible over the main road. Automatic limiting starts at the entry line and releases at the exit line. Completed laps are tracked independently of wrapped route coordinates: being passed by a lapped car does not change your race position. Live order remains on-track; intervals include unserved penalties (with PEN shown), while final classification applies adjusted finishing times. Wet asphalt is drawn as one continuous road stroke, without sector rectangles or gaps.
+
+Wet drifts now use a separate travel direction and body heading. Grip limits how quickly the velocity vector turns; sideways slip retains momentum and can be recovered with countersteering. Soft wear is increased by approximately 11% (nominal life 9 laps). Automatic pit mode now controls lane speed, brakes to the exact team box, holds for service and drives out without any pedal input. Qualifying auto stops refuel and automatically depart on an out lap, retaining the current set when selected. Disable Automatic pit stops in Settings to return to manual pedals, limiter and qualifying garage release.
+The full pit-road surface is drawn through both merge tails, with no main-road clipping hiding its start or end. Pit activation and painted boundaries coincide with these visible endpoints. Telemetry (speed, tyre condition, fuel and drive mode) is centred at the top, with track/weather information directly beneath; position, lap/session and time sit above live timing on the left. The driving-line renderer, shortcut and help have been removed. All compounds use the same lateral-force drift physics; worn tyres and wet-weather tyres on dry asphalt visibly slide when grip is insufficient.
+
+Countersteering gets additional yaw and lateral recovery authority, with a modest further boost when throttle is applied; normal turning retains its grip limits. Damp-to-wet slick grip now ranks Hard > Medium > Soft, with a pronounced Intermediate advantage. Dry slick ordering remains Soft > Medium > Hard. The player ring and YOU marker pulse four times during the four-second starting countdown, then disappear at lights out. The Northline building has moved outside the circuit and pit-road footprints.
+
+
+## Circuit collection
+
+Northline plus 11 new original layouts are playable: Velocity International, Harbour Street Circuit, Sunset Speedway, Alpine Ridge, Crossover Park, Dunes Grand Prix, Forest Run, Riviera Port, Metro Flyway, Copper Canyon and Aurora Grand Prix. Layouts include a high-speed triangle, banked oval, mountain course, tall serpentine, coastal kite, comb of switchbacks, L-shaped circuit and two different crossing layouts. Dunes has twin straights joined by stadium hairpins.
+
+Crossover Park and Metro Flyway have elevated crossings. Level-aware nearest-path projection preserves player lap progress through the crossing; cars on different levels do not collide. The renderer draws lower cars under the elevated road and upper cars over it, using normal asphalt and track-edge colours without special flyover labels. Sunset, Copper Canyon and Aurora have smoothly banked sections with up to 16% additional cornering grip. Camera framing, minimaps, pit geometry, apex kerbs, local weather and qualifying fuel adapt to the chosen circuit.
+
+
+### Circuit boundary audit and Quick Race grids
+
+Quick Race has a starting-position dropdown below Race distance, from P1 to P22 (default P22). The player is inserted into the chosen slot and every AI car retains a distinct grid slot. Career positions still come from qualifying.
+
+All 12 circuits have been checked for folded inside boundaries, kerb overlap and merged same-level road sections. Ten layouts had bends opened up; Metro's repaired layout and Sunset's oval already had sufficient clearance. Harbour retains distinct street esses; Crossover's adjacent sections have been separated without removing its flyover. Geometry tests cover the complete closed lap, including the start-line seam, with at least 40 units of radius beyond the road half-width and 50 units between non-adjacent same-level road surfaces.
+
+Automated play-tests apply steering, throttle and braking through complete dry and wet player laps on every circuit, then enter each physical pit entrance, stop for service and exit automatically. Full 22-car races also complete on every circuit with legal tyre usage and fuel remaining. Browser checks inspect every circuit's rendered road edges and confirm Quick Race grid selection works and is hidden in Career.
