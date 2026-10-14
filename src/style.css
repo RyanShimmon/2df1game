@@ -1650,3 +1650,37 @@ input[type="range"] {
 @media(max-width:800px) { .school-shell,.mobile-game .school-shell { height:calc(100dvh - 63px); } }
 
 .mobile-game .school-intro { max-height:100%; }
+
+.fullscreen-steps { padding-left:20px; margin:18px 0; font-size:13px; line-height:1.5; color:#c7d6d0; }
+.fullscreen-steps li + li { margin-top:8px; }
+.mobile-racing .forecast-legend { line-height:9px; }
+.mobile-racing .weather-timeline { height:38px; }
+/* Safari's visible browser bars can leave less than 330px for landscape play. */
+@media(orientation:landscape) and (max-height:330px) {
+ .mobile-racing .top-dashboard,.mobile-racing .top-dashboard.temperatures-disabled { width:300px; max-width:calc(100vw - 300px); padding:6px 8px; column-gap:7px; grid-template-columns:29px minmax(0,1fr) minmax(0,1fr) 34px; }
+ .mobile-racing .top-dashboard.temperatures-disabled { grid-template-columns:29px minmax(0,1fr) minmax(0,1fr); }
+ .mobile-racing .top-dashboard .speed strong { font-size:26px; }
+ .mobile-racing .tyre-temperature { width:34px; min-width:34px; }
+ .mobile-racing .temperature-wheels { grid-template-columns:10px 10px; gap:3px 8px; margin-top:4px; }
+ .mobile-racing .temperature-wheel { height:15px; }
+ .mobile-racing .top-dashboard > .drive-modes { margin-top:4px; }
+ .mobile-racing .drive-modes .tab { min-height:22px; padding:4px 3px; }
+ .mobile-racing .weather-hud,.mobile-racing .weather-hud.temperatures-disabled { top:70px; padding:3px 6px; font-size:7px; }
+ .mobile-racing .weather-hud b { font-size:7px; }
+ .mobile-racing .race-bottom { bottom:calc(40px + env(safe-area-inset-bottom)); }
+ .mobile-racing .touch-controls { bottom:calc(40px + env(safe-area-inset-bottom)); }
+ .mobile-racing .touch-controls button { width:52px; height:52px; font-size:11px; }
+ .mobile-racing .steering-stick { width:74px; height:74px; }
+ .mobile-racing .stick-knob { width:32px; height:32px; }
+ .mobile-racing .race-bottom > .engineer { padding:5px 8px; font-size:8px; }
+ .mobile-racing .school-guide { max-height:calc(100dvh - 185px); }
+ .mobile-racing .weather-timeline { height:36px; padding-top:2px; }
+ .mobile-racing #weather-timebar { height:21px; }
+}
+
+/* Disable double-tap zoom while preserving scrolling in menus and dialogs. */
+.mobile-game { touch-action:manipulation; }
+.mobile-game button,.mobile-game input,.mobile-game select { touch-action:manipulation; }
+.mobile-racing .touch-controls button,.mobile-racing .steering-stick { touch-action:none; }
+.mobile-game .modal { touch-action:pan-y; }
+.home-screen-help { margin-top:18px; width:100%; }

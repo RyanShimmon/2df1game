@@ -1,6 +1,6 @@
 # V10 — Grand Prix
 
-Version **1.3.0**.
+Version **1.3.1**.
 
 A local browser game with top-down V10 racing, 22 cars, five tyre types, dynamic weather, qualifying and a saved career. Requires Node.js 18 or newer; no dependency installation is needed.
 
@@ -167,6 +167,8 @@ Settings includes Tyre temperature simulation, enabled by default and saved per 
 
 ### Mobile landscape play
 
-Touch devices use a compact landscape race HUD, independent multi-touch pedals and a choice of thumbstick or left/right arrow steering in Settings. Thumbstick sensitivity is adjustable. Portrait racing is blocked with a rotate prompt; returning to landscape requires Resume. Menus remain usable in portrait. Backgrounding, interruptions, popups and control changes clear held inputs. Fullscreen requests and landscape locking are offered where the browser supports them; manual rotation remains the fallback.
+Touch devices use a compact landscape race HUD, independent multi-touch pedals and a choice of thumbstick or left/right arrow steering in Settings. Thumbstick sensitivity is adjustable. Portrait racing is blocked with a rotate prompt; returning to landscape requires Resume. Menus remain usable in portrait. Backgrounding, interruptions, popups and control changes clear held inputs. The fullscreen button requests fullscreen and landscape locking where supported. On iPhone Safari or unsupported browsers it instead explains Home Screen web-app mode, which removes browser bars; manual rotation remains available. Short landscape viewports use a smaller HUD and controls.
 
 Mobile tyre choices use the full paused tyre-set selector rather than compound shortcut icons, including Quick Race starting tyres. The timing board opens on demand and pauses driving, tyre-temperature details are tappable, and the weather forecast stays compact along the bottom. Race School replaces keyboard instructions with touch instructions for the selected steering mode. Rendering uses a lower pixel-density cap and fewer decorative/rain elements on mobile while retaining the same 22-car simulation and physics.
+
+Double-tap zoom is disabled on touch devices while menu/dialog scrolling and independent driving fingers remain supported. Fullscreen help and Settings → Play from Home Screen show platform-specific installation steps for Safari on iPhone and Chrome on Android. The standalone manifest includes Home Screen icons for both platforms.

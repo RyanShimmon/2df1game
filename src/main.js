@@ -119,7 +119,7 @@ function compounds(selected, prefix) {
     .join("");
 }
 function header() {
-  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.3</div></header>`;
+  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.3.1</div></header>`;
 }
 function tabs() {
   return `<div class="tabs"><button class="tab ${screen === "quick" ? "active" : ""}" data-screen="quick">Quick race</button><button class="tab ${screen === "career" ? "active" : ""}" data-screen="career">Career garage</button><button class="tab" data-action="school">Race School</button><button class="tab" data-action="help">How to drive ↗</button><button class="tab" data-action="settings">Settings</button></div>`;
@@ -196,7 +196,7 @@ function showSettings() {
   const previousPaused=paused;
   if(race) {paused=true;resetDrivingInput();}
   const modal=document.createElement("div");modal.className="modal-backdrop";modal.id="settings-modal";
-  modal.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div class="eyebrow">RACE SETTINGS</div><h2 id="settings-title">Settings</h2><div class="field"><label for="ai-difficulty">AI difficulty</label><select id="ai-difficulty">${Object.entries(DIFFICULTIES).map(([id,d])=>`<option value="${id}" ${settings.difficulty===id ? "selected" : ""}>${d.name}${d.prizeBonus ? ` · +${Math.round(d.prizeBonus*100)}% career race prize` : ""}</option>`).join("")}</select></div><p class="hint" style="margin:10px 0 20px">Applies to your next quick race or career weekend. An existing weekend keeps its difficulty. Bonuses apply to legal finishes; sponsor payouts stay fixed.</p><label class="setting-choice"><input type="checkbox" id="auto-pit-limiter" ${settings.autoPitLimiter ? "checked" : ""}> Automatic pit stops</label><p class="hint">Enabled by default: holds 80 km/h, brakes into your box, completes service and drives to pit exit without throttle. Disable this for manual pedals and P limiter control.</p><label class="setting-choice"><input type="checkbox" id="tyre-temperature-setting" ${settings.tyreTemperature ? "checked" : ""}> Tyre temperature simulation</label><p class="hint">Turn off to hold all tyres at ideal temperature and hide the indicator. Wear and weather grip still apply. Applies to all drivers immediately.</p><div class="mobile-settings"><div class="field"><label for="mobile-steering">Mobile steering</label><select id="mobile-steering"><option value="stick" ${settings.mobileSteering==="stick" ? "selected" : ""}>Thumbstick</option><option value="arrows" ${settings.mobileSteering==="arrows" ? "selected" : ""}>Left / right arrows</option></select></div><div class="field sensitivity-field"><label for="steering-sensitivity">Thumbstick sensitivity</label><input id="steering-sensitivity" type="range" min=".6" max="1.5" step=".1" value="${settings.steeringSensitivity}"></div></div><button class="primary" id="close-settings">BACK TO GAME</button></section>`;
+  modal.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div class="eyebrow">RACE SETTINGS</div><h2 id="settings-title">Settings</h2><div class="field"><label for="ai-difficulty">AI difficulty</label><select id="ai-difficulty">${Object.entries(DIFFICULTIES).map(([id,d])=>`<option value="${id}" ${settings.difficulty===id ? "selected" : ""}>${d.name}${d.prizeBonus ? ` · +${Math.round(d.prizeBonus*100)}% career race prize` : ""}</option>`).join("")}</select></div><p class="hint" style="margin:10px 0 20px">Applies to your next quick race or career weekend. An existing weekend keeps its difficulty. Bonuses apply to legal finishes; sponsor payouts stay fixed.</p><label class="setting-choice"><input type="checkbox" id="auto-pit-limiter" ${settings.autoPitLimiter ? "checked" : ""}> Automatic pit stops</label><p class="hint">Enabled by default: holds 80 km/h, brakes into your box, completes service and drives to pit exit without throttle. Disable this for manual pedals and P limiter control.</p><label class="setting-choice"><input type="checkbox" id="tyre-temperature-setting" ${settings.tyreTemperature ? "checked" : ""}> Tyre temperature simulation</label><p class="hint">Turn off to hold all tyres at ideal temperature and hide the indicator. Wear and weather grip still apply. Applies to all drivers immediately.</p><div class="mobile-settings"><div class="field"><label for="mobile-steering">Mobile steering</label><select id="mobile-steering"><option value="stick" ${settings.mobileSteering==="stick" ? "selected" : ""}>Thumbstick</option><option value="arrows" ${settings.mobileSteering==="arrows" ? "selected" : ""}>Left / right arrows</option></select></div><div class="field sensitivity-field"><label for="steering-sensitivity">Thumbstick sensitivity</label><input id="steering-sensitivity" type="range" min=".6" max="1.5" step=".1" value="${settings.steeringSensitivity}"></div><button class="ghost home-screen-help" id="home-screen-help">Play from Home Screen</button></div><button class="primary" id="close-settings">BACK TO GAME</button></section>`;
   app.appendChild(modal);
   el("ai-difficulty").onchange=e=>{
     settings.difficulty=normalizeDifficulty(e.target.value);
@@ -217,6 +217,7 @@ function showSettings() {
   el("steering-sensitivity").disabled=settings.mobileSteering==="arrows";
   el("mobile-steering").onchange=e=>{settings.mobileSteering=e.target.value;el("steering-sensitivity").disabled=settings.mobileSteering==="arrows";saveMobileSettings();if(race)mountMobileControls();};
   el("steering-sensitivity").oninput=e=>{settings.steeringSensitivity=+e.target.value;saveMobileSettings();resetDrivingInput();};
+  el("home-screen-help").onclick=showFullscreenHelp;
   el("close-settings").onclick=()=>{modal.remove();paused=previousPaused;};
 }
 function careerPage() {
@@ -612,7 +613,7 @@ function refreshMobileIcons(){
   hudIcon(actions.querySelector('[data-action=settings]'),"settings","Settings");
   hudIcon(actions.querySelector('[data-action=pause]'),"pause","Pause race");
   if(el("mobile-timing")){const open=app.querySelector(".tower").classList.contains("mobile-open");hudIcon(el("mobile-timing"),open ? "close" : "timing",open ? "Close timing" : "Show timing board",open);}
-  if(el("mobile-fullscreen"))hudIcon(el("mobile-fullscreen"),"fullscreen","Enter fullscreen");
+  if(el("mobile-fullscreen"))hudIcon(el("mobile-fullscreen"),"fullscreen",document.fullscreenElement ? "Exit fullscreen" : "Fullscreen options");
 }
 function mountMobileControls(){
   if(race)race.mobile=mobileInput;
@@ -641,11 +642,30 @@ function mountMobileControls(){
     toolbar.innerHTML='<button class="ghost" id="mobile-timing">Timing</button><button class="ghost" id="mobile-fullscreen">Fullscreen</button>';
     app.querySelector(".race-actions").prepend(toolbar);
     let timingWasPaused=false;el("mobile-timing").onclick=()=>{const open=app.querySelector(".tower").classList.toggle("mobile-open");resetDrivingInput();if(open){timingWasPaused=paused;paused=true;}else paused=timingWasPaused;refreshMobileIcons();};
-    el("mobile-fullscreen").hidden=!document.documentElement.requestFullscreen;
-    el("mobile-fullscreen").onclick=async()=>{try{await document.documentElement.requestFullscreen();try{await screen.orientation?.lock("landscape");}catch{}}catch{}updateMobileSession();};
+    el("mobile-fullscreen").onclick=async()=>{
+      try{
+        if(document.fullscreenElement){await document.exitFullscreen();}
+        else if(document.documentElement.requestFullscreen){await document.documentElement.requestFullscreen();try{await screen.orientation?.lock("landscape");}catch{}}
+        else showFullscreenHelp();
+      }catch{showFullscreenHelp();}
+      updateMobileSession();
+    };
     const note=document.createElement("small");note.id="mobile-pit-note";app.querySelector(".pit-panel").prepend(note);
   }
   refreshMobileIcons();
+}
+function showFullscreenHelp(){
+  if(el("fullscreen-help"))return;
+  const wasPaused=paused;paused=true;resetDrivingInput();
+  const installed=window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+  const apple=/iPhone|iPad|iPod/.test(navigator.userAgent);
+  const android=/Android/.test(navigator.userAgent);
+  const box=document.createElement("div");box.className="modal-backdrop";box.id="fullscreen-help";
+  box.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-labelledby="fullscreen-title"><div class="eyebrow">MORE ROOM TO RACE</div><h2 id="fullscreen-title">${installed ? "Already in app mode" : "Play without browser bars"}</h2>${installed ? '<p>The game is already running from your Home Screen. Rotate your phone horizontally to race.</p>' : `<p>Install V10 and open it from your Home Screen to play without browser bars.</p><ol class="fullscreen-steps">${apple ? '<li>In Safari, tap Share (the square with an upward arrow).</li><li>Choose Add to Home Screen.</li><li>Enable Open as Web App if shown, then tap Add.</li>' : android ? '<li>Open this site in Chrome, then tap the three-dot menu.</li><li>Choose Install and create shortcut → Install. Older versions may say Install app or Add to Home screen.</li><li>Confirm the installation.</li>' : '<li>Open your browser menu.</li><li>Choose Install app or Add to Home Screen, if available.</li>'}<li>Open V10 from your Home Screen and rotate horizontally.</li></ol><p class="hint">Home Screen mode may use separate saved career progress. Your browser save stays in that browser.</p>`}<button class="primary" id="close-fullscreen-help">BACK TO GAME</button></section>`;
+  app.appendChild(box);const close=()=>{box.remove();paused=wasPaused;resetDrivingInput();ensureAudio();};
+  el("close-fullscreen-help").onclick=close;
+  box.addEventListener("keydown",e=>{if(e.key==="Escape"){e.preventDefault();e.stopPropagation();close();}});
+  el("close-fullscreen-help").focus();
 }
 function updateMobileSession(){
   const running=!!race && !race.done;

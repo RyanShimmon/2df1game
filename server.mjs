@@ -8,6 +8,8 @@ const types = {
   ".js": "text/javascript",
   ".css": "text/css",
   ".json": "application/json",
+  ".webmanifest": "application/manifest+json",
+  ".png": "image/png",
 };
 const port = Number(process.env.PORT || 5173);
 http
