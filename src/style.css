@@ -1387,3 +1387,35 @@ input[type="range"] {
 .tyre-set-card b span { margin-left:auto; }
 .tyre-set-card small { display:block; margin-top:10px; color:#b8c8c5; font-size:11px; }
 .browse-tyres { width:100%; margin-top:12px; }
+
+.school-shell { height:calc(100vh - 76px); overflow:auto; display:flex; justify-content:center; align-items:center; padding:24px; }
+.school-intro { width:min(700px,94vw); }
+.school-intro > p,.school-dialog-text { line-height:1.65; margin:20px 0; color:#c4d0cd; }
+.school-pages,.school-buttons,.school-guide-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.school-pages { margin:20px 0; }
+.school-pages .active { border-color:var(--lime); color:var(--lime); }
+.school-buttons { margin-top:22px; align-items:stretch; }
+.school-buttons > button { margin:0; min-height:48px; padding:14px 20px; }
+.school-buttons .primary { flex:1; margin:0; }
+.school-exit { width:100%; margin-top:12px; }
+.school-guide { position:fixed; bottom:105px; left:50%; transform:translateX(-50%); width:min(470px,calc(100vw - 40px)); background:#14252ded; border:1px solid #7caa60; padding:16px; border-radius:12px; z-index:15; }
+.school-guide h3 { font-size:18px; margin:8px 0; }.school-guide p { font-size:12px; line-height:1.5; color:#c7d6d0; margin-bottom:12px; }
+.school-guide-actions .ghost { font-size:9px; padding:8px; flex:1; }
+.school-highlight { outline:2px solid var(--lime); outline-offset:4px; }
+@media(max-width:800px) { .school-guide { bottom:90px; width:min(400px,calc(100vw - 24px)); } .school-shell { align-items:flex-start; } }
+
+.pit-panel .browse-tyres { margin-bottom:16px; }
+.school-copy { padding-left:19px; margin:0; line-height:1.55; color:#c7d6d0; }
+.school-copy li + li { margin-top:8px; }
+.school-guide .school-copy { font-size:12px; margin-bottom:12px; }
+.school-guide .school-copy li + li { margin-top:4px; }
+.school-arrow-target { position:relative; }
+.school-arrow-target::before { content:"➜"; position:absolute; left:-35px; top:50%; font-size:28px; color:var(--lime); text-shadow:0 2px 5px #000; pointer-events:none; z-index:35; animation:school-nudge .7s ease-in-out infinite alternate; }
+@keyframes school-nudge { from {transform:translate(-7px,-50%);} to {transform:translate(4px,-50%);} }
+@media(prefers-reduced-motion:reduce){ .school-arrow-target::before { animation:none; transform:translateY(-50%); } }
+
+.modal-backdrop { z-index:50; }
+
+.school-guide-actions[hidden], .school-weather-continue[hidden] { display:none; }
+.school-weather-continue { width:100%; margin:4px 0 0; font-size:12px; }
+.weather-timeline.school-weather-highlight { border:3px solid var(--lime); box-shadow:0 0 0 4px #d8ff9b33; z-index:16; }

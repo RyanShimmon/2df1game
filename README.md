@@ -138,3 +138,15 @@ The qualifying race screen includes Move to Q2 / Q3 or End qualifying in P… ba
 Session advancement is locked until every active driver has attempted a timed lap. The button reports how many opponents still need their first run, or prompts the player to complete their own. Ending early simulates the rest of the session with repeated AI outings, tyre wear, weather and updated best times before applying knockouts. Time cycles 1× → 2× → 4× → 8× → 1× in qualifying only; physics still uses fixed simulation steps.
 
 Choose tyre set opens a scrollable allocation popup with compound colours, set IDs, condition bars and fresh/used/fitted labels. A used set can be selected for another outing or the next qualifying stage without resetting its wear. The popup is also available from qualifying preparation; quick compound selection stays available. Simulation pauses while browsing. Reserved and exhausted sets are disabled.
+
+
+### Race School
+
+Race School is available from the main menu. Four clickable introduction cards explain the weekend, compounds and wet-weather grip, fuel modes, controls, track limits and pit rules. Guided dry qualifying requires two out → timed → in training outings, including service after each. The first uses Softs; the second requires Mediums. Used sets retain their wear, and the lesson explicitly distinguishes its mandatory change from normal qualifying rules.
+
+Optional race practice requires a grid launch, fuel-mode change, B pit request, physical pit entry, service and exit. Live coaching highlights relevant controls; explanations pause the lesson. Recover car rejoins asphalt and invalidates an assisted timed lap; Reset outing restores the last garage checkpoint. Race School uses its own saved progress and tyre allocation (`v10.race-school.v1`), without settling career money or results.
+
+Automated play-tests drive both qualifying outings, verify the required change, checkpoint resume and wear retention, mark deleted laps without blocking training progress, and complete race-start/pit practice.
+
+
+Race School now uses brief bullet prompts, an F fuel-mode reminder on out laps, and animated cues for the required physical Medium-set selection in Outing 2. A completed training outing advances the lesson even if its lap was deleted; deleted laps remain excluded from qualifying results. The popup must be used for the required change. After service, W / Up or Leave pit box starts the next outing.
