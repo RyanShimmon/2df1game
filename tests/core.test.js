@@ -212,6 +212,8 @@ test("one-stop and two-stop strategies are competitive over a long 24-lap race",
       { engine: 0, aero: 0, tyres: 0, crew: 0 },
     );
     r.countdown = 0;
+    // Fix service at its midpoint so random 2.3–5.5s stops do not skew this pace comparison.
+    r.pitRandom = () => .5;
     const c = r.player;
     c.player = false;
     c.pace = 1;

@@ -1,3 +1,4 @@
+import {WHEELS,THERMAL,temperatureStatus,temperatureColour} from "./tyre-temperature.js";
 import {RaceSchool,SCHOOL_INTRO,loadSchool} from "./school.js";
 import {circuitThumbnail} from "./track-picker.js";
 import {engineSoundFrame} from "./sound.js";
@@ -65,12 +66,14 @@ let setup = { track:"northline", laps: 16, startingPosition: 22, tyre: "M", fuel
   hudTimer = 0,
   audio = null,
   muted = false;
-let settings={autoPitLimiter:true,difficulty:"normal"};
+let settings={autoPitLimiter:true,difficulty:"normal",tyreTemperature:true};
 try {
  const saved=JSON.parse(localStorage.getItem("v10.settings") || "{}");
  settings.autoPitLimiter=saved.autoPitLimiter !== false;
  settings.difficulty=normalizeDifficulty(saved.difficulty);
+ settings.tyreTemperature=saved.tyreTemperature!==false;
 } catch {}
+if(career.weekend?.setup)career.weekend.setup.tyreTemperatureEnabled=settings.tyreTemperature;
 let school=null;
 let quickSetup = { ...setup },
   careerSetup = { ...setup };
@@ -110,7 +113,7 @@ function compounds(selected, prefix) {
     .join("");
 }
 function header() {
-  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.1</div></header>`;
+  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.2</div></header>`;
 }
 function tabs() {
   return `<div class="tabs"><button class="tab ${screen === "quick" ? "active" : ""}" data-screen="quick">Quick race</button><button class="tab ${screen === "career" ? "active" : ""}" data-screen="career">Career garage</button><button class="tab" data-action="school">Race School</button><button class="tab" data-action="help">How to drive ↗</button><button class="tab" data-action="settings">Settings</button></div>`;
@@ -184,7 +187,7 @@ function showSettings() {
   const previousPaused=paused;
   if(race) {paused=true;keys.clear();}
   const modal=document.createElement("div");modal.className="modal-backdrop";modal.id="settings-modal";
-  modal.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div class="eyebrow">RACE SETTINGS</div><h2 id="settings-title">Settings</h2><div class="field"><label for="ai-difficulty">AI difficulty</label><select id="ai-difficulty">${Object.entries(DIFFICULTIES).map(([id,d])=>`<option value="${id}" ${settings.difficulty===id ? "selected" : ""}>${d.name}${d.prizeBonus ? ` · +${Math.round(d.prizeBonus*100)}% career race prize` : ""}</option>`).join("")}</select></div><p class="hint" style="margin:10px 0 20px">Applies to your next quick race or career weekend. An existing weekend keeps its difficulty. Bonuses apply to legal finishes; sponsor payouts stay fixed.</p><label class="setting-choice"><input type="checkbox" id="auto-pit-limiter" ${settings.autoPitLimiter ? "checked" : ""}> Automatic pit stops</label><p class="hint">Enabled by default: holds 80 km/h, brakes into your box, completes service and drives to pit exit without throttle. Disable this for manual pedals and P limiter control.</p><button class="primary" id="close-settings">BACK TO GAME</button></section>`;
+  modal.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div class="eyebrow">RACE SETTINGS</div><h2 id="settings-title">Settings</h2><div class="field"><label for="ai-difficulty">AI difficulty</label><select id="ai-difficulty">${Object.entries(DIFFICULTIES).map(([id,d])=>`<option value="${id}" ${settings.difficulty===id ? "selected" : ""}>${d.name}${d.prizeBonus ? ` · +${Math.round(d.prizeBonus*100)}% career race prize` : ""}</option>`).join("")}</select></div><p class="hint" style="margin:10px 0 20px">Applies to your next quick race or career weekend. An existing weekend keeps its difficulty. Bonuses apply to legal finishes; sponsor payouts stay fixed.</p><label class="setting-choice"><input type="checkbox" id="auto-pit-limiter" ${settings.autoPitLimiter ? "checked" : ""}> Automatic pit stops</label><p class="hint">Enabled by default: holds 80 km/h, brakes into your box, completes service and drives to pit exit without throttle. Disable this for manual pedals and P limiter control.</p><label class="setting-choice"><input type="checkbox" id="tyre-temperature-setting" ${settings.tyreTemperature ? "checked" : ""}> Tyre temperature simulation</label><p class="hint">Turn off to hold all tyres at ideal temperature and hide the indicator. Wear and weather grip still apply. Applies to all drivers immediately.</p><button class="primary" id="close-settings">BACK TO GAME</button></section>`;
   app.appendChild(modal);
   el("ai-difficulty").onchange=e=>{
     settings.difficulty=normalizeDifficulty(e.target.value);
@@ -195,6 +198,12 @@ function showSettings() {
     settings.autoPitLimiter=e.target.checked;
     try {localStorage.setItem("v10.settings",JSON.stringify(settings));} catch {}
     if(race) {race.autoPitLimiter=school ? true : settings.autoPitLimiter; if(race.autoPitLimiter) race.pitLimiter=!!race.player.pit;}
+  };
+  el("tyre-temperature-setting").onchange=e=>{
+    settings.tyreTemperature=e.target.checked;
+    try {localStorage.setItem("v10.settings",JSON.stringify(settings));} catch {}
+    if(career.weekend?.setup)career.weekend.setup.tyreTemperatureEnabled=settings.tyreTemperature;
+    if(race){race.setTyreTemperature(settings.tyreTemperature);updateHUD();}
   };
   el("close-settings").onclick=()=>{modal.remove();paused=previousPaused;};
 }
@@ -470,7 +479,7 @@ function fuelLabel() {
 }
 function startRace(fromWeekend = false) {
   if (screen === "career" && !fromWeekend) {
-    ensureWeekend(career, {...setup,difficulty:settings.difficulty});
+    ensureWeekend(career, {...setup,difficulty:settings.difficulty,tyreTemperatureEnabled:settings.tyreTemperature});
     selectedWeekendSet = null;
     save();
     menu();
@@ -480,7 +489,7 @@ function startRace(fromWeekend = false) {
   keys.clear();
   touch = { steer: 0, throttle: false, brake: false };
   race = new Race(
-    { ...raceSetup },
+    { ...raceSetup,tyreTemperatureEnabled:settings.tyreTemperature },
     screen === "career"
       ? career.upgrades
       : { engine: 0, aero: 0, tyres: 0, crew: 0 },
@@ -495,6 +504,7 @@ function startRace(fromWeekend = false) {
   raceUI();
 }
 function raceUI() {
+  race.setTyreTemperature(settings.tyreTemperature);
   ensureAudio();
   race.autoPitLimiter=school ? true : settings.autoPitLimiter;
   if(race.autoPitLimiter) race.pitLimiter=!!race.player.pit;
@@ -503,6 +513,10 @@ function raceUI() {
   counters.appendChild(app.querySelector(".race-chips"));
   app.querySelector(".tower").before(counters);
   const dashboard=app.querySelector(".dashboard");dashboard.classList.add("top-dashboard");app.appendChild(dashboard);
+  const temperatures=document.createElement("section");temperatures.className="tyre-temperature";temperatures.setAttribute("aria-label","Four tyre temperatures");
+  temperatures.innerHTML=`<span class="temperature-label">TYRE TEMP</span><div class="temperature-wheels">${WHEELS.map(w=>`<button class="temperature-wheel" data-wheel="${w}" aria-label="${w} tyre temperature"><span>${w}</span></button>`).join("")}</div><output id="temperature-detail" aria-live="polite">Hover / tap</output>`;
+  dashboard.appendChild(temperatures);
+  temperatures.querySelectorAll("[data-wheel]").forEach(button=>button.onclick=()=>{temperatures.dataset.selected=button.dataset.wheel;updateHUD();});
   app.querySelector("[data-action=settings]").onclick=showSettings;
   app.querySelector("[data-action=pit]").onclick = () => {
     if(race.qualifying && race.player.garage && race.player.pit?.serviced){race.player.qNeedsRelease=false;race.launch(race.player);updateHUD();}
@@ -679,13 +693,28 @@ function updateHUD() {
   el("wear-bar").style.background =
     p.wear > 0.8 ? "#ff8270" : TYRES[p.tyre].color;
   el("tyre-state").textContent =
-    p.tyreAge < 450
+    p.tyreTemperatures?.some(t=>t<THERMAL[p.tyre].low-12)
       ? "Cold tyres · build grip"
       : p.wear > 0.82
         ? "Grip fading · box soon"
         : !tyreRuleMet(p)
           ? "Second compound required"
           : "Compound requirement met";
+  const temperaturePanel=app.querySelector(".tyre-temperature");
+  if(temperaturePanel){
+    temperaturePanel.hidden=!race.tyreTemperatureEnabled;
+    app.querySelector(".top-dashboard").classList.toggle("temperatures-disabled",!race.tyreTemperatureEnabled);
+    el("weather-hud").classList.toggle("temperatures-disabled",!race.tyreTemperatureEnabled);
+    temperaturePanel.querySelectorAll("[data-wheel]").forEach((button,i)=>{
+      const t=p.tyreTemperatures?.[i] ?? THERMAL[p.tyre].low;
+      const status=temperatureStatus(p.tyre,t),condition=Math.round(Math.max(0,1-(p.wheelWear?.[i] ?? p.wear))*100);
+      button.style.setProperty("--temperature",temperatureColour(p.tyre,t));
+      const label=`${WHEELS[i]} · ${Math.round(t)}°C · ${status} · ${condition}% condition`;
+      button.title=label;button.setAttribute("aria-label",label);
+      button.setAttribute("aria-pressed",String(temperaturePanel.dataset.selected===WHEELS[i]));
+      if(temperaturePanel.dataset.selected===WHEELS[i])el("temperature-detail").textContent=`${WHEELS[i]} ${Math.round(t)}° · ${status}`;
+    });
+  }
   el("fuel-left").textContent = p.fuel.toFixed(1) + " laps";
   el("fuel-bar").style.width = (p.fuel / race.setup.fuel) * 100 + "%";
   el("fuel-status").textContent =
@@ -760,7 +789,7 @@ function updateHUD() {
     );
     el("tyre-state").textContent = p.pit?.stage==="service" ? "Service hold · waiting for crew" : p.garage ? "Ready · press W / ↑ to leave" :
       p.qState === "in" ? "In lap · return to pits; extra laps untimed" :
-      p.qState === "out" ? "Out lap · warm the tyres" :
+      p.qState === "out" ? race.tyreTemperatureEnabled ? "Out lap · warm the tyres" : "Out lap · prepare your timed lap" :
       p.qInvalid ? "Timed lap invalid · track limits" : "Timed lap · best " + time(p.bestLap);
     el("pit-hint").textContent = p.pit?.stage === "service" ? `SERVICE HOLD · ${Math.max(0,p.pit.timer).toFixed(1)}s remaining. Choose tyres; departure stays locked until service finishes.` : p.garage ?
       `Crew ready. Three-lap fuel loaded. Press W / ↑ when ready. Choose your next outing’s tyres here. ${race.nextSetId === p.tyreSet.id ? "Fitted tyres retained." : race.nextSetId + " selected."}` :
@@ -925,10 +954,10 @@ function openSchool(){
 function showSchoolIntro(index){
   race=null;paused=false;school.state.phase="intro";school.state.intro=index;school.save(localStorage);
   const card=SCHOOL_INTRO[index];
-  app.innerHTML=header()+`<main class="school-shell"><section class="modal school-intro"><div class="eyebrow">RACE SCHOOL · ${index+1} / ${SCHOOL_INTRO.length}</div><h2>${card.title}</h2><p>${card.text.split("\n").map(escapeHTML).join("<br>")}</p><div class="school-pages">${SCHOOL_INTRO.map((c,i)=>`<button class="ghost ${i===index ? "active" : ""}" data-school-page="${i}" aria-label="Lesson ${i+1}: ${c.title}" aria-pressed="${i===index}">${i+1}</button>`).join("")}</div><div class="school-buttons">${index ? '<button class="ghost" id="school-back">BACK</button>' : ""}<button class="primary" id="school-next">${index===3 ? "START GUIDED QUALIFYING →" : "NEXT →"}</button></div><button class="ghost school-exit" id="school-exit">BACK TO MAIN MENU</button></section></main>`;
+  app.innerHTML=header()+`<main class="school-shell"><section class="modal school-intro"><div class="eyebrow">RACE SCHOOL · ${index+1} / ${SCHOOL_INTRO.length}</div><h2>${card.title}</h2>${card.bullets ? `<div class="school-dialog-text">${schoolCopy(card.text)}</div>` : `<p>${card.text.split("\n").map(escapeHTML).join("<br>")}</p>`}<div class="school-pages">${SCHOOL_INTRO.map((c,i)=>`<button class="ghost ${i===index ? "active" : ""}" data-school-page="${i}" aria-label="Lesson ${i+1}: ${c.title}" aria-pressed="${i===index}">${i+1}</button>`).join("")}</div><div class="school-buttons">${index ? '<button class="ghost" id="school-back">BACK</button>' : ""}<button class="primary" id="school-next">${index===SCHOOL_INTRO.length-1 ? "START GUIDED QUALIFYING →" : "NEXT →"}</button></div><button class="ghost school-exit" id="school-exit">BACK TO MAIN MENU</button></section></main>`;
   app.querySelectorAll("[data-school-page]").forEach(b=>b.onclick=()=>showSchoolIntro(+b.dataset.schoolPage));
   el("school-back")?.addEventListener("click",()=>showSchoolIntro(index-1));
-  el("school-next").onclick=()=>index===3 ? startSchoolLesson(false) : showSchoolIntro(index+1);
+  el("school-next").onclick=()=>index===SCHOOL_INTRO.length-1 ? startSchoolLesson(false) : showSchoolIntro(index+1);
   el("school-exit").onclick=leaveSchool;
 }
 function schoolCopy(text){

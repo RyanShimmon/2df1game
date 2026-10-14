@@ -1,6 +1,6 @@
 # V10 — Grand Prix
 
-Version **1.1.0**.
+Version **1.2.0**.
 
 A local browser game with top-down V10 racing, 22 cars, five tyre types, dynamic weather, qualifying and a saved career. Requires Node.js 18 or newer; no dependency installation is needed.
 
@@ -142,7 +142,7 @@ Choose tyre set opens a scrollable allocation popup with compound colours, set I
 
 ### Race School
 
-Race School is available from the main menu. Four clickable introduction cards explain the weekend, compounds and wet-weather grip, fuel modes, controls, track limits and pit rules. Guided dry qualifying requires two out → timed → in training outings, including service after each. The first uses Softs; the second requires Mediums. Used sets retain their wear, and the lesson explicitly distinguishes its mandatory change from normal qualifying rules.
+Race School is available from the main menu. Five clickable introduction cards explain the weekend, compounds and wet-weather grip, tyre temperature and its Settings toggle, fuel modes, controls, track limits and pit rules. Guided dry qualifying requires two out → timed → in training outings, including service after each. The first uses Softs; the second requires Mediums. Used sets retain their wear, and the lesson explicitly distinguishes its mandatory change from normal qualifying rules.
 
 Optional race practice requires a grid launch, fuel-mode change, B pit request, physical pit entry, service and exit. Live coaching highlights relevant controls; explanations pause the lesson. Recover car rejoins asphalt and invalidates an assisted timed lap; Reset outing restores the last garage checkpoint. Race School uses its own saved progress and tyre allocation (`v10.race-school.v1`), without settling career money or results.
 
@@ -154,3 +154,13 @@ Race School now uses brief bullet prompts, an F fuel-mode reminder on out laps, 
 ### Vercel deployment
 
 Import the GitHub repository into Vercel. The committed `vercel.json` selects Other as the framework, runs `npm run build`, and serves `dist/`. The static build contains only `index.html` and `src/`; the local Node server and tests are not published. Production follows `main`, so future pushes redeploy automatically. Career and Race School saves remain local to each browser and site address; localhost saves do not transfer automatically to the hosted site.
+
+### Four-wheel tyre temperature
+
+The HUD shows FL/FR/RL/RR temperatures with a light-blue → green → yellow → orange → red scale. Hover or tap a wheel for its temperature and status; hovering also shows individual condition. Temperature and permanent wear are separate. Braking loads the fronts, acceleration and wheelspin load the rears, and sustained corners load the outside pair. Straights, gentle driving and water cool tyres. Cold/hot fronts change steering and braking; rear temperature changes traction and slide recovery. Overheating progressively reduces grip and increases wear, with capped slide heating to keep recovery possible.
+
+Softs warm fastest, Hards take longer and tolerate more heat. Intermediates and Wets have lower operating windows and overheat on dry asphalt, while existing wet-surface suitability remains independent. Grid tyres are prepared warm; pit replacements are partially warmed. Retaining a qualifying set retains its heat; garage holding and removed sets cool it. Physical sets persist four temperatures and wheel wear, with older saves initialized automatically. AI drivers use the same temperature/grip model and ease off when overheated. Fuel modes influence heat through actual driving rather than adding heat directly.
+
+Temperature balance is checked with controlled push laps on all 12 circuits: dry Mediums/Hards, damp Intermediates (18% and 40% water), and Wets (65% and 100%). Intermediates only receive extra dry-running heat below 18% surface water, with a 62–90°C working window. Pit warm-up and drying transitions are also covered; Wets continue to incur more dry-running wear than Intermediates.
+
+Settings includes Tyre temperature simulation, enabled by default and saved per browser. Disabling it immediately pins all four wheels and stored sets at each compound’s ideal midpoint for every driver, removes thermal grip/wear penalties and hides the HUD. Physical wear, compound differences and weather grip remain active. Re-enabling resumes from those ideal temperatures without a sudden handling penalty. The setting applies to Quick Race, career qualifying/races and Race School.

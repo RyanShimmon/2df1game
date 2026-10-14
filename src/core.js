@@ -1,3 +1,4 @@
+import {prepareTyres,thermalGrip,thermalWear,updateTyreTemperatures,coolStoredSets,distributeWear,holdOptimalTemperature,THERMAL} from "./tyre-temperature.js";
 import {CIRCUITS,circuitById} from "./tracks.js";
 export {CIRCUITS,circuitById};
 import {
@@ -567,15 +568,17 @@ export function interpolatedCar(car,alpha=1) {
     angle:old.angle+angleDiff(car.angle,old.angle)*t,
     s:old.s+(car.s-old.s)*t,speed:old.speed+(car.speed-old.speed)*t};
 }
-export function grip(car) {
+export function grip(car, axis="all") {
   const t = TYRES[car.tyre];
-  const warm = 0.88 + 0.12 * clamp(car.tyreAge / 450, 0, 1);
-  const loss =
-    0.3 * car.wear ** 1.7 + 0.5 * clamp((car.wear - 0.82) / 0.3, 0, 1);
+
+  const wheels=car.wheelWear;
+  const wear=wheels?.length===4 && Math.abs(wheels.reduce((a,b)=>a+b,0)/4-car.wear)<.001
+    ? (axis==="front" ? (wheels[0]+wheels[1])/2 : axis==="rear" ? (wheels[2]+wheels[3])/2 : car.wear) : car.wear;
+  const loss = .3*wear**1.7 + .5*clamp((wear-.82)/.3,0,1);
   return (
     t.grip *
     bankingGrip(car.s || 0) *
-    warm *
+    thermalGrip(car,axis) *
     Math.max(0.4, 1 - loss) *
     (1 + (car.upgrades?.aero || 0) * 0.03) *
     tyreWeatherGrip(car.tyre, car.trackWetness || 0) *
@@ -589,7 +592,7 @@ export function grip(car) {
 // Wet tyres can put power down on dry asphalt even though their soft tread
 // still has weaker lateral grip and overheats rapidly (see resources).
 export function accelerationGrip(car) {
-  const lateral=grip(car);
+  const lateral=grip(car,"rear");
   if(!["I","W"].includes(car.tyre)) return lateral;
   const water=clamp(car.trackWetness || 0,0,1);
   const suitability=tyreWeatherGrip(car.tyre,water);
@@ -614,12 +617,14 @@ export function targetSpeed(car, s = car.s) {
     (1 + (car.upgrades?.engine || 0) * 0.012)
   );
 }
-export function resources(car, dt, distance, effort = 1) {
+export function resources(car, dt, distance, effort = 1, load = {}) {
+  updateTyreTemperatures(car,dt,load);
+  const previousWear=car.wear;
   car.tyreAge += distance;
   car.wear = clamp(
     car.wear +
       (distance / (TRACK.length * TYRES[car.tyre].life)) *
-        effort *
+        effort * thermalWear(car) *
         (car.tyre === "I" || car.tyre === "W"
           ? 1 +
             Math.max(
@@ -632,6 +637,7 @@ export function resources(car, dt, distance, effort = 1) {
     0,
     1.12,
   );
+  const wearAmount=car.wear-previousWear;car.wear=previousWear;distributeWear(car,wearAmount,load);
   car.fuel = Math.max(
     0,
     car.fuel - (distance / TRACK.length) * (0.85 + 0.25 *
@@ -780,6 +786,8 @@ export class Race {
     this.pitLimiter = false;
     this.autoPitLimiter = true;
     this.nextTyre = setup.tyre === "M" ? "H" : "M";
+    for(const car of this.cars){car.tyreTemperatureEnabled=setup.tyreTemperatureEnabled!==false;prepareTyres(car,null,true);}
+    this.tyreTemperatureEnabled=setup.tyreTemperatureEnabled!==false;
     this.message = "Get ready. Find your braking points.";
     this.messageUntil = 8;
     this.done = false;
@@ -915,6 +923,7 @@ export class Race {
   }
   stepPit(car, dt, input = {}) {
     const p = car.pit;
+    if(p.stage==="service")updateTyreTemperatures(car,dt);
     if(car.player && this.autoPitLimiter) this.pitLimiter=true;
     if (p.stage === "service") {
       p.timer -= dt;
@@ -924,7 +933,7 @@ export class Race {
         car.used.add(car.tyre);
         car.wear = p.nextSet?.wear || 0;
         car.tyreSet = p.nextSet || null;
-        if (p.nextSet !== p.previousSet) car.tyreAge = 0;
+        if (p.nextSet !== p.previousSet || (!this.qualifying && !p.nextSet) || !car.tyreTemperatures) {car.tyreAge = 0;prepareTyres(car,p.nextSet);}
         car.stops++;
         car.history.push({
           lap: Math.max(1, Math.floor(car.s / TRACK.length) + 1),
@@ -1040,7 +1049,7 @@ export class Race {
         this.say(
           this.pitLimiter
             ? "Pit exit clear. Press P to release the limiter."
-            : "Pit exit clear. Build grip on the cold tyres.",
+            : this.tyreTemperatureEnabled===false ? "Pit exit clear. Rejoin safely." : "Pit exit clear. Build grip on the cold tyres.",
         );
     }
   }
@@ -1048,6 +1057,7 @@ export class Race {
     if (this.done) return;
     dt = Math.min(dt, 0.05);
     if (this.countdown > 0) {
+      for(const car of this.cars)updateTyreTemperatures(car,dt);
       this.countdown -= dt;
       return;
     }
@@ -1066,6 +1076,7 @@ export class Race {
     }));
     for (const car of this.cars) {
       if (car.finished || car.dnf) continue;
+      coolStoredSets(car,dt);
       const oldS = car.s;
       car.trackWetness = trackWater(
         this.weather,
@@ -1130,7 +1141,7 @@ export class Race {
     // Read water at the physical car position, including during off-track recovery.
     c.offset=n.offset;
     c.trackWetness=trackWater(this.weather,n.s,TRACK.length,n.offset);
-    const g=grip(c), off=n.dist>TRACK.width/2;
+    const g=grip(c,"front"),rearGrip=grip(c,"rear"),off=n.dist>TRACK.width/2;
     if(c.speed<-.1 || ((input.brake || input.reverse) && c.speed<.5)) {
       this.stepReverse(c,dt,input,n);
       return;
@@ -1176,7 +1187,7 @@ export class Race {
     // budget as cornering. Lifting frees lateral grip instead of killing speed.
     const wet=clamp(c.trackWetness || 0,0,1);
     const longitudinalDemand=wet*(throttle*.48+brake*.62)*clamp(c.speed/100,0,1);
-    const cornerGrip=g*Math.sqrt(Math.max(.35,1-longitudinalDemand**2));
+    const cornerGrip=(g*.45+rearGrip*.55)*Math.sqrt(Math.max(.35,1-longitudinalDemand**2));
     const recoveryAuthority=countersteering ? Math.abs(steer)*(.65+.9*throttle)*clamp(Math.abs(recoverySlip)/.8,0,1) : 0;
     const travelTurn=225*cornerGrip/Math.max(c.speed,25)*(countersteering ? 1.15+.25*throttle : 1)+recoveryAuthority;
     c.motionAngle=travelAngle+clamp(angleDiff(c.angle,travelAngle),-travelTurn*dt,travelTurn*dt);
@@ -1217,7 +1228,8 @@ export class Race {
                 ? 0.85
                 : 1) *
         (1 + slide * 0.5 + brake * steer * steer * 0.15);
-    resources(c, dt, distance, effort);
+    resources(c, dt, distance, effort,{throttle,brake,corner:Math.sign(steer)*clamp(c.speed*turning/225,0,1.3),wheelspin:throttle*clamp(1-traction,0,1)});
+    this.tyreAdvice(c);
     if ((slide > 0.12 || (brake && c.speed > 160)) && this.skids.length < 1400)
       this.skids.push({ x: c.x, y: c.y, a: c.angle, t: this.time });
     if (n.dist < 120 && next.dist >= 120 && c.contactCooldown === 0) {
@@ -1249,6 +1261,21 @@ export class Race {
     c.offset=next.offset;
     const limits=updateTrackLimits(c,dt,next.dist);if(limits) this.say(limits);
     resources(c,dt,distance,.72);
+  }
+  setTyreTemperature(enabled){
+    this.tyreTemperatureEnabled=enabled!==false;
+    this.setup.tyreTemperatureEnabled=this.tyreTemperatureEnabled;
+    if(this.weekend)this.weekend.setup.tyreTemperatureEnabled=this.tyreTemperatureEnabled;
+    for(const car of this.cars){
+      car.tyreTemperatureEnabled=this.tyreTemperatureEnabled;
+      if(!this.tyreTemperatureEnabled){holdOptimalTemperature(car);coolStoredSets(car,0);}
+    }
+  }
+  tyreAdvice(c){
+    if(c.tyreTemperatureEnabled===false || !c.player || c.pit || c.garage || this.time<this.messageUntil || this.time<(this.nextTyreAdvice || 0))return;
+    const {low,high}=THERMAL[c.tyre],t=c.tyreTemperatures;
+    const message=t.slice(2).some(v=>v>high+12) ? "Rears overheating — ease the throttle." : t.slice(0,2).some(v=>v>high+12) ? "Front tyres hot — brake earlier and steer smoothly." : t.slice(0,2).every(v=>v<low-12) ? "Front tyres cold — build pace smoothly." : null;
+    if(message){this.say(message);this.nextTyreAdvice=this.time+24;}
   }
   stepAI(c, dt) {
     const remain = this.laps - raceProgress(c) / TRACK.length;
@@ -1290,7 +1317,8 @@ export class Race {
       }
     }
     const mistake=this.time<ai.mistakeUntil ? ai.mistake : null;
-    const mustSave=!this.qualifying && c.fuel<remain*1.08;
+    const overheated=c.tyreTemperatureEnabled!==false && c.tyreTemperatures?.some(t=>t>THERMAL[c.tyre].high+10);
+    const mustSave=overheated || (!this.qualifying && c.fuel<remain*1.08);
     c.drive=mustSave || (!this.qualifying && ai.mode==="conserve") ? "save" : this.qualifying || ai.mode==="attack" ? "push" : "balanced";
     const modePace=c.drive==="save" ? .94 : c.drive==="push" ? 1.035 : 1;
     let target=targetSpeed(c)*(1-c.fuel*.002)*style.pace*ai.pace*modePace*
@@ -1345,15 +1373,17 @@ export class Race {
     const recovery=clamp(desiredOffset-c.offset,-(20+12*style.wetSkill)*dt,(20+12*style.wetSkill)*dt);
     c.offset+=recovery+c.sideSpeed*dt;
     c.sliding=clamp(Math.abs(ai.slip)/.2,0,1);
+    const oldSpeed=c.speed;
     const accel = acceleration(c) * clamp(accelerationGrip(c), 0.25, 1);
-    c.speed += clamp(target - c.speed, -220 * dt, accel * dt);
+    const braking=220*clamp(grip(c,"front"),.3,1.2);
+    c.speed += clamp(target - c.speed, -braking * dt, accel * dt);
     c.speed = Math.max(0, c.speed);
     if(!pitApproach && Math.abs(c.offset)>TRACK.width/2) c.speed=Math.max(0,c.speed-(6+c.speed*.65)*dt);
     if(!pitApproach) updateTrackLimits(c,dt,Math.abs(c.offset));
     if (c.fuel <= 0) c.speed = Math.max(0, c.speed - 55 * dt);
     const delta = c.speed*Math.cos(ai.slip)*dt;
     c.s += delta;
-    resources(c, dt, delta, (this.qualifying && c.qState !== "timed" ? 0.45 : c.drive === "save" ? 0.72 : c.drive === "push" ? 1.18 : 1)*(1.06-.12*style.tyreCare));
+    resources(c, dt, delta, (this.qualifying && c.qState !== "timed" ? 0.45 : c.drive === "save" ? 0.72 : c.drive === "push" ? 1.18 : 1)*(1.06-.12*style.tyreCare),{throttle:clamp((c.speed-oldSpeed)/(Math.max(accel,1)*dt),0,1),brake:clamp((oldSpeed-c.speed)/(braking*dt),0,1),corner:Math.sign(curvature)*clamp(c.speed*c.speed*Math.abs(curvature)/225,0,1.3),wheelspin:c.sliding*.4});
     const loc = sample(c.s);
     c.x = loc.x - Math.sin(loc.angle) * c.offset;
     c.y = loc.y + Math.cos(loc.angle) * c.offset;

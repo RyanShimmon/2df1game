@@ -1,13 +1,13 @@
 {
   "name": "v10-grand-prix",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "node server.mjs",
     "start": "node server.mjs",
     "test": "node --test tests/*.test.js",
-    "check": "node --check src/weather.js && node --check src/weekend.js && node --check src/core.js && node --check src/render.js && node --check src/main.js && node --check src/school.js",
+    "check": "node --check src/tyre-temperature.js && node --check src/weather.js && node --check src/weekend.js && node --check src/core.js && node --check src/render.js && node --check src/main.js && node --check src/school.js",
     "build": "node scripts/build.mjs"
   }
 }

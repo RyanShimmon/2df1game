@@ -1,3 +1,4 @@
+import {prepareTyres,updateTyreTemperatures,coolStoredSets} from "./tyre-temperature.js";
 import {
   createWeather,
   advanceWeather,
@@ -180,6 +181,7 @@ export function fitSet(car, set) {
   car.wear = set.wear;
   car.tyreAge = 0;
   car.tyreSet = set;
+  prepareTyres(car,set);
   car.used.add(set.compound);
 }
 export function recordLap(w, id, lap, at) {
@@ -318,7 +320,7 @@ export function prepareRace(r, w, startId) {
           )[0];
     c.used = new Set();
     fitSet(c, set);
-    c.tyreAge = 600;
+    c.tyreAge = 600;prepareTyres(c,set,true);
   }
   r.nextSetId = selectableSets(r.player.tyreInventory, "R", startId)
     .filter((t) => t.compound !== start.compound)
@@ -492,7 +494,9 @@ export class QualifyingRun extends Race {
     this.traffic=this.cars.map(c=>({id:c.id,s:c.s,speed:c.speed,offset:c.offset,pit:c.pit,
       garage:c.garage,finished:c.finished,dnf:c.dnf}));
     for(const c of this.cars) {
+      coolStoredSets(c,dt);
       if(c.garage && c.pit?.stage!=="service") {
+        updateTyreTemperatures(c,dt);
         if(c.qNeedsRelease && !input.throttle) c.qNeedsRelease=false;
         if(c.player ? input.throttle && !c.qNeedsRelease : this.time>=c.qReleaseAt) this.launch(c);
         continue;

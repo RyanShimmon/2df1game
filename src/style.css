@@ -1419,3 +1419,42 @@ input[type="range"] {
 .school-guide-actions[hidden], .school-weather-continue[hidden] { display:none; }
 .school-weather-continue { width:100%; margin:4px 0 0; font-size:12px; }
 .weather-timeline.school-weather-highlight { border:3px solid var(--lime); box-shadow:0 0 0 4px #d8ff9b33; z-index:16; }
+
+/* Four individual wheels: front row above rear row, matching the car. */
+.tyre-temperature { min-width:76px; width:76px; text-align:center; align-self:center; }
+.temperature-label { font-size:9px; letter-spacing:1px; color:#b7ccc6; }
+.temperature-wheels { display:grid; grid-template-columns:16px 16px; gap:8px 20px; justify-content:center; margin:8px 0 6px; position:relative; }
+.temperature-wheels::before { content:""; position:absolute; top:3px; bottom:3px; left:calc(50% - 6px); width:12px; border:1px solid #647c8370; border-radius:5px; pointer-events:none; }
+.temperature-wheel { height:25px; padding:0; border:1px solid #ffffff50; border-radius:4px; background:var(--temperature,#aadc69); box-shadow:inset 0 0 0 2px #15202830; }
+.temperature-wheel span { font-size:7px; color:#14222b; font-weight:800; }
+.temperature-wheel:hover,.temperature-wheel:focus-visible,.temperature-wheel[aria-pressed=true] { outline:2px solid #fff; outline-offset:2px; }
+#temperature-detail { display:block; min-height:12px; font-size:8px; color:#d5e1dc; white-space:nowrap; }
+.top-dashboard { min-width:525px; }
+@media(max-width:950px) {
+ .top-dashboard { min-width:0; max-width:540px; gap:10px; }
+ .tyre-temperature { width:62px; min-width:62px; }
+ .temperature-wheels { column-gap:15px; }
+}
+@media(max-width:520px) {
+ .top-dashboard { gap:7px; padding:9px; }
+ .top-dashboard .telemetry { min-width:0; }
+ .top-dashboard .speed { min-width:45px; }
+ .top-dashboard .speed strong { font-size:35px; }
+ .drive-modes .tab { padding:5px 3px; font-size:8px; }
+ .temperature-label { font-size:7px; }
+ .tyre-temperature { min-width:53px; width:53px; }
+ .temperature-wheels { grid-template-columns:13px 13px; column-gap:14px; }
+ .temperature-wheel { height:22px; }
+ #temperature-detail { font-size:7px; }
+}
+
+.weather-hud { top:167px; }
+@media(max-width:950px) { .weather-hud { top:140px; } }
+
+.tyre-temperature[hidden] { display:none; }
+.top-dashboard.temperatures-disabled { min-width:430px; }
+.weather-hud.temperatures-disabled { top:151px; }
+@media(max-width:950px) {
+ .top-dashboard.temperatures-disabled { min-width:0; }
+ .weather-hud.temperatures-disabled { top:120px; }
+}
