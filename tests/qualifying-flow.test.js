@@ -15,7 +15,9 @@ test('qualifying starts parked; player waits while AI chooses individual release
   assert.equal(p.qState,'garage'); assert.equal(p.x,x); assert.equal(p.y,y);
   assert.equal(p.fuel,fuel); assert.equal(p.wear,wear);
   assert.ok(q.cars.some(c=>!c.player && c.qState!=='garage'));
-  q.step(.05,{throttle:true}); assert.equal(p.qState,'out'); assert.ok(!p.garage);
+  // AI traffic can occupy the garage exit; held throttle departs at the next safe gap.
+  for(let i=0;i<400 && p.garage;i++) q.step(.05,{throttle:true});
+  assert.equal(p.qState,'out'); assert.ok(!p.garage);
 });
 test('only one timed lap counts and extra in laps cannot produce more results',()=>{
   const q=create(),p=q.player;

@@ -53,6 +53,7 @@ export class Renderer {
         y: rand() * 1900 - 100,
         r: 10 + rand() * 12,
       });
+    this.decorLowDetail=this.decor.filter((_,i)=>i%2===0);
   }
   rebuildTrack() {
     this.trackRef=TRACK;
@@ -89,7 +90,7 @@ export class Renderer {
   resize() {
     this.w = innerWidth;
     this.h = innerHeight;
-    const d = Math.min(devicePixelRatio || 1, 2);
+    const d = Math.min(devicePixelRatio || 1, document.body.classList.contains("mobile-game") ? 1.5 : 2);
     this.canvas.width = this.w * d;
     this.canvas.height = this.h * d;
     this.ctx.setTransform(d, 0, 0, d, 0, 0);
@@ -107,7 +108,7 @@ export class Renderer {
     let tx=(bounds.minX+bounds.maxX)/2,ty=(bounds.minY+bounds.maxY)/2;
     if (!menu && !overview && race) {
       const p=interpolatedCar(race.player,alpha);
-      this.camera.lookahead+=(p.speed*.8-this.camera.lookahead)*(1-Math.exp(-3*dt));
+      this.camera.lookahead+=((race.mobile ? Math.min(100,p.speed*.5) : p.speed*.8)-this.camera.lookahead)*(1-Math.exp(-3*dt));
       tx=p.x+Math.cos(p.angle)*this.camera.lookahead;
       ty=p.y+Math.sin(p.angle)*this.camera.lookahead;
     }
@@ -122,7 +123,7 @@ export class Renderer {
     // Subtle lawn stripes and foliage, clipped naturally beneath the wide circuit.
     ctx.fillStyle = TRACK.theme==="desert" ? "#705c47" : TRACK.theme==="city" ? "#364247" : "#2a443c";
     for(let i=bounds.minX-200;i<bounds.maxX+200;i+=160) ctx.fillRect(i,bounds.minY-200,80,bh+400);
-    for (const d of this.decor) {
+    for (const d of (race?.mobile ? this.decorLowDetail : this.decor)) {
       ctx.fillStyle = "#1a342f";
       ctx.beginPath();
       ctx.arc(d.x + 3, d.y + 5, d.r, 0, Math.PI * 2);
@@ -308,7 +309,7 @@ export class Renderer {
       ctx.strokeStyle = `rgba(187,211,226,${race.weather.rain * 0.35})`;
       ctx.lineWidth = 1;
       const clock = race.weather.elapsed;
-      for (let i = 0; i < 100 * Math.max(0.1, race.weather.rain); i++) {
+      for (let i = 0; i < (race.mobile ? 50 : 100) * Math.max(0.1, race.weather.rain); i++) {
         const x = (i * 173 + clock * 110) % w,
           y = (i * 97 + clock * 650) % h;
         ctx.beginPath();
@@ -318,7 +319,7 @@ export class Renderer {
       }
       ctx.restore();
     }
-    if (race && !menu) this.minimap(race);
+    if (race && !menu && !race.mobile) this.minimap(race);
   }
   flyovers(ctx,race) {
     for(const [a,b] of TRACK.bridges) {

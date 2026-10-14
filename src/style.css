@@ -1388,8 +1388,8 @@ input[type="range"] {
 .tyre-set-card small { display:block; margin-top:10px; color:#b8c8c5; font-size:11px; }
 .browse-tyres { width:100%; margin-top:12px; }
 
-.school-shell { height:calc(100vh - 76px); overflow:auto; display:flex; justify-content:center; align-items:center; padding:24px; }
-.school-intro { width:min(700px,94vw); }
+.school-shell { height:calc(100dvh - 76px); overflow:hidden; display:flex; justify-content:center; align-items:center; padding:24px; }
+.school-intro { width:min(700px,94vw); max-height:100%; min-height:0; overflow-y:auto; overscroll-behavior:contain; pointer-events:auto; touch-action:pan-y; }
 .school-intro > p,.school-dialog-text { line-height:1.65; margin:20px 0; color:#c4d0cd; }
 .school-pages,.school-buttons,.school-guide-actions { display:flex; gap:8px; flex-wrap:wrap; }
 .school-pages { margin:20px 0; }
@@ -1458,3 +1458,195 @@ input[type="range"] {
  .top-dashboard.temperatures-disabled { min-width:0; }
  .weather-hud.temperatures-disabled { top:120px; }
 }
+
+/* Touch-first landscape racing. Desktop layout remains independent. */
+.mobile-settings { display:none; margin-top:18px; }
+.mobile-game .mobile-settings { display:block; }
+.mobile-game .mobile-compound-shortcuts { display:none; }
+.mobile-racing { overscroll-behavior:none; user-select:none; -webkit-user-select:none; }
+.mobile-racing #world { touch-action:none; }
+.mobile-racing .race-top { top:max(7px,env(safe-area-inset-top)); left:max(10px,env(safe-area-inset-left)); right:max(10px,env(safe-area-inset-right)); }
+.mobile-racing .race-actions { width:155px; gap:4px; flex-wrap:wrap; justify-content:flex-end; }
+.mobile-racing .race-actions .ghost { padding:6px 7px; min-height:30px; font-size:9px; }
+#mobile-toolbar { display:flex; gap:4px; }
+.mobile-racing .standings-counters { top:max(7px,env(safe-area-inset-top)); left:max(10px,env(safe-area-inset-left)); width:160px; }
+.mobile-racing .standings-counters .race-chips { grid-template-columns:45px 56px 55px; gap:2px; }
+.mobile-racing .race-chip { padding:6px 4px; }
+.mobile-racing .race-chip span { font-size:7px; }
+.mobile-racing .race-chip b,.mobile-racing .standings-counters #lap { font-size:16px; }
+.mobile-racing .race-chip:last-child b { font-size:13px; }
+.mobile-racing .top-dashboard,.mobile-racing .top-dashboard.temperatures-disabled { top:max(7px,env(safe-area-inset-top)); width:340px; max-width:calc(100vw - 360px); min-width:0; padding:8px 9px; gap:8px; border-radius:8px; }
+.mobile-racing .top-dashboard .speed { min-width:35px; }
+.mobile-racing .speed strong { font-size:32px; }
+.mobile-racing .speed span { font-size:7px; margin-top:4px; letter-spacing:0; }
+.mobile-racing .telemetry { min-width:0; flex:1; }
+.mobile-racing .telemetry-header { gap:4px; font-size:8px; margin-bottom:4px; }
+.mobile-racing .telemetry p { font-size:8px; margin-top:4px; }
+.mobile-racing #tyre-state,.mobile-racing #last-lap,.mobile-racing #fuel-status { display:none; }
+.mobile-racing .drive-modes { gap:2px; margin-top:5px; }
+.mobile-racing .drive-modes .tab { padding:5px 3px; font-size:8px; min-height:25px; }
+.mobile-racing .tyre-temperature { min-width:44px; width:44px; }
+.mobile-racing .temperature-label { font-size:6px; letter-spacing:0; }
+.mobile-racing .temperature-wheels { grid-template-columns:13px 13px; gap:3px 10px; margin:4px 0; }
+.mobile-racing .temperature-wheel { height:18px; }
+.mobile-racing .temperature-wheel span { font-size:5px; }
+.mobile-racing #temperature-detail { display:none; }
+.mobile-racing .weather-hud,.mobile-racing .weather-hud.temperatures-disabled { top:78px; padding:4px 8px; font-size:8px; gap:4px; max-width:360px; }
+.mobile-racing #weather-forecast,.mobile-racing #race-limits { display:none; }
+.mobile-racing .tower { display:none; }
+.mobile-racing .tower.mobile-open { display:flex; position:fixed; left:max(10px,env(safe-area-inset-left)); top:65px; width:300px; max-height:calc(100dvh - 125px); z-index:25; background:#102029fa; flex-direction:column; overflow:auto; }
+.mobile-racing .qualifying-tower #timing { max-height:none; }
+.mobile-racing .weather-timeline { left:max(8px,env(safe-area-inset-left)); right:max(8px,env(safe-area-inset-right)); bottom:env(safe-area-inset-bottom); height:35px; padding:3px 8px 0; }
+.mobile-racing .forecast-legend { font-size:7px; }
+.mobile-racing #weather-timebar { height:23px; }
+.mobile-racing #weather-timebar text { font-size:9px; }
+.mobile-racing .race-bottom { bottom:calc(47px + env(safe-area-inset-bottom)); left:50%; right:auto; transform:translateX(-50%); width:230px; }
+.mobile-racing .pit-panel { width:230px; padding:6px; display:grid; grid-template-columns:1fr 1fr; gap:4px; }
+.mobile-racing .pit-panel .compound-row,.mobile-racing #pit-title,.mobile-racing #pit-hint,.mobile-racing #race-set-note { display:none; }
+#mobile-pit-note { grid-column:1/-1; text-align:center; color:#c8d9ca; font-size:8px; }
+.mobile-racing .pit-panel [data-action=pit] { grid-column:1; grid-row:2; margin:0; padding:8px 4px; min-height:36px; font-size:9px; }
+.mobile-racing .pit-panel .browse-tyres { grid-column:2; grid-row:2; padding:8px 4px; min-height:36px; margin:0; font-size:9px; }
+.mobile-racing .pit-panel .limiter { grid-column:1/-1; margin:0; padding:7px; font-size:9px; }
+.mobile-racing .pit-panel .limiter:disabled { display:none; }
+.mobile-racing .touch-controls { position:fixed; display:flex; left:max(12px,env(safe-area-inset-left)); right:max(12px,env(safe-area-inset-right)); bottom:calc(47px + env(safe-area-inset-bottom)); align-items:flex-end; justify-content:space-between; pointer-events:none; z-index:18; }
+.mobile-racing .touch-controls > div { display:flex; gap:8px; pointer-events:auto; }
+.mobile-racing .touch-controls button { width:64px; height:64px; font-size:13px; font-weight:700; border-radius:14px; background:#102029dd; color:#e6f4da; border:1px solid #d8e9d866; touch-action:none; }
+.mobile-racing .touch-controls [data-touch=throttle] { background:#77994ed9; }
+.mobile-racing .touch-controls [data-touch=brake] { background:#79494cda; }
+.steering-stick { width:96px; height:96px; position:relative; border-radius:50%; border:2px solid #d8e9d84d; background:#102029aa; touch-action:none; }
+.stick-knob { position:absolute; left:50%; top:50%; width:40px; height:40px; border-radius:50%; background:#b6d99caa; border:1px solid #d8ff9b; transform:translate(-50%,-50%); pointer-events:none; }
+.stick-label { position:absolute; bottom:7px; width:100%; text-align:center; font-size:8px; color:#b5cbb8; pointer-events:none; }
+.mobile-racing .engineer { bottom:calc(133px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); max-width:250px; padding:7px 10px; font-size:9px; }
+.mobile-racing .engineer > span { display:none; }
+.mobile-racing .school-guide { left:max(10px,env(safe-area-inset-left)); top:65px; bottom:auto; transform:none; width:215px; padding:9px; max-height:calc(100dvh - 225px); overflow:auto; }
+.mobile-racing .school-guide .eyebrow { font-size:7px; letter-spacing:1px; }
+.mobile-racing .school-guide h3 { font-size:12px; margin:5px 0; }
+.mobile-racing .school-guide .school-copy { font-size:9px; padding-left:13px; }
+.mobile-racing .school-guide-actions .ghost { font-size:7px; padding:5px; min-width:42px; }
+.mobile-racing .school-arrow-target::before { left:-23px; font-size:20px; }
+.mobile-game .modal-backdrop { padding:max(8px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); }
+.mobile-game .modal { max-width:94vw; padding:16px; max-height:90dvh; }
+.mobile-game .school-shell { height:calc(100dvh - 76px); padding:12px; align-items:flex-start; }
+.mobile-game .school-intro > p,.mobile-game .school-dialog-text { font-size:13px; line-height:1.5; margin:12px 0; }
+.mobile-game .school-pages { margin:12px 0; }
+.mobile-game .tyre-set-grid { grid-template-columns:repeat(auto-fit,minmax(125px,1fr)); }
+.mobile-game .tyre-set-card { min-height:90px; padding:10px; }
+#landscape-gate { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:#101b21f7; z-index:100; padding:24px; text-align:center; }
+#landscape-gate section { max-width:370px; }
+#landscape-gate h2 { font-size:32px; }
+#landscape-gate p { line-height:1.6; color:#b7ccc6; margin:15px 0; }
+.rotate-phone { font-size:60px; color:var(--lime); margin-bottom:15px; }
+#landscape-gate [hidden],#mobile-toolbar [hidden] { display:none; }
+@media(max-width:740px) and (orientation:landscape){
+ .mobile-racing .top-dashboard,.mobile-racing .top-dashboard.temperatures-disabled { width:300px; max-width:calc(100vw - 260px); left:48%; }
+ .mobile-racing .race-actions { width:110px; }
+ .mobile-racing .standings-counters { width:125px; }
+ .mobile-racing .standings-counters .race-chips { grid-template-columns:36px 43px 44px; }
+ .mobile-racing .race-chip b,.mobile-racing .standings-counters #lap { font-size:13px; }
+ .mobile-racing .top-dashboard .speed strong { font-size:26px; }
+ .mobile-racing .top-dashboard { gap:6px; }
+ .mobile-racing .race-bottom,.mobile-racing .pit-panel { width:210px; }
+ .mobile-racing .touch-controls button { width:56px; height:56px; }
+ .mobile-racing .steering-stick { width:82px; height:82px; }
+ .mobile-racing .school-guide { width:185px; }
+}
+
+.mobile-racing .touch-controls button:active { filter:brightness(1.3); border-color:var(--lime); }
+
+.mobile-racing .weather-hud,.mobile-racing .weather-hud.temperatures-disabled { top:100px; min-width:0; flex-direction:row; align-items:center; gap:8px; }
+.mobile-racing .weather-hud b { font-size:8px; }
+.mobile-racing #race-limits { display:inline; font-size:7px; }
+.mobile-racing .school-guide .school-copy { font-size:11px; }
+.mobile-racing .school-guide.mobile-weather-lesson { left:50%; top:100px; transform:translateX(-50%); width:min(400px,calc(100vw - 24px)); max-height:calc(100dvh - 150px); }
+
+.temperature-detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:18px 0; }
+.temperature-detail-grid > div { padding:12px; border:2px solid; border-radius:9px; }
+.temperature-detail-grid p { font-size:11px; margin-top:8px; color:#c6d7ca; }
+@media(max-width:620px) and (orientation:landscape){
+ .mobile-racing .top-dashboard,.mobile-racing .top-dashboard.temperatures-disabled { left:50%; width:245px; max-width:calc(100vw - 285px); }
+ .mobile-racing .weather-hud { top:95px; font-size:7px; }
+ .mobile-racing .weather-hud b { font-size:7px; }
+}
+
+.mobile-racing .standings-counters #lap { font-size:12px; }
+.mobile-racing #weather-timebar text { font-size:18px; }
+.mobile-racing .school-guide #school-weather,.mobile-racing .school-guide #school-recover,.mobile-racing .school-guide #school-reset,.mobile-racing .school-guide #school-leave { display:none; }
+.mobile-racing .school-guide #school-explain { min-height:30px; font-size:9px; }
+@media(max-width:620px) and (orientation:landscape){ .mobile-racing .standings-counters #lap { font-size:10px; } }
+
+.mobile-game .tyre-set-card.school-arrow-target { padding-left:34px; }
+.mobile-game .tyre-set-card.school-arrow-target::before { left:7px; }
+
+/* Keep HUD columns aligned and reserve space according to each value. */
+.top-dashboard { align-items:flex-start; }
+.top-dashboard .speed { align-self:center; }
+.top-dashboard .tyre-temperature { align-self:flex-start; }
+.top-dashboard .drive-modes .tab { flex:1; text-align:center; }
+.standings-counters .race-chips { grid-template-columns:89px 68px 130px; }
+@media(max-width:950px) {
+ .standings-counters .race-chips { grid-template-columns:76px 57px 99px; }
+}
+.mobile-racing .top-dashboard,.mobile-racing .top-dashboard.temperatures-disabled {
+ display:grid; grid-template-columns:35px minmax(0,1fr) minmax(0,1fr) 44px;
+ align-items:start; column-gap:9px; padding:9px; min-height:0;
+}
+.mobile-racing .top-dashboard.temperatures-disabled { grid-template-columns:35px minmax(0,1fr) minmax(0,1fr); }
+.mobile-racing .top-dashboard .telemetry { min-width:0; width:100%; }
+.mobile-racing .top-dashboard .telemetry-header { white-space:nowrap; line-height:1.2; }
+.mobile-racing .top-dashboard .speed { min-width:0; }
+.mobile-racing .temperature-label { display:block; line-height:1.2; }
+.mobile-racing .temperature-wheels { margin:6px 0 0; }
+.mobile-racing .drive-modes { width:100%; }
+.mobile-racing .standings-counters { width:174px; }
+.mobile-racing .standings-counters .race-chips { grid-template-columns:64px 43px 63px; gap:2px; }
+.mobile-racing .standings-counters .race-chip { padding:6px 5px; }
+.mobile-racing .standings-counters .race-chip span { font-size:7px; letter-spacing:.4px; white-space:nowrap; }
+.mobile-racing .standings-counters .race-chip b { font-size:16px; line-height:1.2; }
+.mobile-racing .standings-counters #lap { font-size:14px; }
+.mobile-racing .standings-counters #clock { font-size:13px; }
+.mobile-racing .pit-panel,.mobile-racing .pit-panel:has(.current-tyre) { min-width:0; align-items:start; }
+.mobile-racing .pit-panel [data-action=pit],.mobile-racing .pit-panel .browse-tyres {
+ height:40px; min-height:40px; padding:6px; line-height:1.2; align-self:start;
+ white-space:nowrap; border-radius:6px;
+}
+.mobile-racing .pit-panel [data-action=pit] { gap:4px; }
+.mobile-racing .pit-panel [data-action=pit] > span:last-child { display:none; }
+@media(max-width:740px) and (orientation:landscape) {
+ .mobile-racing .standings-counters { width:132px; }
+ .mobile-racing .standings-counters .race-chips { grid-template-columns:49px 32px 47px; }
+ .mobile-racing .standings-counters .race-chip { padding:6px 3px; }
+ .mobile-racing .standings-counters .race-chip span { font-size:6px; letter-spacing:0; }
+ .mobile-racing .standings-counters .race-chip b { font-size:13px; }
+ .mobile-racing .standings-counters #lap,.mobile-racing .standings-counters #clock { font-size:11px; }
+ .mobile-racing .top-dashboard,.mobile-racing .top-dashboard.temperatures-disabled { column-gap:6px; }
+}
+
+/* Compact mobile actions and a shared strategy row beneath both bars. */
+#mobile-resume { margin:0 auto; justify-content:center; }
+.mobile-racing .top-dashboard .speed { grid-column:1; grid-row:1 / 3; }
+.mobile-racing .top-dashboard > .telemetry:not(.fuel-telemetry) { grid-column:2; grid-row:1; }
+.mobile-racing .top-dashboard > .fuel-telemetry { grid-column:3; grid-row:1; }
+.mobile-racing .top-dashboard > .tyre-temperature { grid-column:4; grid-row:1 / 3; }
+.mobile-racing .top-dashboard > .drive-modes { grid-column:2 / 4; grid-row:2; margin-top:5px; }
+.mobile-racing .pit-panel [data-action=pit],.mobile-racing .pit-panel .browse-tyres { height:30px; min-height:30px; padding:4px 6px; }
+.mobile-racing .race-actions { display:grid; grid-template-columns:repeat(3,32px); width:auto; gap:4px; }
+.mobile-racing #mobile-toolbar { display:contents; }
+.mobile-racing .race-actions .hud-icon { width:32px; height:32px; min-height:32px; padding:7px; display:flex; align-items:center; justify-content:center; }
+.mobile-racing .hud-icon svg { width:18px; height:18px; flex:none; }
+.mobile-racing .hud-icon.active { color:var(--lime); border-color:var(--lime); }
+.mobile-racing .race-actions #qualifying-speed,.mobile-racing .race-actions .end-session { grid-column:1 / -1; }
+
+.mobile-racing .race-actions .hud-icon[hidden] { display:none; }
+
+.mobile-racing .pit-panel [data-action=pit] { justify-content:center; text-align:center; }
+.mobile-racing .race-bottom > .engineer { bottom:calc(100% + 6px); max-width:100%; text-align:center; }
+
+#settings-title { margin-bottom:20px; }
+.mobile-settings .sensitivity-field { margin-top:18px; }
+
+#settings-modal .setting-choice { margin-bottom:4px; }
+#settings-modal .setting-choice + .hint { margin-top:4px; }
+
+@media(max-width:800px) { .school-shell,.mobile-game .school-shell { height:calc(100dvh - 63px); } }
+
+.mobile-game .school-intro { max-height:100%; }

@@ -1,6 +1,6 @@
 # V10 — Grand Prix
 
-Version **1.2.0**.
+Version **1.3.0**.
 
 A local browser game with top-down V10 racing, 22 cars, five tyre types, dynamic weather, qualifying and a saved career. Requires Node.js 18 or newer; no dependency installation is needed.
 
@@ -164,3 +164,9 @@ Softs warm fastest, Hards take longer and tolerate more heat. Intermediates and 
 Temperature balance is checked with controlled push laps on all 12 circuits: dry Mediums/Hards, damp Intermediates (18% and 40% water), and Wets (65% and 100%). Intermediates only receive extra dry-running heat below 18% surface water, with a 62–90°C working window. Pit warm-up and drying transitions are also covered; Wets continue to incur more dry-running wear than Intermediates.
 
 Settings includes Tyre temperature simulation, enabled by default and saved per browser. Disabling it immediately pins all four wheels and stored sets at each compound’s ideal midpoint for every driver, removes thermal grip/wear penalties and hides the HUD. Physical wear, compound differences and weather grip remain active. Re-enabling resumes from those ideal temperatures without a sudden handling penalty. The setting applies to Quick Race, career qualifying/races and Race School.
+
+### Mobile landscape play
+
+Touch devices use a compact landscape race HUD, independent multi-touch pedals and a choice of thumbstick or left/right arrow steering in Settings. Thumbstick sensitivity is adjustable. Portrait racing is blocked with a rotate prompt; returning to landscape requires Resume. Menus remain usable in portrait. Backgrounding, interruptions, popups and control changes clear held inputs. Fullscreen requests and landscape locking are offered where the browser supports them; manual rotation remains the fallback.
+
+Mobile tyre choices use the full paused tyre-set selector rather than compound shortcut icons, including Quick Race starting tyres. The timing board opens on demand and pauses driving, tyre-temperature details are tappable, and the weather forecast stays compact along the bottom. Race School replaces keyboard instructions with touch instructions for the selected steering mode. Rendering uses a lower pixel-density cap and fewer decorative/rain elements on mobile while retaining the same 22-car simulation and physics.

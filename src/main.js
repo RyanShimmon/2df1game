@@ -1,3 +1,4 @@
+import {TouchControls,LandscapeGate,stickSteering,mobileLessonText} from "./mobile.js";
 import {WHEELS,THERMAL,temperatureStatus,temperatureColour} from "./tyre-temperature.js";
 import {RaceSchool,SCHOOL_INTRO,loadSchool} from "./school.js";
 import {circuitThumbnail} from "./track-picker.js";
@@ -66,14 +67,19 @@ let setup = { track:"northline", laps: 16, startingPosition: 22, tyre: "M", fuel
   hudTimer = 0,
   audio = null,
   muted = false;
-let settings={autoPitLimiter:true,difficulty:"normal",tyreTemperature:true};
+let settings={autoPitLimiter:true,difficulty:"normal",tyreTemperature:true,mobileSteering:"stick",steeringSensitivity:1};
 try {
  const saved=JSON.parse(localStorage.getItem("v10.settings") || "{}");
  settings.autoPitLimiter=saved.autoPitLimiter !== false;
  settings.difficulty=normalizeDifficulty(saved.difficulty);
  settings.tyreTemperature=saved.tyreTemperature!==false;
+ settings.mobileSteering=saved.mobileSteering==="arrows" ? "arrows" : "stick";
+ settings.steeringSensitivity=Math.max(.6,Math.min(1.5,Number(saved.steeringSensitivity)||1));
 } catch {}
 if(career.weekend?.setup)career.weekend.setup.tyreTemperatureEnabled=settings.tyreTemperature;
+let mobileInput=window.matchMedia("(pointer: coarse)").matches;
+const mobileControls=new TouchControls(),landscapeGate=new LandscapeGate();
+document.body.classList.toggle("mobile-game",mobileInput);renderer.resize();
 let school=null;
 let quickSetup = { ...setup },
   careerSetup = { ...setup };
@@ -113,7 +119,7 @@ function compounds(selected, prefix) {
     .join("");
 }
 function header() {
-  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.2</div></header>`;
+  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.3</div></header>`;
 }
 function tabs() {
   return `<div class="tabs"><button class="tab ${screen === "quick" ? "active" : ""}" data-screen="quick">Quick race</button><button class="tab ${screen === "career" ? "active" : ""}" data-screen="career">Career garage</button><button class="tab" data-action="school">Race School</button><button class="tab" data-action="help">How to drive ↗</button><button class="tab" data-action="settings">Settings</button></div>`;
@@ -162,6 +168,7 @@ function showTrackPicker() {
   backdrop.querySelector(".track-card.selected")?.focus();
 }
 function footer() {
+  if(mobileInput)return `<footer class="menu-footer"><span>GAS / BRAKE · ${settings.mobileSteering==="arrows" ? "Arrow steering" : "Thumbstick steering"} · Tap Pit or Choose tyre set</span><span class="muted">Race in landscape. Change controls in Settings.</span></footer>`;
   return `<footer class="menu-footer"><div class="keycaps"><span><kbd>WASD</kbd> / <kbd>↑↓←→</kbd> Drive</span><span><kbd>B</kbd> Box</span><span><kbd>P</kbd> Limiter</span><span><kbd>T</kbd> / <kbd>1–5</kbd> Next tyre</span><span><kbd>F</kbd> Fuel mode</span><span><kbd>R</kbd> Reverse in pit</span><span><kbd>Esc</kbd> Pause</span></div><span class="muted">V10 power. Every decision counts.</span></footer>`;
 }
 function menu() {
@@ -177,6 +184,8 @@ function menu() {
     `<main class="menu-shell scroll">${screen === "quick" ? `<div class="hero"><div class="eyebrow">THE LINE BETWEEN PACE & PATIENCE</div><h1>DRIVE FAST.<br><span style="color:var(--lime)">THINK AHEAD.</span></h1><p>Twenty-two cars. Every corner counts. Find your rhythm, protect your tyres, and make the call that changes your race.</p></div>${tabs()}${setupCard()}<div class="circuit-label"><div class="eyebrow">${TRACK.country.toUpperCase()} · ${(TRACK.length/1000).toFixed(2)} KM</div><div class="display">${TRACK.name.toUpperCase()}</div><p>${TRACK.character}.</p></div>` : careerPage()}${footer()}</main>`;
   bindMenu();
   fuelLabel();
+  mountMobileSetupPicker();
+  updateMobileSession();
 }
 function sponsorCard() {
   const chosen=SPONSORS.find(s=>s.id===career.sponsor);
@@ -185,9 +194,9 @@ function sponsorCard() {
 }
 function showSettings() {
   const previousPaused=paused;
-  if(race) {paused=true;keys.clear();}
+  if(race) {paused=true;resetDrivingInput();}
   const modal=document.createElement("div");modal.className="modal-backdrop";modal.id="settings-modal";
-  modal.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div class="eyebrow">RACE SETTINGS</div><h2 id="settings-title">Settings</h2><div class="field"><label for="ai-difficulty">AI difficulty</label><select id="ai-difficulty">${Object.entries(DIFFICULTIES).map(([id,d])=>`<option value="${id}" ${settings.difficulty===id ? "selected" : ""}>${d.name}${d.prizeBonus ? ` · +${Math.round(d.prizeBonus*100)}% career race prize` : ""}</option>`).join("")}</select></div><p class="hint" style="margin:10px 0 20px">Applies to your next quick race or career weekend. An existing weekend keeps its difficulty. Bonuses apply to legal finishes; sponsor payouts stay fixed.</p><label class="setting-choice"><input type="checkbox" id="auto-pit-limiter" ${settings.autoPitLimiter ? "checked" : ""}> Automatic pit stops</label><p class="hint">Enabled by default: holds 80 km/h, brakes into your box, completes service and drives to pit exit without throttle. Disable this for manual pedals and P limiter control.</p><label class="setting-choice"><input type="checkbox" id="tyre-temperature-setting" ${settings.tyreTemperature ? "checked" : ""}> Tyre temperature simulation</label><p class="hint">Turn off to hold all tyres at ideal temperature and hide the indicator. Wear and weather grip still apply. Applies to all drivers immediately.</p><button class="primary" id="close-settings">BACK TO GAME</button></section>`;
+  modal.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div class="eyebrow">RACE SETTINGS</div><h2 id="settings-title">Settings</h2><div class="field"><label for="ai-difficulty">AI difficulty</label><select id="ai-difficulty">${Object.entries(DIFFICULTIES).map(([id,d])=>`<option value="${id}" ${settings.difficulty===id ? "selected" : ""}>${d.name}${d.prizeBonus ? ` · +${Math.round(d.prizeBonus*100)}% career race prize` : ""}</option>`).join("")}</select></div><p class="hint" style="margin:10px 0 20px">Applies to your next quick race or career weekend. An existing weekend keeps its difficulty. Bonuses apply to legal finishes; sponsor payouts stay fixed.</p><label class="setting-choice"><input type="checkbox" id="auto-pit-limiter" ${settings.autoPitLimiter ? "checked" : ""}> Automatic pit stops</label><p class="hint">Enabled by default: holds 80 km/h, brakes into your box, completes service and drives to pit exit without throttle. Disable this for manual pedals and P limiter control.</p><label class="setting-choice"><input type="checkbox" id="tyre-temperature-setting" ${settings.tyreTemperature ? "checked" : ""}> Tyre temperature simulation</label><p class="hint">Turn off to hold all tyres at ideal temperature and hide the indicator. Wear and weather grip still apply. Applies to all drivers immediately.</p><div class="mobile-settings"><div class="field"><label for="mobile-steering">Mobile steering</label><select id="mobile-steering"><option value="stick" ${settings.mobileSteering==="stick" ? "selected" : ""}>Thumbstick</option><option value="arrows" ${settings.mobileSteering==="arrows" ? "selected" : ""}>Left / right arrows</option></select></div><div class="field sensitivity-field"><label for="steering-sensitivity">Thumbstick sensitivity</label><input id="steering-sensitivity" type="range" min=".6" max="1.5" step=".1" value="${settings.steeringSensitivity}"></div></div><button class="primary" id="close-settings">BACK TO GAME</button></section>`;
   app.appendChild(modal);
   el("ai-difficulty").onchange=e=>{
     settings.difficulty=normalizeDifficulty(e.target.value);
@@ -205,6 +214,9 @@ function showSettings() {
     if(career.weekend?.setup)career.weekend.setup.tyreTemperatureEnabled=settings.tyreTemperature;
     if(race){race.setTyreTemperature(settings.tyreTemperature);updateHUD();}
   };
+  el("steering-sensitivity").disabled=settings.mobileSteering==="arrows";
+  el("mobile-steering").onchange=e=>{settings.mobileSteering=e.target.value;el("steering-sensitivity").disabled=settings.mobileSteering==="arrows";saveMobileSettings();if(race)mountMobileControls();};
+  el("steering-sensitivity").oninput=e=>{settings.steeringSensitivity=+e.target.value;saveMobileSettings();resetDrivingInput();};
   el("close-settings").onclick=()=>{modal.remove();paused=previousPaused;};
 }
 function careerPage() {
@@ -487,7 +499,7 @@ function startRace(fromWeekend = false) {
   }
   const raceSetup = screen === "career" ? career.weekend.setup : {...setup,difficulty:settings.difficulty};
   keys.clear();
-  touch = { steer: 0, throttle: false, brake: false };
+  touch = { steer: 0, throttle: false, brake: false };mobileControls.reset();
   race = new Race(
     { ...raceSetup,tyreTemperatureEnabled:settings.tyreTemperature },
     screen === "career"
@@ -504,6 +516,7 @@ function startRace(fromWeekend = false) {
   raceUI();
 }
 function raceUI() {
+  race.mobile=mobileInput;
   race.setTyreTemperature(settings.tyreTemperature);
   ensureAudio();
   race.autoPitLimiter=school ? true : settings.autoPitLimiter;
@@ -516,7 +529,7 @@ function raceUI() {
   const temperatures=document.createElement("section");temperatures.className="tyre-temperature";temperatures.setAttribute("aria-label","Four tyre temperatures");
   temperatures.innerHTML=`<span class="temperature-label">TYRE TEMP</span><div class="temperature-wheels">${WHEELS.map(w=>`<button class="temperature-wheel" data-wheel="${w}" aria-label="${w} tyre temperature"><span>${w}</span></button>`).join("")}</div><output id="temperature-detail" aria-live="polite">Hover / tap</output>`;
   dashboard.appendChild(temperatures);
-  temperatures.querySelectorAll("[data-wheel]").forEach(button=>button.onclick=()=>{temperatures.dataset.selected=button.dataset.wheel;updateHUD();});
+  temperatures.querySelectorAll("[data-wheel]").forEach(button=>button.onclick=()=>{if(mobileInput){showMobileTemperatureDetails();return;}temperatures.dataset.selected=button.dataset.wheel;updateHUD();});
   app.querySelector("[data-action=settings]").onclick=showSettings;
   app.querySelector("[data-action=pit]").onclick = () => {
     if(race.qualifying && race.player.garage && race.player.pit?.serviced){race.player.qNeedsRelease=false;race.launch(race.player);updateHUD();}
@@ -527,6 +540,7 @@ function raceUI() {
   app.querySelector("[data-action=pause]").onclick = () => pauseRace();
   app.querySelector("[data-action=view]").onclick = () => {
     overview = !overview;
+    refreshMobileIcons();
   };
   app.querySelector("[data-action=sound]").onclick = toggleAudio;
   app
@@ -535,22 +549,9 @@ function raceUI() {
   app
     .querySelectorAll("[data-pit-tyre]")
     .forEach((b) => (b.onclick = () => setPitTyre(b.dataset.pitTyre)));
-  app.querySelectorAll("[data-touch]").forEach((b) => {
-    b.onpointerdown = (e) => {
-      e.preventDefault();
-      b.setPointerCapture(e.pointerId);
-      const k = b.dataset.touch;
-      if (k === "left" || k === "right") touch.steer = k === "left" ? -1 : 1;
-      else touch[k] = true;
-    };
-    b.onpointerup = b.onpointercancel = (e) => {
-      const k = b.dataset.touch;
-      if (k === "left" || k === "right") touch.steer = 0;
-      else touch[k] = false;
-    };
-  });
+  mountMobileControls();
   const browse=document.createElement("button");browse.className="ghost browse-tyres";browse.id="browse-race-tyres";
-  browse.textContent="Choose tyre set · fresh & used";browse.onclick=()=>showTyreSetPicker();
+  browse.textContent="Choose tyre set · fresh & used";browse.setAttribute("aria-label","Choose tyre set");browse.onclick=()=>showTyreSetPicker();
   app.querySelector(".pit-panel .compound-row").after(browse);
   if (race.qualifying) {
     const speed=document.createElement("button");speed.className="ghost";speed.id="qualifying-speed";
@@ -573,6 +574,90 @@ function raceUI() {
       "In laps enter the pit road automatically. Service refuels for three laps, then holds you in the box. Choose tyres here and press W / ↑ when ready to leave.";
   }
   updateHUD();
+  updateMobileSession();
+}
+function mountMobileSetupPicker(){
+  if(!mobileInput || screen!=="quick")return;
+  const row=app.querySelector("[data-start-tyre]")?.closest(".compound-row");if(!row)return;
+  row.classList.add("mobile-compound-shortcuts");const button=document.createElement("button");button.className="ghost browse-tyres";button.textContent=TYRES[setup.tyre].name+" · Choose tyre set";button.onclick=()=>showTyreSetPicker(true);row.after(button);
+}
+function showMobileTemperatureDetails(){
+  if(!race || el("temperature-details"))return;
+  const previous=paused;paused=true;resetDrivingInput();const box=document.createElement("div");box.className="modal-backdrop";box.id="temperature-details";
+  box.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-label="Tyre temperatures"><h2>Tyre temperatures</h2><div class="temperature-detail-grid">${WHEELS.map((wheel,i)=>{const p=race.player,t=p.tyreTemperatures[i];return `<div style="border-color:${temperatureColour(p.tyre,t)}"><b>${wheel} · ${Math.round(t)}°C</b><p>${temperatureStatus(p.tyre,t)} · ${Math.round(Math.max(0,1-p.wheelWear[i])*100)}% condition</p></div>`;}).join("")}</div><button class="primary" id="close-temperature-details">BACK TO RACE</button></section>`;
+  app.appendChild(box);el("close-temperature-details").onclick=()=>{box.remove();paused=previous;resetDrivingInput();};
+}
+function saveMobileSettings(){try{localStorage.setItem("v10.settings",JSON.stringify(settings));}catch{}}
+function resetDrivingInput(){mobileControls.reset();keys.clear();touch={steer:0,throttle:false,brake:false};const knob=app.querySelector(".stick-knob");if(knob)knob.style.transform="translate(-50%,-50%)";}
+function hudIcon(button, name, label, active=false){
+  const paths={
+    timing:'<path d="M9 5h11M9 12h11M9 19h11"/><path d="M4 4v3M3 7h3M3 11h3l-3 3h3M3 18h3l-2 1 2 1H3"/>',
+    close:'<path d="m6 6 12 12M18 6 6 18"/>',
+    fullscreen:'<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/>',
+    sound:'<path d="M4 9h4l5-4v14l-5-4H4zM16 8q5 4 0 8m3-11q8 7 0 14"/>',
+    muted:'<path d="M4 9h4l5-4v14l-5-4H4zM17 9l5 6m0-6-5 6"/>',
+    map:'<path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2zM9 3v16m6-14v16"/>',
+    settings:'<path d="m9 3-1 3-3 1 1 3-2 2 2 2-1 3 3 1 1 3h6l1-3 3-1-1-3 2-2-2-2 1-3-3-1-1-3z"/><circle cx="12" cy="12" r="3"/>',
+    pause:'<path d="M8 4v16M16 4v16"/>'
+  };
+  button.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${paths[name]}</svg>`;
+  button.classList.add("hud-icon");button.setAttribute("aria-label",label);button.title=label;
+  button.classList.toggle("active",active);
+}
+function refreshMobileIcons(){
+  if(!mobileInput)return;
+  const actions=app.querySelector(".race-actions");if(!actions)return;
+  hudIcon(actions.querySelector('[data-action=sound]'),muted ? "muted" : "sound",muted ? "Enable engine sound" : "Mute engine sound");
+  hudIcon(actions.querySelector('[data-action=view]'),"map",overview ? "Close circuit map" : "Show circuit map",overview);
+  hudIcon(actions.querySelector('[data-action=settings]'),"settings","Settings");
+  hudIcon(actions.querySelector('[data-action=pause]'),"pause","Pause race");
+  if(el("mobile-timing")){const open=app.querySelector(".tower").classList.contains("mobile-open");hudIcon(el("mobile-timing"),open ? "close" : "timing",open ? "Close timing" : "Show timing board",open);}
+  if(el("mobile-fullscreen"))hudIcon(el("mobile-fullscreen"),"fullscreen","Enter fullscreen");
+}
+function mountMobileControls(){
+  if(race)race.mobile=mobileInput;
+  if(!mobileInput){el("mobile-toolbar")?.remove();el("mobile-pit-note")?.remove();}
+  resetDrivingInput();
+  const dashboard=app.querySelector(".top-dashboard"), modes=dashboard?.querySelector(".drive-modes");
+  if(modes){if(mobileInput)dashboard.appendChild(modes);else dashboard.querySelector(".telemetry").appendChild(modes);}
+  const engineer=el("engineer");
+  if(engineer){if(mobileInput)app.querySelector(".race-bottom").prepend(engineer);else app.appendChild(engineer);}
+  const controls=app.querySelector(".touch-controls");if(!controls)return;
+  controls.innerHTML=`<div class="steering-controls">${mobileInput && settings.mobileSteering==="stick" ? '<div class="steering-stick" role="group" aria-label="Steering thumbstick"><span class="stick-knob"></span><span class="stick-label">STEER</span></div>' : '<button data-touch="left" aria-label="Steer left">←</button><button data-touch="right" aria-label="Steer right">→</button>'}</div><div class="pedal-controls"><button class="pedal" data-touch="brake" aria-label="Brake then reverse">BRAKE</button><button class="pedal" data-touch="throttle" aria-label="Accelerate">GAS</button></div>`;
+  const sync=()=>{touch=mobileControls.state();};
+  controls.querySelectorAll("[data-touch]").forEach(button=>{
+    button.onpointerdown=e=>{if(paused || landscapeGate.blocked)return;e.preventDefault();button.setPointerCapture(e.pointerId);mobileControls.press(e.pointerId,button.dataset.touch);sync();};
+    button.onpointerup=button.onpointercancel=button.onlostpointercapture=e=>{mobileControls.release(e.pointerId);sync();};
+  });
+  const stick=controls.querySelector(".steering-stick");
+  if(stick){
+    const move=e=>{const rect=stick.getBoundingClientRect(),dx=e.clientX-rect.left-rect.width/2,value=stickSteering(dx,rect.width*.38,settings.steeringSensitivity);mobileControls.move(e.pointerId,value);stick.querySelector(".stick-knob").style.transform=`translate(calc(-50% + ${Math.max(-38,Math.min(38,dx))}px),-50%)`;sync();};
+    stick.onpointerdown=e=>{if(paused || landscapeGate.blocked)return;e.preventDefault();stick.setPointerCapture(e.pointerId);mobileControls.press(e.pointerId,"stick",0);move(e);};
+    stick.onpointermove=e=>{if(mobileControls.pointers.has(e.pointerId))move(e);};
+    stick.onpointerup=stick.onpointercancel=stick.onlostpointercapture=e=>{mobileControls.release(e.pointerId);stick.querySelector(".stick-knob").style.transform="translate(-50%,-50%)";sync();};
+  }
+  if(mobileInput && !el("mobile-toolbar")){
+    const toolbar=document.createElement("div");toolbar.id="mobile-toolbar";
+    toolbar.innerHTML='<button class="ghost" id="mobile-timing">Timing</button><button class="ghost" id="mobile-fullscreen">Fullscreen</button>';
+    app.querySelector(".race-actions").prepend(toolbar);
+    let timingWasPaused=false;el("mobile-timing").onclick=()=>{const open=app.querySelector(".tower").classList.toggle("mobile-open");resetDrivingInput();if(open){timingWasPaused=paused;paused=true;}else paused=timingWasPaused;refreshMobileIcons();};
+    el("mobile-fullscreen").hidden=!document.documentElement.requestFullscreen;
+    el("mobile-fullscreen").onclick=async()=>{try{await document.documentElement.requestFullscreen();try{await screen.orientation?.lock("landscape");}catch{}}catch{}updateMobileSession();};
+    const note=document.createElement("small");note.id="mobile-pit-note";app.querySelector(".pit-panel").prepend(note);
+  }
+  refreshMobileIcons();
+}
+function updateMobileSession(){
+  const running=!!race && !race.done;
+  document.body.classList.toggle("mobile-racing",mobileInput && running);
+  landscapeGate.sync(mobileInput,running,innerWidth,innerHeight);
+  let overlay=el("landscape-gate");
+  if(!landscapeGate.blocked){overlay?.remove();return;}
+  resetDrivingInput();accumulator=0;
+  if(!overlay){overlay=document.createElement("div");overlay.id="landscape-gate";overlay.innerHTML='<section role="dialog" aria-modal="true" aria-labelledby="rotate-title"><div class="rotate-phone" aria-hidden="true">↻</div><h2 id="rotate-title"></h2><p id="rotate-description"></p><button class="primary" id="mobile-resume">RESUME →</button></section>';app.appendChild(overlay);el("mobile-resume").onclick=()=>{landscapeGate.resume();resetDrivingInput();accumulator=0;ensureAudio();updateMobileSession();};}
+  el("rotate-title").textContent=landscapeGate.portrait ? "Rotate your phone to race" : "Ready when you are";
+  el("rotate-description").textContent=landscapeGate.portrait ? "Hold your phone horizontally. Unlock screen rotation if needed. Racing is paused." : "Your race is paused. Tap Resume to continue.";
+  el("mobile-resume").hidden=landscapeGate.portrait;
 }
 function setDrive(mode) {
   if (!race) return;
@@ -582,22 +667,22 @@ function setDrive(mode) {
     b.setAttribute("aria-pressed", b.dataset.drive === mode);
   });
 }
-function showTyreSetPicker() {
+function showTyreSetPicker(quickStart=false) {
   if(el("tyre-set-picker")) return;
   const running=race && !race.done ? race : null,w=running?.weekend || (!running ? career.weekend : null);
-  if(!w && !running) return;
+  if(!w && !running && !quickStart) return;
   const mediumLesson=!!school && !!running?.qualifying && school.state.outings===1 && (!school.state.mediumChosen || running.player.tyre!=="M");
   if(mediumLesson)school.state.pickerOpened=true;
   const currentId=running?.player.tyreSet?.id || (running ? "quick-current" : null);
   const inventory=running ? running.player.tyreInventory || [
     {id:currentId,label:running.player.tyre+" · fitted",compound:running.player.tyre,wear:running.player.wear,used:true},
     ...["S","M","H","I","W"].map(compound=>({id:"quick-"+compound,label:compound,compound,wear:0,used:false}))
-  ] : w.inventories[21];
-  const phase=running && !running.qualifying ? "R" : w.phase;
-  const available=selectableSets(inventory,phase,running && !running.qualifying ? currentId : null),selected=running ? running.nextSetId || "quick-"+running.nextTyre : selectedWeekendSet;
-  const wasPaused=paused;paused=!!running || paused;keys.clear();touch={steer:0,throttle:false,brake:false};
+  ] : quickStart ? ["S","M","H","I","W"].map(compound=>({id:"start-"+compound,label:compound,compound,wear:0,used:false})) : w.inventories[21];
+  const phase=quickStart || running && !running.qualifying ? "R" : w.phase;
+  const available=selectableSets(inventory,phase,running && !running.qualifying ? currentId : null),selected=running ? running.nextSetId || "quick-"+running.nextTyre : quickStart ? "start-"+setup.tyre : selectedWeekendSet;
+  const wasPaused=paused;paused=!!running || paused;keys.clear();touch={steer:0,throttle:false,brake:false};mobileControls.reset();
   const backdrop=document.createElement("div");backdrop.className="modal-backdrop";backdrop.id="tyre-set-picker";
-  backdrop.innerHTML=`<section class="modal tyre-picker-modal" role="dialog" aria-modal="true" aria-labelledby="tyre-picker-title"><div class="track-picker-heading"><div><div class="eyebrow">${running && !running.player.tyreInventory ? "RACE TYRE OPTIONS" : "WEEKEND TYRE ALLOCATION"}</div><h2 id="tyre-picker-title">Choose your tyre set</h2></div><button class="ghost" data-close-tyres aria-label="Close tyre selector">×</button></div><p class="hint">Fresh or used — each physical set keeps its condition across outings and qualifying sessions. The compound buttons remain available for quick choices.</p>${["S","M","H","I","W"].map(compound=>`<div class="tyre-set-group"><h3 style="color:${TYRES[compound].color}">${TYRES[compound].name}</h3><div class="tyre-set-grid">${inventory.filter(t=>t.compound===compound&&!t.returned).map(t=>{
+  backdrop.innerHTML=`<section class="modal tyre-picker-modal" role="dialog" aria-modal="true" aria-labelledby="tyre-picker-title"><div class="track-picker-heading"><div><div class="eyebrow">${quickStart ? "STARTING TYRES" : running && !running.player.tyreInventory ? "RACE TYRE OPTIONS" : "WEEKEND TYRE ALLOCATION"}</div><h2 id="tyre-picker-title">Choose your tyre set</h2></div><button class="ghost" data-close-tyres aria-label="Close tyre selector">×</button></div><p class="hint">Fresh or used — each physical set keeps its condition across outings and qualifying sessions. ${mobileInput ? "" : "The compound buttons remain available for quick choices."}</p>${["S","M","H","I","W"].map(compound=>`<div class="tyre-set-group"><h3 style="color:${TYRES[compound].color}">${TYRES[compound].name}</h3><div class="tyre-set-grid">${inventory.filter(t=>t.compound===compound&&!t.returned).map(t=>{
     const enabled=available.some(a=>a.id===t.id) && (!mediumLesson || t.compound==="M"),condition=Math.round(Math.max(0,1-t.wear)*100),fitted=!!running && currentId===t.id;
     return `<button class="tyre-set-card ${t.id===selected ? "selected" : ""}" data-choose-set="${t.id}" ${enabled ? "" : "disabled"} aria-pressed="${t.id===selected}" style="--tyre:${TYRES[compound].color}"><b><i class="tyre-dot"></i>${t.label || t.id}<span>${condition}%</span></b><div class="bar"><i style="width:${condition}%;background:var(--tyre)"></i></div><small>${fitted ? "Currently fitted" : !enabled ? mediumLesson && t.compound!=="M" ? "Use Mediums for outing 2" : t.reserved ? "Reserved for Q3" : "Worn out" : t.used ? "Used · reusable" : "Fresh"}${t.id===selected ? " · Selected" : ""}</small></button>`;
   }).join("")}</div></div>`).join("")}</section>`;
@@ -606,6 +691,7 @@ function showTyreSetPicker() {
   backdrop.querySelector("[data-close-tyres]").onclick=close;backdrop.onclick=e=>{if(e.target===backdrop)close();};
   backdrop.querySelectorAll("[data-choose-set]").forEach(button=>button.onclick=()=>{
     const set=available.find(t=>t.id===button.dataset.chooseSet);if(!set)return;
+    if(quickStart){setup.tyre=set.compound;close();menu();return;}
     if(running) {
       if(mediumLesson && set.compound!=="M")return;
       if(running.qualifying && running.player.pit && !running.selectGarageSet(set.id))return;
@@ -615,6 +701,13 @@ function showTyreSetPicker() {
         const active=b.dataset.pitTyre===set.compound;b.classList.toggle("active",active);b.setAttribute("aria-pressed",active);
       });
       close();updateHUD();
+      // Advance keyboard focus with the lesson so the old picker does not
+      // retain a second outline beside the new departure highlight.
+      if(mediumLesson){
+        const target=app.querySelector(school.guide(running).highlight || '[data-action=pit]');
+        if(target?.disabled){const heading=el("school-goal");heading.tabIndex=-1;heading.focus();}
+        else target?.focus();
+      }
     } else {
       selectedWeekendSet=set.id;w.selectedSetId=set.id;w.selectedPhase=w.phase;w.startSetId=set.id;
       close();save();menu();
@@ -628,7 +721,7 @@ function showTyreSetPicker() {
       else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}
     }
   });
-  if(mediumLesson)backdrop.querySelector('[data-choose-set^="M"]:not(:disabled)')?.classList.add("school-arrow-target");
+  if(mediumLesson){const medium=backdrop.querySelector('[data-choose-set^="M"]:not(:disabled)');medium?.classList.add("school-arrow-target");if(mobileInput)medium?.scrollIntoView({block:"center"});}
   backdrop.querySelector("[data-close-tyres]").focus();
 }
 function setPitTyre(tyre) {
@@ -668,7 +761,7 @@ function updateWeatherTimeline() {
   const rain=Array.from({length:79},(_,i)=>{const t=start+i*5; return `${i ? "L" : "M"}${x(t).toFixed(1)},${y(rainAt(race.weather,Math.max(0,t))).toFixed(1)}`;}).join(" ");
   let ticks="";
   for(let t=Math.ceil(Math.max(0,start)/60)*60;t<=now+360;t+=60) ticks+=`<line x1="${x(t)}" x2="${x(t)}" y1="9" y2="45" stroke="#526c78" opacity=".45"/><text x="${x(t)}" y="58" text-anchor="middle">${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,"0")}</text>`;
-  svg.innerHTML=`${ticks}<path d="${rain} L720,43 L0,43 Z" fill="#76baff" opacity=".13"/><path d="${rain}" fill="none" stroke="#76baff" stroke-width="2"/><path d="${water}" fill="none" stroke="#6ee4b4" stroke-width="2"/><line x1="${x(now)}" x2="${x(now)}" y1="7" y2="47" stroke="#f3e5b2"/><text x="${x(now)+5}" y="9" fill="#f3e5b2">NOW</text>`;
+  svg.innerHTML=`${ticks}<path d="${rain} L720,43 L0,43 Z" fill="#76baff" opacity=".13"/><path d="${rain}" fill="none" stroke="#76baff" stroke-width="2"/><path d="${water}" fill="none" stroke="#6ee4b4" stroke-width="2"/><line x1="${x(now)}" x2="${x(now)}" y1="7" y2="47" stroke="#f3e5b2"/><text x="${x(now)+5}" y="${mobileInput ? 17 : 9}" fill="#f3e5b2">NOW</text>`;
 }
 function updateHUD() {
   if (!race || !el("position")) return;
@@ -727,7 +820,7 @@ function updateHUD() {
   updateWeatherTimeline();
   el("race-limits").textContent =
     `Limits ${p.trackLimits % 4}/3 · ${p.penaltySecondsTotal || 0}s penalties`;
-  el("message").textContent = race.message;
+  el("message").textContent = mobileInput ? mobileLessonText(race.message,settings.mobileSteering) : race.message;
   el("engineer").classList.toggle("hidden", !!school || race.time > race.messageUntil);
   const limiter = app.querySelector("[data-action=limiter]");
   limiter.textContent=(race.pitLimiter ? "LIMITER ON · 80" : "LIMITER OFF") + (race.autoPitLimiter ? " · AUTO" : " · P");
@@ -783,7 +876,7 @@ function updateHUD() {
     el("fuel-status").textContent = "Qualifying fuel load";
     el("fuel-status").style.color = "";
     el("lap").textContent =
-      race.stage.name + " · " + ({garage:"GARAGE",out:"OUT LAP",timed:"TIMED LAP",in:"IN LAP",stranded:"NO FUEL"}[p.qState] || "PIT");
+      race.stage.name + " · " + ((mobileInput ? {garage:"PITS",out:"OUT",timed:"TIMED",in:"IN",stranded:"STOP"} : {garage:"GARAGE",out:"OUT LAP",timed:"TIMED LAP",in:"IN LAP",stranded:"NO FUEL"})[p.qState] || "PIT");
     el("clock").textContent = school ? time(race.time) : time(
       Math.max(0, race.stage.duration - race.weekend.elapsed),
     );
@@ -848,6 +941,17 @@ function updateHUD() {
     el("tyre-name").textContent =
       TYRES[p.tyre].name.toUpperCase() + " · " + p.tyreSet.id;
   }
+  if(mobileInput){
+    el("pit-button").textContent=el("pit-button").textContent.replace(/ · (?:B|W \/ ↑)/g,"");
+    el("pit-title").textContent=el("pit-title").textContent.replace(" · T CYCLES","");
+    el("browse-race-tyres").textContent="Choose tyre set";
+    const compact=el("mobile-pit-note");
+    if(compact)compact.textContent=race.qualifying && p.garage
+      ? `GARAGE · ${p.tyreSet.id} · ${TYRES[p.tyre].name}`
+      : el("pit-title").textContent+" · "+(race.player.tyreInventory && race.nextSetId ? race.nextSetId+" " : "")+TYRES[race.nextTyre].name;
+    limiter.textContent=limiter.textContent.replace(" · P","");
+    el("pit-hint").textContent=mobileLessonText(el("pit-hint").textContent,settings.mobileSteering);
+  }
   el("countdown").classList.toggle("hidden", race.countdown <= 0);
   el("countdown")
     .querySelectorAll("i")
@@ -855,14 +959,16 @@ function updateHUD() {
 }
 function pauseRace() {
   if (!race || race.done) return;
+  if(mobileInput && app.querySelector(".tower.mobile-open"))el("mobile-timing").click();
   paused = !paused;
   keys.clear();
-  touch = { steer: 0, throttle: false, brake: false };
+  touch = { steer: 0, throttle: false, brake: false };mobileControls.reset();
   if (paused) {
     const b = document.createElement("div");
     b.className = "modal-backdrop";
     b.id = "pause-modal";
     b.innerHTML = `<section class="modal"><div class="eyebrow">TAKE A BREATHER</div><h2>Race paused</h2><div class="pause-controls"><p><b>Driving</b><span>W / ↑ Accelerate · S / ↓ Brake, then reverse<br>A / D or ← / → Steer</span></p><p><b>Pit stops</b><span>B Request a stop, then steer into the pit road<br>${race.autoPitLimiter ? "Automatic speed, stop, service and exit" : "P Toggle limiter · R Reverse in the pit lane"}</span></p><p><b>Strategy</b><span>F Cycle Save / Balanced / Push<br>T Cycle next tyres · 1–5 Select S / M / H / I / W</span></p><p><b>View & pause</b><span>M Change map view · Esc Resume</span></p></div><button class="primary" id="resume">BACK TO THE RACE →</button><button class="ghost" id="retire" style="width:100%;margin-top:12px">Retire race</button><p class="hint">Career retirement records a DNF. No sponsor bonus.</p></section>`;
+    if(mobileInput)b.querySelector(".pause-controls").innerHTML=`<p><b>Drive</b><span>Hold GAS · BRAKE slows then reverses.<br>${settings.mobileSteering==="arrows" ? "Use left/right arrows." : "Drag the steering pad; release to centre."}</span></p><p><b>Strategy</b><span>Tap a fuel mode or Choose tyre set.<br>Tap Pit, then steer into the separate pit entrance.</span></p><p><b>Display</b><span>Timing opens the full board. Map shows the circuit.<br>Settings changes steering and tyre temperature.</span></p>`;
     app.appendChild(b);
     el("resume").onclick = pauseRace;
     if(school) {el("retire").textContent="LEAVE RACE SCHOOL";el("retire").nextElementSibling.textContent="School checkpoints are saved. Career is unaffected.";}
@@ -891,9 +997,10 @@ function pauseRace() {
       paused = false;
       showResults();
     };
-  } else el("pause-modal")?.remove();
+  } else {el("pause-modal")?.remove();ensureAudio();}
 }
 function showResults() {
+  updateMobileSession();
   if(school){
     showSchoolDialog("Try this exercise again", "Your outing ended before the lesson was complete. Restart from the last garage checkpoint; your career is unaffected.",[{label:"RETRY EXERCISE",action:()=>startSchoolLesson(school.state.phase==="race")},{label:"LEAVE SCHOOL",action:leaveSchool}]);return;
   }
@@ -922,7 +1029,7 @@ function showResults() {
   if (race.settled) return;
   race.settled = true;
   keys.clear();
-  touch = { steer: 0, throttle: false, brake: false };
+  touch = { steer: 0, throttle: false, brake: false };mobileControls.reset();
   if (race.mode === "career") {
     settlement = settleCareer(career, race.result);
     save();
@@ -940,7 +1047,7 @@ function showResults() {
     menu();
   };
 }
-function leaveSchool(){school?.save(localStorage);keys.clear();touch={steer:0,throttle:false,brake:false};menu();}
+function leaveSchool(){school?.save(localStorage);keys.clear();touch={steer:0,throttle:false,brake:false};mobileControls.reset();menu();}
 function openSchool(){
   const saved=loadSchool(localStorage);school=new RaceSchool(saved);
   if(saved && !["intro","complete"].includes(saved.phase)) {
@@ -954,26 +1061,27 @@ function openSchool(){
 function showSchoolIntro(index){
   race=null;paused=false;school.state.phase="intro";school.state.intro=index;school.save(localStorage);
   const card=SCHOOL_INTRO[index];
-  app.innerHTML=header()+`<main class="school-shell"><section class="modal school-intro"><div class="eyebrow">RACE SCHOOL · ${index+1} / ${SCHOOL_INTRO.length}</div><h2>${card.title}</h2>${card.bullets ? `<div class="school-dialog-text">${schoolCopy(card.text)}</div>` : `<p>${card.text.split("\n").map(escapeHTML).join("<br>")}</p>`}<div class="school-pages">${SCHOOL_INTRO.map((c,i)=>`<button class="ghost ${i===index ? "active" : ""}" data-school-page="${i}" aria-label="Lesson ${i+1}: ${c.title}" aria-pressed="${i===index}">${i+1}</button>`).join("")}</div><div class="school-buttons">${index ? '<button class="ghost" id="school-back">BACK</button>' : ""}<button class="primary" id="school-next">${index===SCHOOL_INTRO.length-1 ? "START GUIDED QUALIFYING →" : "NEXT →"}</button></div><button class="ghost school-exit" id="school-exit">BACK TO MAIN MENU</button></section></main>`;
+  app.innerHTML=header()+`<main class="school-shell"><section class="modal school-intro"><div class="eyebrow">RACE SCHOOL · ${index+1} / ${SCHOOL_INTRO.length}</div><h2>${card.title}</h2><div class="school-dialog-text">${schoolCopy(card.text)}</div><div class="school-pages">${SCHOOL_INTRO.map((c,i)=>`<button class="ghost ${i===index ? "active" : ""}" data-school-page="${i}" aria-label="Lesson ${i+1}: ${c.title}" aria-pressed="${i===index}">${i+1}</button>`).join("")}</div><div class="school-buttons">${index ? '<button class="ghost" id="school-back">BACK</button>' : ""}<button class="primary" id="school-next">${index===SCHOOL_INTRO.length-1 ? "START GUIDED QUALIFYING →" : "NEXT →"}</button></div><button class="ghost school-exit" id="school-exit">BACK TO MAIN MENU</button></section></main>`;
   app.querySelectorAll("[data-school-page]").forEach(b=>b.onclick=()=>showSchoolIntro(+b.dataset.schoolPage));
   el("school-back")?.addEventListener("click",()=>showSchoolIntro(index-1));
   el("school-next").onclick=()=>index===SCHOOL_INTRO.length-1 ? startSchoolLesson(false) : showSchoolIntro(index+1);
   el("school-exit").onclick=leaveSchool;
 }
 function schoolCopy(text){
-  const lines=String(text).split("\n");
-  return lines.length>1 ? `<ul class="school-copy">${lines.map(line=>`<li>${escapeHTML(line)}</li>`).join("")}</ul>` : `<p>${escapeHTML(text)}</p>`;
+  const copy=mobileInput ? mobileLessonText(text,settings.mobileSteering) : String(text);
+  const lines=copy.split(/\n|(?<=[.!?])\s+(?=[A-Z])/).map(line=>line.trim()).filter(Boolean);
+  return `<ul class="school-copy">${lines.map(line=>`<li>${escapeHTML(line)}</li>`).join("")}</ul>`;
 }
 function showSchoolDialog(title,text,actions){
-  el("school-dialog")?.remove();paused=true;keys.clear();touch={steer:0,throttle:false,brake:false};
+  el("school-dialog")?.remove();paused=true;keys.clear();touch={steer:0,throttle:false,brake:false};mobileControls.reset();
   const box=document.createElement("div");box.className="modal-backdrop";box.id="school-dialog";
-  box.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-labelledby="school-dialog-title"><div class="eyebrow">RACE SCHOOL</div><h2 id="school-dialog-title">${title}</h2><div class="school-dialog-text">${schoolCopy(text)}</div>${actions.map((a,i)=>`<button class="${i===0 ? "primary" : "ghost school-exit"}" data-school-dialog="${i}">${a.label}</button>`).join("")}</section>`;
+  box.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-labelledby="school-dialog-title"><div class="eyebrow">RACE SCHOOL</div><h2 id="school-dialog-title">${title}</h2><div class="school-dialog-text">${schoolCopy(text)}</div>${actions.map((a,i)=>`<button class="${i===0 ? "primary" : "ghost school-exit"}" data-school-dialog="${i}">${mobileInput ? mobileLessonText(a.label,settings.mobileSteering) : a.label}</button>`).join("")}</section>`;
   app.appendChild(box);box.querySelectorAll("[data-school-dialog]").forEach(b=>b.onclick=()=>{box.remove();actions[+b.dataset.schoolDialog].action();});box.querySelector("button").focus();
 }
 function startSchoolLesson(practice=false){
   school.weatherLesson=null;
   race=practice ? school.createPractice() : school.createQualifying();school.save(localStorage);
-  keys.clear();touch={steer:0,throttle:false,brake:false};paused=false;accumulator=0;overview=false;
+  keys.clear();touch={steer:0,throttle:false,brake:false};mobileControls.reset();paused=false;accumulator=0;overview=false;
   raceUI();mountSchoolGuide();
   showSchoolDialog(practice ? "Your first race start" : school.state.outings ? "Second outing: use Mediums" : "First outing: use Softs",practice ? "Lights out → accelerate with W / ↑.\nPress F to try a fuel mode.\nPress B to request a stop.\nSteer into the separate pit entrance.\nService and race pit exit are automatic." : "Dry practice: Softs first, Mediums second.\nW / ↑ leaves the box · S / ↓ brakes · A/D steers.\nF cycles Save / Balanced / Push.\nEach outing: out lap → timed lap → in lap.\nEnter the pits on your in lap — no B needed.\nWait for service; leave when ready.",[
     {label:practice ? "START PRACTICE →" : "READY TO DRIVE →",action:()=>{paused=false;keys.clear();if(!practice && !school.state.outings)showSchoolWeather();}},
@@ -984,7 +1092,11 @@ function mountSchoolGuide(){
   if(race.qualifying){el("finish-qualifying-run").hidden=true;el("clock").previousElementSibling.textContent="PRACTICE TIME";}
   const guide=document.createElement("section");guide.id="school-guide";guide.className="school-guide";
   guide.innerHTML=`<div class="eyebrow" id="school-progress"></div><h3 id="school-goal"></h3><div id="school-instruction"></div><div class="school-guide-actions"><button class="primary school-weather-continue" id="school-weather-continue" hidden>GOT IT · READY TO DRIVE →</button><div class="school-guide-actions" id="school-normal-actions"><button class="ghost" id="school-weather">WEATHER FORECAST</button><button class="ghost" id="school-explain">EXPLAIN AGAIN</button><button class="ghost" id="school-recover">RECOVER CAR</button>${race.qualifying ? '<button class="ghost" id="school-reset">RESET OUTING</button>' : ""}<button class="ghost" id="school-leave">LEAVE SCHOOL</button></div></div>`;
-  app.appendChild(guide);el("school-explain").onclick=()=>{const g=school.guide(race);showSchoolDialog(g.title,g.text,[{label:"BACK TO PRACTICE",action:()=>{paused=false;keys.clear();}}]);};
+  app.appendChild(guide);if(mobileInput)el("school-explain").textContent="LESSON HELP";
+  el("school-explain").onclick=()=>{const g=school.guide(race);const actions=[{label:"BACK TO PRACTICE",action:()=>{paused=false;resetDrivingInput();}}];
+    if(mobileInput){actions.push({label:"RECOVER CAR",action:()=>{school.recover(race);paused=false;resetDrivingInput();}});if(race.qualifying)actions.push({label:"RESET OUTING",action:()=>startSchoolLesson(false)});actions.push({label:"WEATHER FORECAST",action:()=>{paused=false;showSchoolWeather();}},{label:"LEAVE SCHOOL",action:leaveSchool});}
+    showSchoolDialog(g.title,g.text,actions);
+  };
   el("school-weather").onclick=showSchoolWeather;
   el("school-weather-continue").onclick=()=>{paused=school.weatherLesson.wasPaused;school.weatherLesson=null;keys.clear();updateSchoolGuide();};
   el("school-recover").onclick=()=>school.recover(race);
@@ -992,11 +1104,12 @@ function mountSchoolGuide(){
   el("school-leave").onclick=leaveSchool;updateSchoolGuide();
 }
 function showSchoolWeather(){
-  school.weatherLesson={wasPaused:paused};paused=true;keys.clear();touch={steer:0,throttle:false,brake:false};updateHUD();
+  school.weatherLesson={wasPaused:paused};paused=true;keys.clear();touch={steer:0,throttle:false,brake:false};mobileControls.reset();updateHUD();
   el("school-weather-continue").focus();
 }
 function updateSchoolGuide(){
   const weatherLesson=!!school.weatherLesson;
+  el("school-guide").classList.toggle("mobile-weather-lesson",weatherLesson);
   el("school-normal-actions").hidden=weatherLesson;
   el("school-weather-continue").hidden=!weatherLesson;
   app.querySelector(".weather-timeline")?.classList.toggle("school-weather-highlight",weatherLesson);
@@ -1026,6 +1139,7 @@ function showHelp() {
   b.className = "modal-backdrop";
   b.id = "help";
   b.innerHTML = `<section class="modal"><div class="eyebrow">DRIVER BRIEFING</div><h2>Find your rhythm.</h2><div class="help-grid"><div><h3>Drive</h3><p>W / ↑ accelerates, S / ↓ brakes then reverses once stopped. A/D or ←/→ steer. Brake before the turn, ease off through it, accelerate on exit. Touch controls appear on mobile.</p></div><div><h3>Strategy</h3><p>Softs give more grip but wear quickly. Mediums balance pace and life. Hards run longer. Use TWO different compounds before finishing. 16 laps is ideal for comparing one and two stops.</p></div><div><h3>Pit stops</h3><p>Press B to request a stop, then steer off the track into the separate pit road before the start straight. Automatic pit stops handle lane speed, the box stop, service and exit without pedals. Disable this in Settings to use manual pedals and P limiter control. Manual speeding adds 5 seconds. The wide lane has smooth merges and assisted steering; gas/brake still control speed. Release the limiter with P after exit. 1/2/3/4/5 selects S/M/H/I/W. Stop in the marked box with S; R reverses if you overshoot. Service holds the car. Three track-limit warnings precede a 5-second penalty.</p></div><div><h3>Fuel & pace</h3><p>Save reduces pace, wear and fuel use. Push trades resources for speed. F cycles modes. No refuelling, no battery. Fuel runs out? Coast to a stop and retire.</p></div><div><h3>Career</h3><p>Name your driver and choose any team. Complete Q1, Q2 and Q3 knockouts before each race. The weekend tyre pool is shared: choose individual sets and save fresh tyres for the race. Start in a slower development car. Reset your career from the garage to start again. Sign one sponsor per race, earn position money and upgrade power, grip, tyre life or pit service. Six different circuits form a season.</p></div><div><h3>Your controls</h3><p>Esc pauses. M toggles map view. Engine sound starts automatically; toggle it with Sound on / off. Your browser saves career progress automatically; quick races do not affect it.</p></div></div><button class="primary" id="close-help">READY TO RACE →</button></section>`;
+  if(mobileInput)b.querySelectorAll("p").forEach(p=>p.textContent=mobileLessonText(p.textContent,settings.mobileSteering));
   app.appendChild(b);
   el("close-help").onclick = () => {
     b.remove();
@@ -1049,6 +1163,7 @@ function toggleAudio() {
   muted=!muted;
   ensureAudio();
   app.querySelector("[data-action=sound]").textContent=muted ? "Sound off" : "Sound on";
+  refreshMobileIcons();
 }
 window.addEventListener("keydown", (e) => {
   if (
@@ -1063,6 +1178,7 @@ window.addEventListener("keydown", (e) => {
   if (k === "escape") {
     if(el("school-dialog")){e.preventDefault();return;}
     if(el("tyre-set-picker")) {el("tyre-set-picker").querySelector("[data-close-tyres]").click();return;}
+    if(el("temperature-details")){el("close-temperature-details").click();return;}
     if(el("settings-modal")) {el("close-settings").click();return;}
     if (el("reset-career-modal")) {
       el("cancel-reset").click();
@@ -1074,12 +1190,12 @@ window.addEventListener("keydown", (e) => {
     }
     pauseRace();
   }
-  if (!race || paused || race.done) return;
+  if (!race || paused || landscapeGate.blocked || race.done) return;
   if (k === "b") race.requestPit();
   if (k === "p") race.togglePitLimiter();
-  if (["1", "2", "3", "4", "5"].includes(k))
+  if (!mobileInput && ["1", "2", "3", "4", "5"].includes(k))
     setPitTyre(["S", "M", "H", "I", "W"][+k - 1]);
-  if (k === "t") {
+  if (!mobileInput && k === "t") {
     const choices = ["S", "M", "H", "I", "W"].filter(tyre => !race.weekend || selectableSets(race.player.tyreInventory, race.qualifying ? race.weekend.phase : "R", race.qualifying ? null : race.player.tyreSet?.id).some(t => t.compound === tyre));
     if(race.qualifying) choices.unshift("current");
     if(!choices.length) return;
@@ -1096,13 +1212,13 @@ window.addEventListener("keydown", (e) => {
 window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
 window.addEventListener("blur", () => {
   keys.clear();
-  touch = { steer: 0, throttle: false, brake: false };
+  touch = { steer: 0, throttle: false, brake: false };mobileControls.reset();
   if (race && !paused && !race.done) pauseRace();
 });
 function loop(now) {
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
-  if (race && !paused && !race.done) {
+  if (race && !paused && !landscapeGate.blocked && !race.done) {
     accumulator += dt*(race.qualifying ? race.timeScale : 1);
     const input = {
       reverse: keys.has("r") || touch.reverse,
@@ -1138,7 +1254,7 @@ function loop(now) {
   }
   renderer.draw(race, !race, overview, dt, race && !paused && !race.done ? accumulator/(1/60) : 1);
   if (audio) {
-    const sound=engineSoundFrame(race,paused,muted,keys.has("w") || keys.has("arrowup") || touch.throttle);
+    const sound=engineSoundFrame(race,paused || landscapeGate.blocked,muted,keys.has("w") || keys.has("arrowup") || touch.throttle);
     const rev=sound.frequency;
     audio.osc.frequency.setTargetAtTime(rev, audio.context.currentTime, 0.06);
     audio.gain.gain.setTargetAtTime(
@@ -1149,5 +1265,8 @@ function loop(now) {
   }
   requestAnimationFrame(loop);
 }
+window.addEventListener("resize",updateMobileSession);
+window.matchMedia("(pointer: coarse)").addEventListener("change",e=>{mobileInput=e.matches;document.body.classList.toggle("mobile-game",mobileInput);if(race)mountMobileControls();else menu();updateMobileSession();});
+document.addEventListener("visibilitychange",()=>{if(document.hidden){resetDrivingInput();if(race && !paused && !race.done)pauseRace();}});
 menu();
 requestAnimationFrame(loop);
