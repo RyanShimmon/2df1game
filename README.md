@@ -150,3 +150,7 @@ Automated play-tests drive both qualifying outings, verify the required change, 
 
 
 Race School now uses brief bullet prompts, an F fuel-mode reminder on out laps, and animated cues for the required physical Medium-set selection in Outing 2. A completed training outing advances the lesson even if its lap was deleted; deleted laps remain excluded from qualifying results. The popup must be used for the required change. After service, W / Up or Leave pit box starts the next outing.
+
+### Vercel deployment
+
+Import the GitHub repository into Vercel. The committed `vercel.json` selects Other as the framework, runs `npm run build`, and serves `dist/`. The static build contains only `index.html` and `src/`; the local Node server and tests are not published. Production follows `main`, so future pushes redeploy automatically. Career and Race School saves remain local to each browser and site address; localhost saves do not transfer automatically to the hosted site.
