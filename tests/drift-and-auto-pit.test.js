@@ -30,12 +30,15 @@ test('auto pits ignore brake and reverse pedal input and still complete service'
  for(let i=0;i<4000 && p.pit;i++)r.stepPit(p,1/60,{brake:true,reverse:true});
  assert.equal(p.stops,1);assert.equal(p.pit,null);
 });
-test('automatic qualifying stop refuels and exits on retained tyres without a new throttle press',()=>{
+test('automatic qualifying stop refuels and holds retained tyres until a new throttle press',()=>{
  const profile={driverName:'Alex',teamIndex:2},w=createWeekend(newCareer(profile),{laps:12,fuel:14,tyre:'S'});
  const q=new QualifyingRun(w,'S1',upgrades,profile),p=q.player;q.cars=[p];p.garage=false;p.pit=null;p.qState='in';p.s=TRACK.pitEntry;p.speed=80;
  q.enterPit(p);
+ for(let i=0;i<4000 && !p.garage;i++)q.step(1/60,{});
+ assert.equal(p.stops,1);assert.ok(p.pit.serviced);assert.equal(p.qState,'garage');assert.equal(p.garage,true);assert.equal(p.tyreSet.id,'S1');assert.ok(p.fuel>3);
+ q.step(1/60,{throttle:true});
  for(let i=0;i<4000 && p.pit;i++)q.step(1/60,{});
- assert.equal(p.stops,1);assert.equal(p.pit,null);assert.equal(p.qState,'out');assert.equal(p.garage,false);assert.equal(p.tyreSet.id,'S1');assert.ok(p.fuel>3);
+ assert.equal(p.pit,null);assert.equal(p.qState,'out');
 });
 test('soft wear rises modestly while retaining its qualifying reuse advantage',()=>{
  const r=race(),p=r.player;resources(p,0,TRACK.length);

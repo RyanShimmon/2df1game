@@ -1376,3 +1376,14 @@ input[type="range"] {
 @media(max-width:620px) { .track-picker-grid {grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;} .track-picker-modal {padding:14px;} .track-picker-heading h2 {font-size:26px;} .track-picker-backdrop {padding:12px;} .track-card-info > div {display:block;} .track-card-info span {display:block;margin-top:3px;} .track-thumbnail {height:95px;} }
 
 .starting-position-label { margin-top: 14px; }
+
+.tyre-picker-modal { width:min(760px,94vw); max-height:88vh; overflow:auto; }
+.tyre-set-group { margin-top:20px; }
+.tyre-set-group h3 { font-size:15px; margin-bottom:10px; }
+.tyre-set-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:10px; }
+.tyre-set-card { color:#edf3e6; padding:14px; border:1px solid #485559; border-radius:10px; background:#263338; text-align:left; }
+.tyre-set-card.selected { border-color:var(--tyre); background:#354248; }
+.tyre-set-card b { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+.tyre-set-card b span { margin-left:auto; }
+.tyre-set-card small { display:block; margin-top:10px; color:#b8c8c5; font-size:11px; }
+.browse-tyres { width:100%; margin-top:12px; }

@@ -1,6 +1,6 @@
 # V10 — Grand Prix
 
-Version **1.0.0**.
+Version **1.1.0**.
 
 A local browser game with top-down V10 racing, 22 cars, five tyre types, dynamic weather, qualifying and a saved career. Requires Node.js 18 or newer; no dependency installation is needed.
 
@@ -124,3 +124,17 @@ Quick Race has a starting-position dropdown below Race distance, from P1 to P22 
 All 12 circuits have been checked for folded inside boundaries, kerb overlap and merged same-level road sections. Ten layouts had bends opened up; Metro's repaired layout and Sunset's oval already had sufficient clearance. Harbour retains distinct street esses; Crossover's adjacent sections have been separated without removing its flyover. Geometry tests cover the complete closed lap, including the start-line seam, with at least 40 units of radius beyond the road half-width and 50 units between non-adjacent same-level road surfaces.
 
 Automated play-tests apply steering, throttle and braking through complete dry and wet player laps on every circuit, then enter each physical pit entrance, stop for service and exit automatically. Full 22-car races also complete on every circuit with legal tyre usage and fuel remaining. Browser checks inspect every circuit's rendered road edges and confirm Quick Race grid selection works and is hidden in Career.
+
+
+### Qualifying pit-box control
+
+An in lap automatically arms pit entry; steer into the physical pit entrance without pressing B. Qualifying service has a minimum wait and refuels the car, then keeps it parked in its box until a fresh W / Up press. Tyres can be selected while service is running or after it finishes; choosing another physical set runs a tyre-change wait before departure. Current retains the fitted set and its wear. Race automatic pit stops still exit immediately after service.
+
+The qualifying race screen includes Move to Q2 / Q3 or End qualifying in P… based on the current standings. Selecting it fast-forwards remaining AI outings, applies the actual knockout order, and opens the next session or race preparation immediately.
+
+
+### Qualifying speed and physical tyre sets
+
+Session advancement is locked until every active driver has attempted a timed lap. The button reports how many opponents still need their first run, or prompts the player to complete their own. Ending early simulates the rest of the session with repeated AI outings, tyre wear, weather and updated best times before applying knockouts. Time cycles 1× → 2× → 4× → 8× → 1× in qualifying only; physics still uses fixed simulation steps.
+
+Choose tyre set opens a scrollable allocation popup with compound colours, set IDs, condition bars and fresh/used/fitted labels. A used set can be selected for another outing or the next qualifying stage without resetting its wear. The popup is also available from qualifying preparation; quick compound selection stays available. Simulation pauses while browsing. Reserved and exhausted sets are disabled.

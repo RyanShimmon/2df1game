@@ -6,7 +6,7 @@ import {
   recommendedTyre,
   rainAt,
 } from "./weather.js";
-import { selectTrack, normalizeDifficulty, Race, TRACK, TYRES, sample, resources, clamp, PIT_LANE, samplePit, wrap, capturePoses } from "./core.js";
+import { selectTrack, normalizeDifficulty, Race, TRACK, TYRES, sample, resources, clamp, PIT_LANE, samplePit, wrap, capturePoses, tyreServiceTime } from "./core.js";
 export const WEEKENDS = [
   { name: "Northline Opener", track:"northline", laps: 24, weather: "showers" },
   { name: "Velocity Trophy", track:"velocity", laps: 24, weather: "wetToDry" },
@@ -184,12 +184,19 @@ export function fitSet(car, set) {
 }
 export function recordLap(w, id, lap, at) {
   if (!Number.isFinite(lap) || lap <= 0) return;
+  w.attempts ||= {};w.attempts[id]=(w.attempts[id] || 0)+1;
   const row = w.results.find((r) => r.id === id);
   if (!row) w.results.push({ id, time: lap, at });
   else if (lap < row.time) {
     row.time = lap;
     row.at = at;
   }
+}
+export function pendingFirstRuns(w) {
+  return w.active.filter(id=>id!==21 && !(w.attempts?.[id]>0 || w.results.some(r=>r.id===id)));
+}
+export function qualifyingReady(w) {
+  return pendingFirstRuns(w).length===0 && (w.attempts?.[21]>0 || w.results.some(r=>r.id===21));
 }
 export function stageOrder(w) {
   return [...w.active].sort((a, b) => {
@@ -267,6 +274,7 @@ export function finishQualifyingStage(w, upgrades, profile) {
     w.phase = w.phase === "Q1" ? "Q2" : "Q3";
   }
   w.results = [];
+  w.attempts = {};
   w.elapsed = 0;
   w.runCount = 0;
   w.runInProgress = false;
@@ -330,6 +338,8 @@ export class QualifyingRun extends Race {
     const selected = selectableSets(w.inventories[21], w.phase).find(t => t.id === setId);
     if (!selected) throw Error("Select an available tyre set");
     this.qualifying = true;
+    this.profile=profile;
+    this.timeScale=1;
     migrateWeekend(w);
     this.weather = w.weather;
     this.weekend = w;
@@ -377,7 +387,8 @@ export class QualifyingRun extends Race {
     return 5 + Math.random()*65 + c.id*.4;
   }
   launch(c) {
-    if (c.qState !== "garage" || !c.pit || this.weekend.elapsed >= this.stage.duration) return false;
+    if (c.qState !== "garage" || !c.pit || !c.pit.serviced || this.weekend.elapsed >= this.stage.duration) return false;
+    if (this.finishingSession && c.player) return false;
     const blocked = this.cars.some(other => other !== c && !other.garage && other.pit &&
       Math.abs(other.pit.distance-c.pit.distance)<65);
     if (blocked) return false;
@@ -395,7 +406,52 @@ export class QualifyingRun extends Race {
   }
   requestPit() {
     if (this.player.garage) { this.say("Crew ready. Press W / ↑ when you want to leave."); return; }
+    if (this.player.qState === "in") { this.pitRequested=true; this.say("In lap: pit entry is automatic. Steer into the pit road."); return; }
     super.requestPit();
+  }
+  selectGarageSet(id) {
+    const c=this.player,p=c.pit;
+    if (!p || (!c.garage && p.stage!=="service")) return false;
+    const set=selectableSets(c.tyreInventory,this.weekend.phase).find(t=>t.id===id);
+    if (!set) return false;
+    this.nextSetId=set.id;this.nextTyre=set.compound;
+    if (p.nextSet===set) return true;
+    p.previousSet=c.tyreSet;p.nextSet=set;p.nextTyre=set.compound;
+    p.serviced=false;p.stage="service";c.speed=0;
+    p.serviceDuration=set===c.tyreSet ? 2.3 : tyreServiceTime(c.upgrades.crew,this.pitRandom || Math.random);
+    p.timer=Math.max(p.timer || 0,p.serviceDuration);
+    c.qNeedsRelease=true;
+    this.say("Tyres selected. Minimum service wait, then press W / ↑ when ready to leave.");
+    return true;
+  }
+  cycleTimeScale() {
+    const speeds=[1,2,4,8];this.timeScale=speeds[(speeds.indexOf(this.timeScale)+1)%speeds.length];return this.timeScale;
+  }
+  canEndSession() { return qualifyingReady(this.weekend); }
+  sessionAction() {
+    const waiting=pendingFirstRuns(this.weekend).length;
+    if(waiting) return `Waiting for ${waiting} opponent${waiting===1 ? "" : "s"} to complete a first run`;
+    if(!this.canEndSession())return "Complete your first timed lap before ending the session";
+    const rank=stageOrder(this.weekend).indexOf(21)+1;
+    const timed=this.weekend.results.some(r=>r.id===21);
+    return this.stage.name!=="Q3" && timed && rank<=this.stage.keep
+      ? "Move to " + (this.stage.name==="Q1" ? "Q2" : "Q3")
+      : "End qualifying in P"+rank;
+  }
+  endSession() {
+    if (this.sessionEnded || !this.canEndSession()) return null;
+    this.sessionEnded=true;this.finishingSession=true;
+    // Withdraw the player; fast-forward the remaining AI outings before the cutoff is decided.
+    this.player.garage=true;this.player.speed=0;
+    this.player.qState="garage";this.player.pit=null;
+    // Simulate the rest of the session with repeated AI outings, fresh choices and weather.
+    for(let i=0;i<60*(this.stage.duration+90) && !this.done;i++)this.step(1/60,{});
+    this.endRun();
+    const rank=stageOrder(this.weekend).indexOf(21)+1;
+    finishQualifyingStage(this.weekend,this.player.upgrades,this.profile);
+    const through=this.weekend.active.includes(21) && this.weekend.phase!=="R";
+    if(!through) finishRemainingQualifying(this.weekend,this.player.upgrades,this.profile);
+    return {through,position:rank,phase:this.weekend.phase};
   }
   endRun() {
     if (this.done) return;
@@ -416,7 +472,10 @@ export class QualifyingRun extends Race {
       if (!c.qInvalid) {
         c.bestLap = Math.min(c.bestLap,lap);
         recordLap(this.weekend,c.id,lap,this.stageStart+this.time);
-      } else if(c.player) this.say("Lap deleted: track limits. Complete your in lap.");
+      } else {
+        this.weekend.attempts ||= {};this.weekend.attempts[c.id]=(this.weekend.attempts[c.id] || 0)+1;
+        if(c.player) this.say("Lap deleted: track limits. Complete your in lap.");
+      }
       c.qState = "in";
       c.qStart = null;
       if(c.player) { this.pitRequested = true; this.say("Timed lap complete. In lap: return to the box. Extra laps will not count."); }
@@ -433,7 +492,7 @@ export class QualifyingRun extends Race {
     this.traffic=this.cars.map(c=>({id:c.id,s:c.s,speed:c.speed,offset:c.offset,pit:c.pit,
       garage:c.garage,finished:c.finished,dnf:c.dnf}));
     for(const c of this.cars) {
-      if(c.garage) {
+      if(c.garage && c.pit?.stage!=="service") {
         if(c.qNeedsRelease && !input.throttle) c.qNeedsRelease=false;
         if(c.player ? input.throttle && !c.qNeedsRelease : this.time>=c.qReleaseAt) this.launch(c);
         continue;
@@ -442,26 +501,27 @@ export class QualifyingRun extends Race {
       c.trackWetness=trackWater(this.weather,c.s,TRACK.length,c.offset);
       c.contactCooldown=Math.max(0,c.contactCooldown-dt);
       if(c.pit) {
-        if(!c.pit.serviced) { c.qState="in"; c.qStart=null; }
+        if(!c.pit.serviced) { c.qState=c.garage ? "garage" : "in"; c.qStart=null; }
         this.stepPit(c,dt,input);
         if(c.stops>oldStops) {
           c.fuel=getQualifyingFuel();
           c.qStart=null;
-          const automaticDeparture=c.player && this.autoPitLimiter && this.weekend.elapsed<this.stage.duration;
-          c.qState=automaticDeparture ? "out" : "garage";
-          if(automaticDeparture) c.qLaps=0;
+          c.qState="garage";
+          c.garage=true;
           c.qInvalid=false;
-          c.garage=!automaticDeparture;
           c.qNeedsRelease=!!input.throttle;
           c.speed=0;
           c.qReleaseAt=this.time+this.releaseDelay(c);
           if(c.player) {
             this.nextSetId=c.tyreSet.id;
             this.nextTyre=c.tyre;
-            this.say(automaticDeparture ? "Service complete. Automatic pit exit; next outing has three-lap fuel." : "Service complete. Fuel for three laps. Press W / ↑ to leave when ready.");
+            this.say("Service complete. Choose tyres here, then press W / ↑ to leave when ready.");
           }
         }
-      } else if(c.player) this.stepPlayer(c,dt,input);
+      } else if(c.player) {
+        if(c.qState==="in") this.pitRequested=true;
+        this.stepPlayer(c,dt,input);
+      }
       else {
         super.stepAI(c,dt);
       }
