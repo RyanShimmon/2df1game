@@ -127,7 +127,7 @@ function tyreLifeIndicator(selected={compound:setup.tyre,wear:0}) {
   return `<section class="tyre-life" aria-label="Average tyre life"><div class="tyre-life-heading"><b>AVERAGE TYRE LIFE</b><span>Balanced pace · suitable conditions</span></div><div class="tyre-life-grid">${["S","M","H","I","W"].map(compound=>`<div style="--tyre:${TYRES[compound].color}"><i class="tyre-dot"></i><span>${TYRES[compound].name}</span><b>≈ ${estimatedTyreLife(compound,{upgrades}).toFixed(1).replace(/\.0$/,"")} laps</b></div>`).join("")}</div><p class="tyre-life-remaining">${selected.id ? selected.id+" · " : ""}${TYRES[selected.compound].name} selected <strong>≈ ${remaining.toFixed(1)} laps remaining</strong></p><p class="hint">Estimate for this car. Push, heat and sliding shorten tyre life.</p></section>`;
 }
 function header() {
-  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.4</div></header>`;
+  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.4.1</div></header>`;
 }
 function tabs() {
   return `<div class="tabs"><button class="tab ${screen === "quick" ? "active" : ""}" data-screen="quick">Quick race</button><button class="tab ${screen === "career" ? "active" : ""}" data-screen="career">Career garage</button><button class="tab" data-action="school">Race School</button><button class="tab" data-action="help">How to drive ↗</button><button class="tab" data-action="settings">Settings</button></div>`;
@@ -234,7 +234,7 @@ function careerPage() {
   migrateWeekend(career.weekend);
   if (career.weekend && !validWeekend(career.weekend, career))
     career.weekend = null;
-  return `<div class="career-head"><div><div class="eyebrow">BUILD YOUR WAY UP THE GRID</div><h2 style="margin-top:10px">Your career garage</h2></div><div class="wallet"><div class="stat"><span>Budget</span><strong>${money(career.cash)}</strong></div><div class="stat"><span>Career points</span><strong>${career.points}</strong></div></div></div>${tabs()}<button class="ghost career-reset" data-action="reset-career">Reset career</button><div class="notice">${notice || `Season ${career.season}, round ${career.round} of 6 · ${career.seasonPoints} season points · ${escapeHTML(career.profile.driverName)} · ${TEAMS[career.profile.teamIndex].name} development car`}</div><div class="career-layout"><div class="career-left">${career.weekend ? weekendCard() : setupCard()}<section class="panel"><div class="panel-heading"><h3>Recent results</h3><span class="eyebrow">${career.history.length ? "SAVED" : "NEW DRIVER"}</span></div>${
+  return `<div class="career-head"><div><div class="eyebrow">BUILD YOUR WAY UP THE GRID</div><h2 style="margin-top:10px">Your career garage</h2></div><div class="wallet"><div class="stat"><span>Budget</span><strong>${money(career.cash)}</strong></div><div class="stat"><span>Career points</span><strong>${career.points}</strong></div></div></div>${tabs()}<button class="ghost career-reset" data-action="reset-career">Reset career</button><div class="notice">${notice || `Season ${career.season}, round ${career.round} of 6 · ${career.seasonPoints} season points · ${escapeHTML(career.profile.driverName)} · ${TEAMS[career.profile.teamIndex].name} development car`}</div>${garageSections()}<div class="career-layout"><div class="career-left">${career.weekend ? weekendCard() : setupCard()}<section class="panel"><div class="panel-heading"><h3>Recent results</h3><span class="eyebrow">${career.history.length ? "SAVED" : "NEW DRIVER"}</span></div>${
     career.history.length
       ? career.history
           .slice(0, 4)
@@ -244,31 +244,73 @@ function careerPage() {
           )
           .join("")
       : '<p class="muted">Start near the back in a slower car. Earn race money, meet sponsor conditions and invest in your pace. The six-round season visits six different circuits.</p>'
-  }<div class="save-note">Career saves automatically in this browser.</div>${saveWarning ? `<div class="storage-warning">${saveWarning}</div>` : ""}</section></div><div class="career-right">${sponsorCard()}${developmentCard()}${aeroCard()}${rivalDevelopmentCard()}</div></div>`;
+  }<div class="save-note">Career saves automatically in this browser.</div>${saveWarning ? `<div class="storage-warning">${saveWarning}</div>` : ""}</section></div><div class="career-right">${sponsorCard()}</div></div>`;
+}
+function garageSections(){
+ const installed=Object.values(career.upgrades).reduce((sum,n)=>sum+n,0),locked=!!career.weekend;
+ const sections=[
+  {id:"development",title:"Car development",summary:`${installed} upgrade ${installed===1 ? "level" : "levels"} · ${locked ? "Weekend locked" : "9 upgrade paths"}`},
+  {id:"aero",title:"Aero package",summary:`${AERO_PACKAGES[career.aeroSpec || "balanced"].name} · ${locked ? "Weekend locked" : "Choose your setup"}`},
+  {id:"teams",title:"Team development",summary:"11 teams · Budgets & upgrades"},
+ ];
+ return `<nav class="garage-sections" aria-label="Career management">${sections.map(section=>`<button class="garage-section-choice" data-garage-section="${section.id}" aria-haspopup="dialog"><span><b>${section.title}</b><small>${section.summary}</small></span><span class="garage-section-arrow" aria-hidden="true">↗</span></button>`).join("")}</nav>`;
+}
+function garageDialogKeys(event,backdrop,close){
+ if(event.key==="Escape"){event.preventDefault();event.stopPropagation();close();}
+ if(event.key==="Tab"){
+  const controls=[...backdrop.querySelectorAll('button:not(:disabled),summary,[href],input:not(:disabled),select:not(:disabled),[tabindex]:not([tabindex="-1"])')].filter(node=>node.getClientRects().length),first=controls[0],last=controls.at(-1);
+  if(event.shiftKey&&(document.activeElement===first||!controls.includes(document.activeElement))){event.preventDefault();last?.focus();}
+  else if(!event.shiftKey&&(document.activeElement===last||!controls.includes(document.activeElement))){event.preventDefault();first?.focus();}
+ }
+}
+function showGarageSection(section,{scrollTop=0,focusSelector=null}={}){
+ if(el("garage-section-modal"))return;
+ const sections={development:{title:"Car development",render:developmentCard},aero:{title:"Aero package",render:aeroCard},teams:{title:"Team development",render:rivalDevelopmentCard}},selected=sections[section];
+ if(!selected)return;
+ const shell=app.querySelector(".menu-shell"),backdrop=document.createElement("div");
+ backdrop.className="modal-backdrop";backdrop.id="garage-section-modal";
+ backdrop.innerHTML=`<section class="modal garage-modal" role="dialog" aria-modal="true" aria-labelledby="garage-section-title"><div class="track-picker-heading"><div><div class="eyebrow">YOUR GARAGE · ${money(career.cash)}</div><h2 id="garage-section-title" tabindex="-1">${selected.title}</h2></div><button class="ghost" data-close-garage aria-label="Close ${selected.title}">×</button></div><div class="garage-panel-body">${selected.render()}</div><button class="ghost garage-back" data-close-garage>BACK TO GARAGE</button></section>`;
+ app.appendChild(backdrop);shell.inert=true;
+ const close=()=>{backdrop.remove();shell.inert=false;keys.clear();app.querySelector(`[data-garage-section="${section}"]`)?.focus({preventScroll:true});};
+ backdrop.querySelectorAll("[data-close-garage]").forEach(button=>button.onclick=close);
+ backdrop.onclick=event=>{if(event.target===backdrop)close();};
+ backdrop.addEventListener("keydown",event=>garageDialogKeys(event,backdrop,close));
+ backdrop.querySelectorAll("[data-upgrade]").forEach(button=>button.onclick=()=>showUpgradePreview(button.dataset.upgrade));
+ backdrop.querySelectorAll("[data-aero-spec]").forEach(button=>button.onclick=()=>{
+  if(setAeroPackage(career,button.dataset.aeroSpec))refreshGarageSection("aero",`[data-aero-spec="${button.dataset.aeroSpec}"]`);
+ });
+ const focus=focusSelector&&backdrop.querySelector(focusSelector);
+ (focus&&!focus.disabled ? focus : el("garage-section-title")).focus({preventScroll:true});
+ backdrop.querySelector(".garage-modal").scrollTop=scrollTop;
+}
+function refreshGarageSection(section,focusSelector){
+ const pageTop=app.querySelector(".menu-shell").scrollTop,panelTop=el("garage-section-modal").querySelector(".garage-modal").scrollTop;
+ save();menu();app.querySelector(".menu-shell").scrollTop=pageTop;
+ showGarageSection(section,{scrollTop:panelTop,focusSelector});
 }
 function developmentCard(){
  const bench=developmentBench(career.upgrades,career.aeroSpec),locked=!!career.weekend;
- return `<section class="panel development-panel"><div class="panel-heading"><h3>Car development</h3><span class="eyebrow">${locked ? "LOCKED FOR WEEKEND" : "BUILD YOUR ADVANTAGE"}</span></div><div class="development-stats"><div><span>0–250 KM/H</span><b>${bench.accelerate.toFixed(2)}s</b></div><div><span>MEDIUM LIFE</span><b>≈ ${bench.medium.toFixed(1)} laps</b></div><div><span>FUEL · 24 LAPS</span><b>≈ ${bench.fuel.toFixed(1)}</b></div></div>${["Powertrain","Chassis","Race operations","Team business"].map(group=>`<div class="development-group"><h4>${group}</h4>${Object.entries(UPGRADES).filter(([,u])=>u.group===group).map(([key,u])=>{
+ return `<div class="development-panel"><div class="panel-heading"><span class="eyebrow">${locked ? "LOCKED FOR WEEKEND" : "BUILD YOUR ADVANTAGE"}</span></div><div class="development-stats"><div><span>0–250 KM/H</span><b>${bench.accelerate.toFixed(2)}s</b></div><div><span>MEDIUM LIFE</span><b>≈ ${bench.medium.toFixed(1)} laps</b></div><div><span>FUEL · 24 LAPS</span><b>≈ ${bench.fuel.toFixed(1)}</b></div></div>${["Powertrain","Chassis","Race operations","Team business"].map(group=>`<div class="development-group"><h4>${group}</h4>${Object.entries(UPGRADES).filter(([,u])=>u.group===group).map(([key,u])=>{
   const n=level(career.upgrades,key),max=n>=u.max;
   return `<div class="upgrade"><div class="upgrade-info"><h3>${u.name}</h3><p>${u.desc}</p><div class="levels" aria-label="Level ${n} of ${u.max}">${Array.from({length:u.max},(_,i)=>`<i class="${i<n?"on":""}"></i>`).join("")}<span>${n} / ${u.max}</span></div></div><button class="ghost upgrade-review" data-upgrade="${key}" ${locked || max ? "disabled" : ""} aria-label="${max ? u.name+" fully developed" : "Review "+u.name+", "+money(upgradeCost(career,key))}">${max ? "MAX" : `<span>REVIEW</span><b>${money(upgradeCost(career,key))}</b>`}</button></div>`;
- }).join("")}</div>`).join("")}<p class="hint">Review an upgrade to see its measured effects before buying. Development and aero choices lock when qualifying starts.</p></section>`;
+ }).join("")}</div>`).join("")}<p class="hint">Review an upgrade to see its measured effects before buying. Development and aero choices lock when qualifying starts.</p></div>`;
 }
 function aeroCard(){
- return `<section class="panel aero-panel"><div class="panel-heading"><h3>Aero package</h3><span class="eyebrow">${career.weekend ? "WEEKEND LOCKED" : "FREE TO SWITCH"}</span></div><p class="hint">Buy Aerodynamics I to unlock both specialist packages. Choose before qualifying.</p><div class="aero-packages">${Object.entries(AERO_PACKAGES).map(([key,pack])=>{
+ return `<div class="aero-panel"><div class="panel-heading"><span class="eyebrow">${career.weekend ? "WEEKEND LOCKED" : "FREE TO SWITCH"}</span></div><p class="hint">${career.weekend ? "Your aero package is fixed for this weekend." : level(career.upgrades,"aero") ? "Choose your package before qualifying. Switching is free." : "Buy Aerodynamics I to unlock both specialist packages. Choose before qualifying."}</p><div class="aero-packages">${Object.entries(AERO_PACKAGES).map(([key,pack])=>{
   const locked=key!=="balanced"&&!level(career.upgrades,"aero"),selected=(career.aeroSpec || "balanced")===key;
   return `<button class="aero-choice ${selected?"selected":""}" data-aero-spec="${key}" aria-pressed="${selected}" ${locked || career.weekend ? "disabled" : ""}><b>${pack.name}${selected?" ✓":""}</b><span>${pack.desc}</span><small>${locked ? "UNLOCK AT AERO I" : key==="downforce" ? "+10% high-speed support · +8% drag" : key==="lowDrag" ? "−8% drag · −5% high-speed support" : "Even balance"}</small></button>`;
- }).join("")}</div></section>`;
+ }).join("")}</div></div>`;
 }
 function rivalDevelopmentCard(){
  const snapshot=career.weekend?.setup.teamDevelopment || developmentSnapshot(career,weekendSchedule(career.round).track);
- return `<section class="panel rivals-panel"><details><summary>Team development <span>11 teams</span></summary><p class="hint">Teams fund parts from race and sponsor income. They pay the same prices and use the same upgrade effects. Budgets are per car, averaged across each team's drivers.</p>${career.teams.map(t=>{
+ return `<div class="rivals-panel"><p class="hint">Teams fund parts from race and sponsor income. They pay the same prices and use the same upgrade effects. Budgets are per car, averaged across each team's drivers.</p>${career.teams.map(t=>{
   const yours=t.teamIndex===career.profile.teamIndex,upgrades=yours?career.upgrades:t.upgrades,budget=yours?career.cash:t.budget,count=Object.values(upgrades).reduce((a,b)=>a+b,0),pack=snapshot.find(x=>x.teamIndex===t.teamIndex)?.aeroSpec || "balanced";
   const bought=t.history[0]?.purchases || [];
   return `<details class="team-development-row"><summary><b style="--team:${TEAMS[t.teamIndex].color}">${TEAMS[t.teamIndex].name}${yours ? " · YOU" : ""}</b><span>${count} ${count===1?"level":"levels"}</span><small>${money(budget)}</small></summary><div class="team-parts">${Object.entries(UPGRADES).filter(([key])=>level(upgrades,key)>0).map(([key,u])=>`<span>${u.name} ${level(upgrades,key)}</span>`).join("") || "Factory specification"}</div><p class="hint">${AERO_PACKAGES[pack]?.name || "Balanced"} package${!yours && bought.length ? " · Latest: "+bought.map(b=>UPGRADES[b.key].name+" "+b.level+" ("+money(b.cost)+")").join(", ") : ""}</p></details>`;
- }).join("")}</details></section>`;
+ }).join("")}</div>`;
 }
 function showUpgradePreview(key){
- if(career.weekend || !UPGRADES[key] || level(career.upgrades,key)>=UPGRADES[key].max)return;
+ if(el("upgrade-preview") || career.weekend || !UPGRADES[key] || level(career.upgrades,key)>=UPGRADES[key].max)return;
  const preview=upgradePreview(career,key,{tyreTemperatureEnabled:settings.tyreTemperature}),cost=upgradeCost(career,key),top=app.querySelector(".menu-shell").scrollTop;
  const explanation={
   tyres:"Life estimates assume Balanced pace and suitable conditions. Heat, sliding and driving style change the actual stint.",
@@ -280,15 +322,18 @@ function showUpgradePreview(key){
  const backdrop=document.createElement("div");backdrop.className="modal-backdrop";backdrop.id="upgrade-preview";
  backdrop.innerHTML=`<section class="modal upgrade-preview" role="dialog" aria-modal="true" aria-labelledby="upgrade-preview-title"><div class="eyebrow">DEVELOPMENT · LEVEL ${level(career.upgrades,key)} → ${level(career.upgrades,key)+1}</div><h2 id="upgrade-preview-title">${preview.name}</h2><p class="muted">${UPGRADES[key].desc}</p><div class="preview-column-labels"><span>MEASURE</span><span>CURRENT → UPGRADED</span></div><dl class="upgrade-metrics">${preview.rows.map(row=>`<div><dt>${row.label}</dt><dd><span>${row.before}</span><i aria-hidden="true">→</i><b>${row.after}</b></dd></div>`).join("")}</dl><p class="hint">${explanation}</p>${key==="tyres"&&!settings.tyreTemperature?'<p class="hint">Temperature simulation is off. Longer life and the gentler grip cliff still apply.</p>':""}<div class="preview-budget"><span>Available ${money(career.cash)}</span><b>${money(cost)}</b></div><button class="primary" id="install-upgrade" ${career.cash<cost?"disabled":""}>${career.cash<cost ? "NEED "+money(cost-career.cash)+" MORE" : "INSTALL UPGRADE · "+money(cost)}</button><button class="ghost" id="cancel-upgrade">BACK TO DEVELOPMENT</button></section>`;
  app.appendChild(backdrop);
- const close=()=>{backdrop.remove();app.querySelector(`[data-upgrade="${key}"]`)?.focus();};
+ const garage=el("garage-section-modal");
+ if(garage){garage.inert=true;garage.setAttribute("aria-hidden","true");}
+ const close=()=>{backdrop.remove();if(garage){garage.inert=false;garage.removeAttribute("aria-hidden");}app.querySelector(`[data-upgrade="${key}"]`)?.focus({preventScroll:true});};
  el("cancel-upgrade").onclick=close;backdrop.onclick=e=>{if(e.target===backdrop)close();};
  el("install-upgrade").onclick=()=>{
   if(!buyUpgrade(career,key))return;
   notice=UPGRADES[key].name+" "+level(career.upgrades,key)+" installed. Your next weekend uses the new parts.";
-  save();menu();app.querySelector(".menu-shell").scrollTop=top;
+  if(garage)refreshGarageSection("development",`[data-upgrade="${key}"]`);
+  else {save();menu();app.querySelector(".menu-shell").scrollTop=top;}
  };
  el("upgrade-preview-title").tabIndex=-1;el("upgrade-preview-title").focus();
- backdrop.addEventListener("keydown",e=>{if(e.key==="Escape"){e.stopPropagation();close();}});
+ backdrop.addEventListener("keydown",event=>garageDialogKeys(event,backdrop,close));
 }
 function engineerBriefHTML(running){
  const report=running.engineerReport();
@@ -338,31 +383,11 @@ function weekendCard() {
       return `<div class="history-row"><b>P${i + 1}</b><span>${escapeHTML(modelName)}</span><span>${phase === "R" ? "GRID" : t ? time(t.time) : "NO TIME"}</span></div>`;
     })
     .join("");
-  return `<section class="race-card weekend-card"><div class="track-header"><h3>${phase === "R" ? "Race preparation" : phase + " qualifying"}</h3><span class="badge">${w.weather.rain > 0.6 ? "HEAVY RAIN" : w.weather.rain > 0.05 ? "RAIN" : w.weather.wetness > 0.1 ? "DRYING" : "DRY"} / ${Math.round(w.weather.wetness * 100)}% WET</span></div><p class="hint">${phase === "R" ? `Starting P${w.grid.indexOf(21) + 1} · ${w.setup.laps} laps · ${w.eventName || weekendSchedule(w.round).name} · ${DIFFICULTIES[normalizeDifficulty(w.setup.difficulty)].name} AI · choose any remaining set.` : eliminated ? "You have been knocked out. The remaining sessions will set the front of the grid." : `${w.active.length} cars · ${stage.keep} advance · ${Math.ceil((stage.duration - w.elapsed) / 60)} min remaining. Choose when to leave the garage. Each run has an out lap, one timed lap and an in lap.`}</p>${phase === "R" ? `<div class="field"><label for="weekend-set">Race starting set</label><select id="weekend-set">${sets.map((t) => `<option value="${t.id}" ${t.id === selectedWeekendSet ? "selected" : ""}>${tyreSetLabel(t)}</option>`).join("")}</select></div>` : `<div class="fuel-row"><span>Selected tyre set</span><b>${sets.find(t=>t.id===selectedWeekendSet) ? tyreSetLabel(sets.find(t=>t.id===selectedWeekendSet)) : "No available sets"}</b></div>`}${phase !== "R" ? `<button class="ghost browse-tyres" data-action="browse-weekend-tyres">Browse tyre sets · fresh & used</button>` : ""}${phase === "R" ? `<div class="fuel-row"><span>Race fuel</span><b id="weekend-fuel-label">${w.setup.fuel.toFixed(1)} laps</b></div><input id="weekend-fuel" aria-label="Race fuel in laps" type="range" min="${w.setup.laps * 0.85}" max="${w.setup.laps * 1.35}" step=".1" value="${w.setup.fuel}">` : ""}<div class="weekend-inventory">${w.inventories[21]
-    .filter((t) => !t.returned)
-    .map(
-      (t) =>
-        `<span style="--tyre:${TYRES[t.compound].color}" class="tyre-set-chip ${t.reserved && phase !== "Q3" && phase !== "R" ? "locked" : ""}">${t.id} · ${Math.round(Math.max(0, 1 - t.wear) * 100)}%${t.reserved && phase !== "R" ? " · Q3" : ""}</span>`,
-    )
-    .join(
-      "",
-    )}</div>${tyreLifeIndicator(sets.find(t=>t.id===selectedWeekendSet) || {compound:setup.tyre,wear:0})}<p class="hint">${forecast(w.weather)} · surface water carries over from qualifying.</p>${phase === "R" ? '<button class="primary" data-action="weekend-race">START GRAND PRIX →</button>' : eliminated ? '<button class="primary" data-action="finish-qualifying">COMPLETE QUALIFYING →</button>' : `<button class="primary" data-action="qualifying-run" ${!sets.length || w.elapsed >= stage.duration ? "disabled" : ""}>${w.runCount ? "ANOTHER RUN" : "DRIVE " + phase} →</button><button class="ghost end-session" data-action="end-qualifying" ${!qualifyingReady(w) ? "disabled" : ""}>${pendingFirstRuns(w).length ? `Waiting for ${pendingFirstRuns(w).length} opponents to complete a first run` : !qualifyingReady(w) ? "Complete your first timed lap before ending the session" : `END ${phase} & ADVANCE`}</button>`}<details class="weekend-results"><summary>${phase === "R" ? "Starting grid" : "Session timing"}</summary>${rows}</details><p class="save-note">Weekend allocation and qualifying progress save automatically.</p></section>`;
-}
-function setsForSelectedWeekend(w) {
-  return w.inventories[21].find(t=>t.id===selectedWeekendSet) || {compound:setup.tyre,wear:0};
+  return `<section class="race-card weekend-card"><div class="track-header"><h3>${phase === "R" ? "Race preparation" : phase + " qualifying"}</h3><span class="badge">${w.weather.rain > 0.6 ? "HEAVY RAIN" : w.weather.rain > 0.05 ? "RAIN" : w.weather.wetness > 0.1 ? "DRYING" : "DRY"} / ${Math.round(w.weather.wetness * 100)}% WET</span></div><p class="hint">${phase === "R" ? `Starting P${w.grid.indexOf(21) + 1} · ${w.setup.laps} laps · ${w.eventName || weekendSchedule(w.round).name} · ${DIFFICULTIES[normalizeDifficulty(w.setup.difficulty)].name} AI · choose any remaining set.` : eliminated ? "You have been knocked out. The remaining sessions will set the front of the grid." : `${w.active.length} cars · ${stage.keep} advance · ${Math.ceil((stage.duration - w.elapsed) / 60)} min remaining. Choose when to leave the garage. Each run has an out lap, one timed lap and an in lap.`}</p><div class="fuel-row"><span>${phase === "R" ? "Race starting set" : "Selected tyre set"}</span><b>${sets.find(t=>t.id===selectedWeekendSet) ? tyreSetLabel(sets.find(t=>t.id===selectedWeekendSet)) : "No available sets"}</b></div><button class="ghost browse-tyres" data-action="browse-weekend-tyres" aria-haspopup="dialog" ${!sets.length ? "disabled" : ""}>Choose tyre set · fresh & used</button>${phase === "R" ? `<div class="fuel-row"><span>Race fuel</span><b id="weekend-fuel-label">${w.setup.fuel.toFixed(1)} laps</b></div><input id="weekend-fuel" aria-label="Race fuel in laps" type="range" min="${w.setup.laps * 0.85}" max="${w.setup.laps * 1.35}" step=".1" value="${w.setup.fuel}">` : ""}${tyreLifeIndicator(sets.find(t=>t.id===selectedWeekendSet) || {compound:setup.tyre,wear:0})}<p class="hint">${forecast(w.weather)} · surface water carries over from qualifying.</p>${phase === "R" ? '<button class="primary" data-action="weekend-race">START GRAND PRIX →</button>' : eliminated ? '<button class="primary" data-action="finish-qualifying">COMPLETE QUALIFYING →</button>' : `<button class="primary" data-action="qualifying-run" ${!sets.length || w.elapsed >= stage.duration ? "disabled" : ""}>${w.runCount ? "ANOTHER RUN" : "DRIVE " + phase} →</button><button class="ghost end-session" data-action="end-qualifying" ${!qualifyingReady(w) ? "disabled" : ""}>${pendingFirstRuns(w).length ? `Waiting for ${pendingFirstRuns(w).length} opponents to complete a first run` : !qualifyingReady(w) ? "Complete your first timed lap before ending the session" : `END ${phase} & ADVANCE`}</button>`}<details class="weekend-results"><summary>${phase === "R" ? "Starting grid" : "Session timing"}</summary>${rows}</details><p class="save-note">Weekend allocation and qualifying progress save automatically.</p></section>`;
 }
 function bindWeekend() {
   const w = career.weekend;
   app.querySelector("[data-action=browse-weekend-tyres]")?.addEventListener("click",()=>showTyreSetPicker());
-  if(el("weekend-set")) el("weekend-set").onchange = (e) => {
-    selectedWeekendSet = e.target.value;
-    w.startSetId = selectedWeekendSet;
-    w.selectedSetId = selectedWeekendSet;
-    w.selectedPhase = w.phase;
-    save();
-    const indicator=app.querySelector(".tyre-life");
-    if(indicator) indicator.outerHTML=tyreLifeIndicator(setsForSelectedWeekend(w));
-  };
   if (el("weekend-fuel"))
     el("weekend-fuel").oninput = (e) => {
       w.setup.fuel = +e.target.value;
@@ -460,11 +485,7 @@ function bindMenu() {
         scroller.scrollTop=top;
       }),
   );
-  app.querySelectorAll("[data-upgrade]").forEach(b=>b.onclick=()=>showUpgradePreview(b.dataset.upgrade));
-  app.querySelectorAll("[data-aero-spec]").forEach(b=>b.onclick=()=>{
-    const top=app.querySelector(".menu-shell").scrollTop;
-    if(setAeroPackage(career,b.dataset.aeroSpec)){save();menu();app.querySelector(".menu-shell").scrollTop=top;}
-  });
+  app.querySelectorAll("[data-garage-section]").forEach(button=>button.onclick=()=>showGarageSection(button.dataset.garageSection));
   app.querySelector('[data-action="help"]').onclick = showHelp;
   app.querySelector('[data-action="settings"]').onclick=showSettings;
   app
@@ -750,7 +771,7 @@ function showTyreSetPicker(quickStart=false) {
   const available=selectableSets(inventory,phase,running && !running.qualifying ? currentId : null),selected=running ? running.nextSetId || "quick-"+running.nextTyre : quickStart ? "start-"+setup.tyre : selectedWeekendSet;
   const wasPaused=paused;paused=!!running || paused;keys.clear();touch={steer:0,throttle:false,brake:false};mobileControls.reset();
   const backdrop=document.createElement("div");backdrop.className="modal-backdrop";backdrop.id="tyre-set-picker";
-  backdrop.innerHTML=`<section class="modal tyre-picker-modal" role="dialog" aria-modal="true" aria-labelledby="tyre-picker-title"><div class="track-picker-heading"><div><div class="eyebrow">${quickStart ? "STARTING TYRES" : running && !running.player.tyreInventory ? "RACE TYRE OPTIONS" : "WEEKEND TYRE ALLOCATION"}</div><h2 id="tyre-picker-title">Choose your tyre set</h2></div><button class="ghost" data-close-tyres aria-label="Close tyre selector">×</button></div><p class="hint">Fresh or used — each physical set keeps its condition across outings and qualifying sessions. ${mobileInput ? "" : "The compound buttons remain available for quick choices."}</p>${["S","M","H","I","W"].map(compound=>`<div class="tyre-set-group"><h3 style="color:${TYRES[compound].color}">${TYRES[compound].name}</h3><div class="tyre-set-grid">${inventory.filter(t=>t.compound===compound&&!t.returned).map(t=>{
+  backdrop.innerHTML=`<section class="modal tyre-picker-modal" role="dialog" aria-modal="true" aria-labelledby="tyre-picker-title"><div class="track-picker-heading"><div><div class="eyebrow">${quickStart ? "STARTING TYRES" : running && !running.player.tyreInventory ? "RACE TYRE OPTIONS" : "WEEKEND TYRE ALLOCATION"}</div><h2 id="tyre-picker-title">Choose your tyre set</h2></div><button class="ghost" data-close-tyres aria-label="Close tyre selector">×</button></div><p class="hint">Fresh or used — each physical set keeps its condition across outings and qualifying sessions. ${!mobileInput && running ? "The compound buttons remain available for quick choices." : ""}</p>${["S","M","H","I","W"].map(compound=>`<div class="tyre-set-group"><h3 style="color:${TYRES[compound].color}">${TYRES[compound].name}</h3><div class="tyre-set-grid">${inventory.filter(t=>t.compound===compound&&!t.returned).map(t=>{
     const enabled=available.some(a=>a.id===t.id) && (!mediumLesson || t.compound==="M"),condition=Math.round(Math.max(0,1-t.wear)*100),fitted=!!running && currentId===t.id;
     return `<button class="tyre-set-card ${t.id===selected ? "selected" : ""}" data-choose-set="${t.id}" ${enabled ? "" : "disabled"} aria-pressed="${t.id===selected}" style="--tyre:${TYRES[compound].color}"><b><i class="tyre-dot"></i>${t.label || t.id}<span>${condition}%</span></b><div class="bar"><i style="width:${condition}%;background:var(--tyre)"></i></div><small>${fitted ? "Currently fitted" : !enabled ? mediumLesson && t.compound!=="M" ? "Use Mediums for outing 2" : t.reserved ? "Reserved for Q3" : "Worn out" : t.used ? "Used · reusable" : "Fresh"}${t.id===selected ? " · Selected" : ""}</small></button>`;
   }).join("")}</div></div>`).join("")}</section>`;
@@ -778,7 +799,10 @@ function showTyreSetPicker(quickStart=false) {
       }
     } else {
       selectedWeekendSet=set.id;w.selectedSetId=set.id;w.selectedPhase=w.phase;w.startSetId=set.id;
+      const top=app.querySelector(".menu-shell")?.scrollTop || 0;
       close();save();menu();
+      app.querySelector(".menu-shell").scrollTop=top;
+      app.querySelector("[data-action=browse-weekend-tyres]")?.focus({preventScroll:true});
     }
   });
   backdrop.addEventListener("keydown",e=>{

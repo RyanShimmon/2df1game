@@ -1,6 +1,6 @@
 # V10 — Grand Prix
 
-Version **1.4**.
+Version **1.4.1**.
 
 A local browser game with top-down V10 racing, 22 cars, five tyre types, dynamic weather, qualifying and a saved career. Requires Node.js 18 or newer; no dependency installation is needed.
 
