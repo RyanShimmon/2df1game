@@ -1,6 +1,6 @@
 # V10 — Grand Prix
 
-Version **1.4.1**.
+Version **1.4.2**.
 
 A local browser game with top-down V10 racing, 22 cars, five tyre types, dynamic weather, qualifying and a saved career. Requires Node.js 18 or newer; no dependency installation is needed.
 
@@ -30,7 +30,7 @@ Touch pedals, steering and reverse are available on touch devices. Sound is opt-
 
 ## Driving and strategy
 
-Power builds progressively toward 330 km/h. Steering and sliding reduce acceleration and scrub speed; a clean corner exit helps carry momentum onto the straight. A controlled low-fuel acceleration test takes approximately nine seconds to reach 330. Career starter cars are slower; upgrades improve power, grip, tyre conservation and service time. Wider red-and-white inside kerbs identify corner apexes. The track has no painted centre line or driving-line assist.
+Power builds progressively toward a 330 km/h balanced-package ceiling. Steering and sliding reduce acceleration and scrub speed; a clean corner exit helps carry momentum onto the straight. A controlled low-fuel acceleration test takes approximately nine seconds to reach 330. Career starter cars are slower; upgrades improve power, grip, tyre conservation and service time. Wider red-and-white inside kerbs identify corner apexes. The track has no painted centre line or driving-line assist.
 
 Soft tyres are fastest but last roughly 9 race laps; mediums 13; hards 19. Actual life depends on driving, upgrades and water. Out laps and pit travel are gentler on tyres. A complete dry qualifying outing generally leaves about 80–85% soft condition, allowing the same physical set to be used for another session.
 
@@ -58,7 +58,7 @@ P enables the 80 km/h limiter. Speeding incurs five seconds, served during the s
 
 Leaving the circuit triggers a warning once per continuous excursion; returning fully to the track rearms detection. Three warnings are allowed. The fourth infringement adds five seconds; another four infringements add another five. Qualifying excursions delete the affected flying lap. The HUD shows warnings and total penalty seconds, with engineer messages for each incident.
 
-AI passing choices stay committed for a short period and lateral movement is capped. Oriented car bounds resolve overlaps gradually while retaining AI position/offset changes, instead of snapping cars back to the centreline. Damage and punctures are not yet simulated.
+AI commits to one target and side for an overtake, follows slower traffic when both lanes are occupied, and waits for space before merging back. Steering is damped and follows the racing line without time-based wandering. Oriented car bounds resolve overlaps gradually while retaining AI position/offset changes, instead of snapping cars back to the centreline. Damage and punctures are not yet simulated.
 
 ## Career and weekends
 
@@ -103,13 +103,13 @@ The garage has nine development paths. Each purchase opens a review with measure
 | Race engineer | £3,500 | 3 | Fuel/tyre estimates, then weather windows, then estimated pit rejoin traffic |
 | Commercial development | £4,500 | 3 | 10% more income per level on successfully completed sponsor contracts |
 
-Balanced, High downforce and Low drag aero packages can be switched without cost before a weekend. High downforce adds high-speed corner support but increases drag and lowers the clean-air speed ceiling. Low drag improves straight-line performance at the expense of cornering support. Normal clean-air speed remains capped at 330 km/h; a slipstream can exceed it. Brake and suspension upgrades never remove the underlying compound, wear, temperature and water penalties.
+Balanced, High downforce and Low drag aero packages can be switched without cost before a weekend. High downforce gives +10% reference cornering speed and −10% top speed; Low drag gives −10% reference cornering speed and +10% top speed under the same conditions. Lateral force scales with the square of the corner-speed multiplier. The package scales both drag and the clean-air speed ceiling, including for AI; the fully powered ceilings are 297 / 330 / 363 km/h respectively for High downforce / Balanced / Low drag, before slipstream. Brake and suspension upgrades never remove the underlying compound, wear, temperature and water penalties.
 
 Performance previews use a deterministic solo test car on the selected circuit, with ideal Medium tyres, six fuel laps and Balanced pace. They are comparisons, not promised lap times. Tyre-life and fuel figures use the same resource formulas as the game. Tyre engineering still extends life and softens the grip cliff with temperature simulation disabled; crew service improvements also remain active.
 
 Engineer advice appears through the race radio. The pause menu includes the full briefing, using your current pace, tyres, available stock, forecast, time penalties, teammate box occupancy and traffic. Weather crossover and rejoin positions are estimates. Commercial bonuses appear in sponsor offers, results and saved income, and never bypass contract conditions.
 
-AI teams use saved, seeded development preferences and their own budgets. Each starts with £7,000 per car and pays the same escalating upgrade costs as the player. Subsequent funding uses the average classification and earned contract income of the team's drivers at race end. They can buy up to two affordable parts before the next weekend and choose their aero package for the circuit. The garage's Team development view shows installed levels, budget, package and latest purchases. Both cars share their team's parts; the player's teammate shares the player's development. Weekend snapshots keep all equipment consistent across Q1, Q2, Q3 and the race. Team development never changes the equal physical tyre allocation or wear rules.
+AI teams use saved, seeded development preferences and their own budgets. Each starts with £7,000 per car and pays the same escalating upgrade costs as the player. Subsequent funding uses the average classification and earned contract income of the team's drivers at race end. They can buy up to two affordable parts before the next weekend and choose their aero package for the circuit. The garage's Team development view shows installed levels, budget, package and latest purchases. Hover or focus an installed upgrade to see its effects at that level; tap to open or dismiss the same popup on mobile. Escape dismisses the popup first, then closes the garage panel. Both cars share their team's parts; the player's teammate shares the player's development. Weekend snapshots keep all equipment consistent across Q1, Q2, Q3 and the race. Team development never changes the equal physical tyre allocation or wear rules.
 
 ## Verify
 
@@ -204,10 +204,10 @@ Double-tap zoom is disabled on touch devices while menu/dialog scrolling and ind
 
 ### Slipstream and adaptive opponents
 
-Following a nearby, aligned car at racing speed reduces drag for the player and AI. Strength depends on separation, lateral position, heading and speed; cars in pits, stationary cars, distant road sections and separate bridge levels cannot provide a tow. A strong tow can carry the car a little above 330 km/h. Drag reduction disappears quickly after pulling out; the speed gained fades over roughly 2–5 seconds rather than being cut immediately. The speed readout turns lime while receiving a useful tow. This is a calibrated game approximation of aerodynamic drag and momentum, not a wind-tunnel simulation.
+Following a nearby, aligned car at racing speed reduces drag for the player and AI. Strength depends on separation, lateral position, heading and speed; cars in pits, stationary cars, distant road sections and separate bridge levels cannot provide a tow. A strong tow can carry the car a little above its chosen aero package’s clean-air ceiling. Drag reduction disappears quickly after pulling out; the speed gained fades over roughly 2–5 seconds rather than being cut immediately. The speed readout turns lime while receiving a useful tow. This is a calibrated game approximation of aerodynamic drag and momentum, not a wind-tunnel simulation.
 
 AI uses a continuous outside/apex/exit path built for each circuit. It plans braking from the actual path curvature, stopping distance and available tyre grip, with smooth lateral changes, space for cars alongside and individual pace, consistency and mistakes. Tyre condition and weather affect both braking and acceleration. The rendered racing-line assist remains removed.
 
 Each new race receives a fresh random seed. Every driver has an independent random stream plus personal risk, tyre-life targets, forecast horizon and compound preferences. Pit decisions are reviewed against actual/projected surface water, measured wear, remaining distance, compound requirements, pit time and teammate box traffic. There are no fixed pit-lap schedules. Career grid preparation chooses each opponent's own available physical set instead of overriding the whole grid with one recommended compound. Qualifying release times, set reuse, fallback lap estimates and AI service durations are seeded too. Identical seeds and events reproduce decisions for debugging; player tyre-button selections do not control opponents. To replay a Quick Race in a simulation, use `race.setup.aiSeed` from the original run.
 
-`tests/racecraft.test.js` exercises tow eligibility and momentum, real acceleration beyond 330, braking anticipation, dry/wet AI laps on all 12 circuits, driver independence, seeded replays, weather/wear/teammate reactions, and career/qualifying physical tyre allocation.
+`tests/racecraft.test.js` exercises tow eligibility and momentum, real acceleration beyond 330, braking anticipation, dry/wet AI laps on all 12 circuits, driver independence, seeded replays, weather/wear/teammate reactions, and career/qualifying physical tyre allocation. `tests/ai-line-discipline.test.js` covers stable straight-line tracking, passing commitment, occupied lanes, traffic-order-independent side-by-side spacing, safe merging and qualifying courtesy.

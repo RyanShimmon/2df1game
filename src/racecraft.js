@@ -49,7 +49,7 @@ export function racingPoint(line,s){
 // car approaches, avoiding a last-second sweep across its path. Out laps may
 // merge for the final corner only when the adjacent fast line is clear.
 export function qualifyingLane(car,line,traffic){
-  if(!["out","in"].includes(car.qState)) {car.ai.yieldSide=null;return null;}
+  if(!["out","in"].includes(car.qState)) {car.ai.yieldSide=null;car.ai.yieldFor=null;return null;}
   const pos=wrap(car.s,line.length),look=racingPoint(line,car.s+clamp((car.speed || 0)*.85,45,180));
   const nearby=traffic.filter(other=>{
     if(other.id===car.id || other.pit || other.garage || other.dnf || other.finished) return false;
@@ -62,13 +62,16 @@ export function qualifyingLane(car,line,traffic){
     return Math.abs(gap)<65 || (other.qState==="timed" && gap<0 && gap>-Math.max(180,other.speed*1.1));
   });
   const approaching=nearby.find(other=>other.qState==="timed" && other.speed>car.speed+10);
-  if(approaching && !committed){
+  const yieldingTo=traffic.find(other=>other.id===car.ai.yieldFor);
+  if(!yieldingTo || yieldingTo.pit || yieldingTo.garage || wrap(yieldingTo.s-car.s+line.length/2,line.length)-line.length/2>130)car.ai.yieldFor=null;
+  if(approaching && !committed && car.ai.yieldFor!==approaching.id){
     const behind=wrap(car.s-approaching.s,line.length);
     // Choose the free edge several seconds ahead of the pass, then commit.
     if(behind>Math.max(180,approaching.speed*1.1)){
       const catchTime=clamp(behind/Math.max(20,approaching.speed-car.speed),0,3);
       const fastLine=racingPoint(line,car.s+car.speed*catchTime).offset;
       if(Math.abs(fastLine)>8) car.ai.yieldSide=fastLine>=0 ? -1 : 1;
+      car.ai.yieldFor=approaching.id;
     }
   }
   const preparing=car.qState==="out" && pos>=line.finalCornerStart;
@@ -77,6 +80,62 @@ export function qualifyingLane(car,line,traffic){
     return other.qState==="timed" && gap<65 && gap>-Math.max(110,other.speed*1.1) && Math.abs(other.offset-look.offset)<30;
   });
   return {offset:car.ai.yieldSide*(line.width/2-14),preparing:preparing&&!mergeBlocked,mergeBlocked};
+}
+// Pick one car and one side for a pass. A timer can abandon a stalled move,
+// but never chooses a new side while the cars are still alongside each other.
+export function planRacingLane(car,line,traffic,{time=0,allowPass=true,yieldOffset=null}={}){
+ const state=car.ai.lane ||= {phase:"line",targetId:null,side:0,startedAt:0,minUntil:0,cooldownUntil:0,nextDecision:0};
+ const edge=line.width/2-18,base=yieldOffset ?? racingPoint(line,car.s).offset+(car.driverStyle?.line || 0)*.12;
+ const aggression=car.driverStyle?.aggression ?? .5;
+ const gapTo=other=>wrap(other.s-car.s+line.length/2,line.length)-line.length/2;
+ const nearby=traffic.filter(other=>other.id!==car.id&&!other.pit&&!other.garage&&!other.dnf&&!other.finished&&Math.abs(other.offset)<line.width/2+10)
+  .map(other=>({car:other,gap:gapTo(other)})).filter(other=>Math.abs(other.gap)<360).sort((a,b)=>a.gap-b.gap||a.car.id-b.car.id);
+ const ahead=nearby.filter(other=>other.gap>0),leader=ahead[0];
+ const candidate=side=>clamp(base+side*34,-edge,edge);
+ const laneClear=(side,target)=>{
+  const offset=candidate(side),future=clamp(racingPoint(line,car.s+Math.min(150,car.speed*.6)).offset+(car.driverStyle?.line || 0)*.12+side*34,-edge,edge);
+  if(Math.abs(offset-base)<30 || Math.abs(future-racingPoint(line,car.s+Math.min(150,car.speed*.6)).offset)<27)return false;
+  return !nearby.some(other=>{
+   if(other.car.id===target.car.id)return false;
+   const rear=-70-Math.max(0,other.car.speed-car.speed)*1.5;
+   const occupied=other.gap>rear&&other.gap<target.gap+70&&(Math.abs(other.car.offset-offset)<31||Math.abs(other.car.offset-future)<31);
+   const crossing=Math.abs(other.gap)<50&&other.car.offset>Math.min(car.offset,offset)-27&&other.car.offset<Math.max(car.offset,offset)+27;
+   return occupied||crossing;
+  });
+ };
+ const endPass=()=>{state.phase="return";state.targetId=null;state.side=0;state.cooldownUntil=time+2.5;};
+ if(yieldOffset!==null){state.phase="line";state.targetId=null;state.side=0;state.cooldownUntil=time+1;}
+ if(state.phase==="passing"){
+  const target=nearby.find(other=>other.car.id===state.targetId),alongside=target&&Math.abs(target.gap)<55;
+  if(!target || target.gap < -55 || (!alongside&&time>state.minUntil&&
+    (target.gap>220 || time-state.startedAt>8+aggression*4 || target.gap>95&&target.car.speed>car.speed+8 || !laneClear(state.side,target))))endPass();
+ }
+ if(state.phase==="return" && Math.abs(car.offset-base)<3 && Math.abs(car.ai.lineVelocity || 0)<12)state.phase="line";
+ if(state.phase==="line"&&yieldOffset===null&&allowPass&&time>=state.cooldownUntil&&time>=state.nextDecision){
+  state.nextDecision=time+.4;
+  const bend=Math.max(Math.abs(racingPoint(line,car.s).curvature),Math.abs(racingPoint(line,car.s+100).curvature));
+  if(leader&&leader.gap>38&&leader.gap<105+45*aggression&&car.speed>90&&car.speed>leader.car.speed+2&&
+    Math.abs(base-leader.car.offset)<32&&Math.abs(car.offset-leader.car.offset)<38&&bend<.0032){
+   const choices=[-1,1].filter(side=>laneClear(side,leader)).sort((a,b)=>
+    Math.abs(candidate(a)-car.offset)-Math.abs(candidate(b)-car.offset) || ((car.driverStyle?.line || 0)>=0 ? b-a : a-b));
+   if(choices.length){state.phase="passing";state.targetId=leader.car.id;state.side=choices[0];state.startedAt=time;state.minUntil=time+1.2+aggression*.7;}
+  }
+ }
+ let desired=state.phase==="passing" ? candidate(state.side) : base,min=-edge,max=edge;
+ // Preserve lateral order beside another car. Combine constraints once instead
+ // of repeatedly pushing left/right according to the iteration order of traffic.
+ for(const other of nearby)if(Math.abs(other.gap)<50&&Math.abs(other.car.offset-car.offset)>6){
+  if(other.car.offset>car.offset)max=Math.min(max,other.car.offset-30);
+  else min=Math.max(min,other.car.offset+30);
+ }
+ if(yieldOffset!==null){min=Math.min(min,yieldOffset);max=Math.max(max,yieldOffset);}
+ desired=min<=max ? clamp(desired,min,max) : clamp(car.offset,-edge,edge);
+ let followingSpeed=Infinity;
+ for(const other of ahead)if(other.gap<180&&Math.abs(car.offset-other.car.offset)<27&&
+  (Math.abs(desired-other.car.offset)<30||other.gap<44+car.speed*.1)){
+  followingSpeed=Math.min(followingSpeed,Math.max(0,other.car.speed+(other.gap-44-car.speed*.1)*.7));
+ }
+ return {offset:desired,min,max,followingSpeed,phase:state.phase,targetId:state.targetId,side:state.side};
 }
 export function brakingTarget(line,s,grip,braking,top,commitment=1){
   const horizon=clamp(top*top/(2*Math.max(braking,1))+110,220,Math.min(3000,line.length/2));

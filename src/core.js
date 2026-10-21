@@ -2,7 +2,7 @@ import {engineerReport} from "./engineer.js";
 import {UPGRADES,AERO_PACKAGES,emptyUpgrades,normalizeUpgrades,level,upgradePrice,fuelMultiplier,sponsorPayout,aeroPackage,aeroGrip,setAeroPackage,createTeamDevelopment,migrateDevelopment,developTeams,developmentSnapshot,fundTeams} from "./development.js";
 export {UPGRADES,AERO_PACKAGES,fuelMultiplier,sponsorPayout,setAeroPackage,developTeams,developmentSnapshot};
 import {selectableSets} from "./tyre-stock.js";
-import {seededRandom,driverSeed,buildRacingLine,racingPoint,qualifyingLane,brakingTarget,updateSlipstream,forecastWater,createStrategy,rankTyres} from "./racecraft.js";
+import {seededRandom,driverSeed,buildRacingLine,racingPoint,qualifyingLane,planRacingLane,brakingTarget,updateSlipstream,forecastWater,createStrategy,rankTyres} from "./racecraft.js";
 import {prepareTyres,thermalGrip,thermalWear,updateTyreTemperatures,coolStoredSets,distributeWear,holdOptimalTemperature,THERMAL} from "./tyre-temperature.js";
 import {CIRCUITS,circuitById} from "./tracks.js";
 export {CIRCUITS,circuitById};
@@ -478,17 +478,18 @@ export function liveInterval(leader,car) {
 export function cleanAirTopSpeed(car){
   const mode=car.drive==='save' ? .89 : car.drive==='push' ? 1.06 : 1;
   const pack=aeroPackage(car.upgrades,car.aeroSpec);
-  return Math.min(MAX_SPEED,MAX_SPEED*pack.top,MAX_SPEED*(1+level(car.upgrades,"engine")*.035)*(car.pace || 1)*(1-car.fuel*.0006)*mode*pack.top);
+  return Math.min(MAX_SPEED,MAX_SPEED*(1+level(car.upgrades,"engine")*.035)*(car.pace || 1)*(1-car.fuel*.0006)*mode)*pack.top;
 }
 export function maximumSpeed(car){return cleanAirTopSpeed(car)+18*(car.slipstream?.carry || 0);}
 export function acceleration(car) {
   const power=90*(1+level(car.upgrades,"engine")*(.045+.025*(1-clamp(car.speed/280,0,1))))*(car.pace || 1)*(1-car.fuel*.002);
-  const drag=power*.82*(Math.max(0,car.speed)/MAX_SPEED)**1.3*aeroPackage(car.upgrades,car.aeroSpec).drag;
+  const pack=aeroPackage(car.upgrades,car.aeroSpec);
+  const drag=power*.82*(Math.max(0,car.speed)/MAX_SPEED)**1.3*pack.drag;
   const tow=car.slipstream?.strength || 0;
-  // The normal limiter stays at 330; a tow reduces aerodynamic resistance.
+  // The aero package scales the clean-air ceiling; a tow reduces resistance.
   // Once clear, the additional kinetic energy decays instead of a speed snap.
   if(car.speed>cleanAirTopSpeed(car)+.01 && tow<.02)return 0;
-  return Math.max(0,power-drag*(1-.16*tow)-4-car.speed*.012-Math.max(0,car.speed-MAX_SPEED)*.55);
+  return Math.max(0,power-drag*(1-.16*tow)-4-car.speed*.012-Math.max(0,car.speed-MAX_SPEED*pack.top)*.55);
 }
 function overspeedDrag(car){return Math.max(0,car.speed-cleanAirTopSpeed(car))*.6*(1-(car.slipstream?.strength || 0));}
 export function tyreRuleMet(car) {
@@ -723,8 +724,6 @@ function createCar(i, setup, upgrades, mode) {
     limitOutside: 0,
     limitInside: 0,
     penaltySecondsTotal: 0,
-    passUntil: 0,
-    passOffset: 0,
     weatherPitTime: -100,
     history: [],
   };
@@ -1378,6 +1377,7 @@ export class Race {
       const risk=(.025+.1*(1-style.consistency))*(.4+water+c.wear)*(ai.mode==="attack" ? 1.5 : 1);
       if(Math.abs(curvature)>.001 && c.aiRandom()<risk && !shouldPit) {
         ai.mistake=c.aiRandom()<.5 ? "wide" : "oversteer";
+        ai.mistakeSide=-Math.sign(curvature);
         ai.mistakeUntil=this.time+.8+c.aiRandom()*1.1;
       }
     }
@@ -1392,55 +1392,29 @@ export class Race {
     if(yielding) target=Math.min(target*.82,210);
     if(mistake)target*=mistake==='wide' ? .88 : .94;
     if (shouldPit && pos > TRACK.pitEntry - 220) target = Math.min(target, 80);
-    let desiredOffset =
-      c.passUntil > this.time ? c.passOffset : racingPoint(AI_LINE,c.s+clamp(c.speed*.18,8,45)).offset+style.line*.12+Math.sin(this.time*.35+style.phase)*2;
-    if(mistake==="wide") desiredOffset=-Math.sign(curvature)*45;
-    for (const other of this.traffic || this.cars) {
-      if (
-        other.id === c.id ||
-        other.pit ||
-        other.dnf ||
-        other.finished ||
-        other.garage
-      )
-        continue;
-      const gap =
-        wrap(other.s - c.s + TRACK.length / 2, TRACK.length) - TRACK.length / 2;
-      if (gap > 0 && gap < 90+40*style.aggression) {
-        if (!yielding && c.passUntil <= this.time && ai.mode!=="conserve" && (Math.abs(path.curvature)<.0035 || style.aggression>.7)) {
-          c.passOffset = other.offset >= 0 ? -34 : 34;
-          c.passUntil = this.time + 1.5+2*style.aggression;
-          desiredOffset = c.passOffset;
-        }
-        if (Math.abs(c.offset - other.offset) < 25)
-          target = Math.min(
-            target,
-            Math.max(0, other.speed + (gap - 40) * 0.4),
-          );
-      }
-    }
-    if(yielding) desiredOffset=courtesy.offset;
-    // Do not steer through a car already alongside or into an occupied passing lane.
-    for(const other of this.traffic || this.cars) {
-      if(other.id===c.id || other.pit || other.garage || other.dnf || other.finished) continue;
-      const gap=wrap(other.s-c.s+TRACK.length/2,TRACK.length)-TRACK.length/2;
-      if(Math.abs(gap)<48 && Math.abs(desiredOffset-other.offset)<29)
-        desiredOffset=c.offset<=other.offset ? Math.min(c.offset,other.offset-29) : Math.max(c.offset,other.offset+29);
-    }
-    desiredOffset=clamp(desiredOffset,-TRACK.width/2+(yielding ? 14 : 18),TRACK.width/2-(yielding ? 14 : 18));
+    const pitApproach=shouldPit && pos>TRACK.pitEntry-800 && pos<TRACK.pitEntry+80;
+    const lane=planRacingLane(c,AI_LINE,this.traffic || this.cars,{time:this.time,
+      allowPass:!pitApproach&&!mistake&&ai.mode!=="conserve"&&(!this.qualifying||c.qState==="timed"),
+      yieldOffset:yielding ? courtesy.offset : null});
+    let desiredOffset=lane.offset;
+    target=Math.min(target,lane.followingSpeed);
+    if(mistake==="wide")desiredOffset=clamp(path.offset+(ai.mistakeSide || -Math.sign(curvature))*22,lane.min,lane.max);
     // AI also steers off the circuit before crossing the pit entrance.
     if(shouldPit && pos > TRACK.pitEntry-800 && pos < TRACK.pitEntry+80)
       desiredOffset=TRACK.width/2+12;
-    const pitApproach=shouldPit && pos>TRACK.pitEntry-800 && pos<TRACK.pitEntry+80;
     const demand=c.speed*c.speed*Math.abs(path.curvature)/(225*Math.max(.08,grip(c)));
     const excess=Math.max(0,demand-(.94+.08*style.wetSkill));
     const slipTarget=pitApproach ? 0 : -Math.sign(curvature)*clamp(excess*.3+
       (mistake==="oversteer" ? .2 : 0),0,.28);
     ai.slip+=(slipTarget-ai.slip)*(1-Math.exp(-(slipTarget ? 3 : (5+style.wetSkill*3)*(1+level(c.upgrades,"suspension")*.06))*dt));
     c.sideSpeed+=(c.speed*Math.sin(ai.slip)-(c.sideSpeed || 0))*(1-Math.exp(-5*dt));
-    const lateralCap=clamp(c.speed*.35,14,78);
-    const lineVelocity=clamp((desiredOffset-c.offset)*3,-lateralCap,lateralCap);
-    ai.lineVelocity+=clamp(lineVelocity-ai.lineVelocity,-180*Math.max(.25,grip(c))*dt,180*Math.max(.25,grip(c))*dt);
+    const lateralCap=clamp(c.speed*.35,0,78);
+    const slope=(racingPoint(AI_LINE,c.s+30).offset-racingPoint(AI_LINE,c.s-30).offset)/60;
+    let feedForward=yielding||pitApproach ? 0 : slope*c.speed/clamp(1-curvature*c.offset,.5,1.5);
+    if(desiredOffset<=lane.min+.1&&feedForward<0 || desiredOffset>=lane.max-.1&&feedForward>0)feedForward=0;
+    const lineVelocity=clamp(feedForward+(desiredOffset-c.offset)*2.4,-lateralCap,lateralCap);
+    const lateralAcceleration=180*Math.max(.25,grip(c));
+    ai.lineVelocity+=clamp((lineVelocity-ai.lineVelocity)*10,-lateralAcceleration,lateralAcceleration)*dt;
     c.offset+=ai.lineVelocity*dt+c.sideSpeed*dt;
     c.sliding=clamp(Math.abs(ai.slip)/.2,0,1);
     const oldSpeed=c.speed;

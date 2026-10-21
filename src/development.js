@@ -1,7 +1,7 @@
 // Shared development prices and mechanical effects: player and AI buy the same parts.
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export const UPGRADES={
- engine:{name:"V10 development",desc:"Stronger acceleration, especially out of slow corners. Normal top speed stays capped at 330 km/h.",cost:6000,max:5,group:"Powertrain"},
+ engine:{name:"V10 development",desc:"Stronger acceleration, especially out of slow corners. Your aero package sets the top-speed trade-off.",cost:6000,max:5,group:"Powertrain"},
  efficiency:{name:"Fuel efficiency",desc:"2% less fuel per level. Start lighter or spend longer in Push.",cost:5000,max:5,group:"Powertrain"},
  aero:{name:"Aerodynamics",desc:"More high-speed corner support. Unlocks High downforce and Low drag packages at level 1.",cost:5000,max:5,group:"Chassis"},
  suspension:{name:"Suspension & differential",desc:"More progressive traction and stronger countersteer recovery. You still control the slide.",cost:5000,max:5,group:"Chassis"},
@@ -11,11 +11,21 @@ export const UPGRADES={
  engineer:{name:"Race engineer",desc:"L1: fuel and tyre estimates. L2: weather crossover windows. L3: pit rejoin and traffic estimates.",cost:3500,max:3,group:"Race operations"},
  commercial:{name:"Commercial development",desc:"10% more sponsor income per level. Contract conditions still have to be met.",cost:4500,max:3,group:"Team business"},
 };
+// Corner speed scales with the square root of lateral grip. Derive force and
+// drag from the advertised speed changes so the two packages really mirror.
+const packageSpec=(name,desc,corner,top)=>({name,desc,corner,top,drag:top**-1.3});
 export const AERO_PACKAGES={
- balanced:{name:"Balanced",desc:"An all-round package for mixed circuits.",grip:0,drag:1,top:1},
- downforce:{name:"High downforce",desc:"More grip in fast corners; extra drag and a lower straight-line ceiling.",grip:.10,drag:1.08,top:.975},
- lowDrag:{name:"Low drag",desc:"Less drag and stronger straight-line speed; less cornering support.",grip:-.05,drag:.92,top:1.015},
+ balanced:packageSpec("Balanced","An all-round package for mixed circuits.",1,1),
+ downforce:packageSpec("High downforce","Faster cornering in exchange for lower straight-line speed.",1.10,.90),
+ lowDrag:packageSpec("Low drag","Higher straight-line speed in exchange for slower cornering.",.90,1.10),
 };
+const percentage=value=>Math.abs(value).toFixed(1).replace(/\.0$/,"");
+export function aeroPackageSummary(spec){
+ const pack=AERO_PACKAGES[spec] || AERO_PACKAGES.balanced;
+ if(pack===AERO_PACKAGES.balanced)return "Even balance";
+ const change=value=>(value>=1?"+":"−")+percentage((value-1)*100)+"%";
+ return change(pack.corner)+" cornering speed · "+change(pack.top)+" top speed";
+}
 export const emptyUpgrades=()=>Object.fromEntries(Object.keys(UPGRADES).map(k=>[k,0]));
 export const level=(upgrades,key)=>clamp(Number(upgrades?.[key])||0,0,UPGRADES[key]?.max || 0);
 export function normalizeUpgrades(upgrades={}){return Object.fromEntries(Object.keys(UPGRADES).map(k=>[k,Math.floor(level(upgrades,k))]));}
@@ -26,11 +36,27 @@ export const sponsorPayout=(upgrades,amount)=>Math.round(amount*sponsorMultiplie
 export function aeroPackage(upgrades,spec="balanced"){return level(upgrades,"aero")>0 && AERO_PACKAGES[spec] ? AERO_PACKAGES[spec] : AERO_PACKAGES.balanced;}
 export function aeroGrip(car){
  const speed=clamp(Math.abs(car.speed || 0)/280,0,1),support=.35+.65*speed*speed;
- return (1+level(car.upgrades,"aero")*.035*support)*(1+aeroPackage(car.upgrades,car.aeroSpec).grip*support);
+ return (1+level(car.upgrades,"aero")*.035*support)*aeroPackage(car.upgrades,car.aeroSpec).corner**2;
 }
 export function setAeroPackage(career,spec){
  if(career.weekend || !AERO_PACKAGES[spec] || (spec!=="balanced" && level(career.upgrades,"aero")===0))return false;
  career.aeroSpec=spec;return true;
+}
+export function upgradeDetails(key,installedLevel){
+ const upgrade=UPGRADES[key];if(!upgrade)return null;
+ const n=Math.floor(level({[key]:installedLevel},key)),pct=value=>percentage(value)+"%";
+ const descriptions={
+  engine:`${pct(n*7)} more low-speed engine power and ${pct(n*4.5)} more high-speed power. Improves acceleration; the aero package still sets the speed trade-off.`,
+  efficiency:`Uses ${pct(n*2)} less fuel. The car can start lighter or spend more time in Push.`,
+  aero:`${pct(n*3.5)} more grip at high speed, with a smaller benefit at low speed. Unlocks High downforce and Low drag packages.`,
+  suspension:`${pct(n*2.5)} more traction support and ${pct(n*6)} more countersteer support. Helps put power down and recover slides.`,
+  brakes:`${pct(n*5)} more braking force. Tyre compound, wear, temperature and rain still determine how much grip is available.`,
+  tyres:`${pct(n*7)} less tyre wear, a gentler worn-tyre grip cliff and better control of overheating.`,
+  crew:`Tyre changes take 2.3–${Math.max(2.3,5.5-n*.5).toFixed(1)} seconds. Replacement tyres are prepared ${percentage(n*1.5)}°C warmer when temperature simulation is enabled.`,
+  engineer:["Basic race radio.","Adds fuel-margin and remaining tyre-life estimates.","Adds fuel and tyre estimates, plus predicted weather crossover windows.","Adds fuel and tyre estimates, weather crossover windows, and pit rejoin position and traffic estimates."][n],
+  commercial:`Earns ${pct(n*10)} more on successful sponsor contracts. The sponsor's conditions still have to be met.`,
+ };
+ return {title:upgrade.name+" · Level "+n,description:n?descriptions[key]:upgrade.desc};
 }
 export function createTeamDevelopment(){return Array.from({length:11},(_,teamIndex)=>({teamIndex,budget:7000,upgrades:emptyUpgrades(),aeroSpec:"balanced",lastRound:0,fundedRound:0,history:[]}));}
 export function migrateDevelopment(career){

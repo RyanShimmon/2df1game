@@ -1,4 +1,4 @@
-import {AERO_PACKAGES,level,fuelMultiplier,sponsorPayout,setAeroPackage,developTeams,developmentSnapshot} from "./development.js";
+import {AERO_PACKAGES,aeroPackageSummary,upgradeDetails,level,fuelMultiplier,sponsorPayout,setAeroPackage,developTeams,developmentSnapshot} from "./development.js";
 import {developmentBench,upgradePreview} from "./development-preview.js";
 import {TouchControls,LandscapeGate,stickSteering,mobileLessonText} from "./mobile.js";
 import {WHEELS,THERMAL,temperatureStatus,temperatureColour} from "./tyre-temperature.js";
@@ -127,7 +127,7 @@ function tyreLifeIndicator(selected={compound:setup.tyre,wear:0}) {
   return `<section class="tyre-life" aria-label="Average tyre life"><div class="tyre-life-heading"><b>AVERAGE TYRE LIFE</b><span>Balanced pace · suitable conditions</span></div><div class="tyre-life-grid">${["S","M","H","I","W"].map(compound=>`<div style="--tyre:${TYRES[compound].color}"><i class="tyre-dot"></i><span>${TYRES[compound].name}</span><b>≈ ${estimatedTyreLife(compound,{upgrades}).toFixed(1).replace(/\.0$/,"")} laps</b></div>`).join("")}</div><p class="tyre-life-remaining">${selected.id ? selected.id+" · " : ""}${TYRES[selected.compound].name} selected <strong>≈ ${remaining.toFixed(1)} laps remaining</strong></p><p class="hint">Estimate for this car. Push, heat and sliding shorten tyre life.</p></section>`;
 }
 function header() {
-  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.4.1</div></header>`;
+  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.4.2</div></header>`;
 }
 function tabs() {
   return `<div class="tabs"><button class="tab ${screen === "quick" ? "active" : ""}" data-screen="quick">Quick race</button><button class="tab ${screen === "career" ? "active" : ""}" data-screen="career">Career garage</button><button class="tab" data-action="school">Race School</button><button class="tab" data-action="help">How to drive ↗</button><button class="tab" data-action="settings">Settings</button></div>`;
@@ -180,6 +180,7 @@ function footer() {
   return `<footer class="menu-footer"><div class="keycaps"><span><kbd>WASD</kbd> / <kbd>↑↓←→</kbd> Drive</span><span><kbd>B</kbd> Box</span><span><kbd>P</kbd> Limiter</span><span><kbd>T</kbd> / <kbd>1–5</kbd> Next tyre</span><span><kbd>F</kbd> Fuel mode</span><span><kbd>R</kbd> Reverse in pit</span><span><kbd>Esc</kbd> Pause</span></div><span class="muted">V10 power. Every decision counts.</span></footer>`;
 }
 function menu() {
+  el("garage-section-modal")?.dispatchEvent(new Event("garage-dispose"));
   school=null;
   race = null;
   paused = false;
@@ -271,7 +272,8 @@ function showGarageSection(section,{scrollTop=0,focusSelector=null}={}){
  backdrop.className="modal-backdrop";backdrop.id="garage-section-modal";
  backdrop.innerHTML=`<section class="modal garage-modal" role="dialog" aria-modal="true" aria-labelledby="garage-section-title"><div class="track-picker-heading"><div><div class="eyebrow">YOUR GARAGE · ${money(career.cash)}</div><h2 id="garage-section-title" tabindex="-1">${selected.title}</h2></div><button class="ghost" data-close-garage aria-label="Close ${selected.title}">×</button></div><div class="garage-panel-body">${selected.render()}</div><button class="ghost garage-back" data-close-garage>BACK TO GARAGE</button></section>`;
  app.appendChild(backdrop);shell.inert=true;
- const close=()=>{backdrop.remove();shell.inert=false;keys.clear();app.querySelector(`[data-garage-section="${section}"]`)?.focus({preventScroll:true});};
+ bindUpgradeTooltips(backdrop);
+ const close=()=>{backdrop.dispatchEvent(new Event("garage-dispose"));backdrop.remove();shell.inert=false;keys.clear();app.querySelector(`[data-garage-section="${section}"]`)?.focus({preventScroll:true});};
  backdrop.querySelectorAll("[data-close-garage]").forEach(button=>button.onclick=close);
  backdrop.onclick=event=>{if(event.target===backdrop)close();};
  backdrop.addEventListener("keydown",event=>garageDialogKeys(event,backdrop,close));
@@ -282,6 +284,41 @@ function showGarageSection(section,{scrollTop=0,focusSelector=null}={}){
  const focus=focusSelector&&backdrop.querySelector(focusSelector);
  (focus&&!focus.disabled ? focus : el("garage-section-title")).focus({preventScroll:true});
  backdrop.querySelector(".garage-modal").scrollTop=scrollTop;
+}
+function bindUpgradeTooltips(backdrop){
+ const buttons=[...backdrop.querySelectorAll("[data-upgrade-info]")];if(!buttons.length)return;
+ const tooltip=document.createElement("div");tooltip.id="team-upgrade-tooltip";tooltip.className="team-upgrade-tooltip";tooltip.setAttribute("role","tooltip");tooltip.hidden=true;backdrop.appendChild(tooltip);
+ const panel=backdrop.querySelector(".garage-modal");
+ let active=null,pinned=false,timer=null;
+ const hide=()=>{clearTimeout(timer);tooltip.hidden=true;active?.removeAttribute("aria-describedby");active?.setAttribute("aria-expanded","false");active=null;pinned=false;};
+ const position=()=>{
+  if(!active)return;
+  const anchor=active.getBoundingClientRect(),bounds=panel.getBoundingClientRect(),box=tooltip.getBoundingClientRect();
+  if(anchor.bottom<bounds.top||anchor.top>bounds.bottom){hide();return;}
+  const left=clamp(anchor.left+anchor.width/2-box.width/2,12,Math.max(12,innerWidth-box.width-12));
+  const above=anchor.top-box.height-8,top=above>=12?above:Math.min(anchor.bottom+8,innerHeight-box.height-12);
+  tooltip.style.left=left+"px";tooltip.style.top=Math.max(12,top)+"px";
+ };
+ const show=button=>{
+  clearTimeout(timer);if(active!==button){hide();active=button;}
+  const info=upgradeDetails(button.dataset.upgradeInfo,+button.dataset.upgradeLevel);
+  tooltip.innerHTML=`<b>${escapeHTML(info.title)}</b><p>${escapeHTML(info.description)}</p>`;tooltip.hidden=false;
+  button.setAttribute("aria-describedby",tooltip.id);button.setAttribute("aria-expanded","true");position();
+ };
+ const dismissSoon=()=>{clearTimeout(timer);if(!pinned&&!active?.matches(":focus"))timer=setTimeout(hide,120);};
+ for(const button of buttons){
+  button.addEventListener("pointerenter",event=>{if(event.pointerType!=="touch")show(button);});
+  button.addEventListener("pointerleave",dismissSoon);
+  button.addEventListener("focus",()=>show(button));
+  button.addEventListener("blur",()=>{if(!button.matches(":hover")&&!pinned){timer=setTimeout(hide,120);}});
+  button.onclick=()=>{if(active===button&&pinned)hide();else {show(button);pinned=true;}};
+ }
+ tooltip.addEventListener("pointerenter",()=>clearTimeout(timer));tooltip.addEventListener("pointerleave",dismissSoon);
+ const escape=event=>{if(event.key==="Escape"&&!tooltip.hidden){event.preventDefault();event.stopImmediatePropagation();hide();}};
+ backdrop.addEventListener("keydown",escape,true);
+ backdrop.addEventListener("pointerdown",event=>{if(active&&!active.contains(event.target)&&!tooltip.contains(event.target))hide();});
+ panel.addEventListener("scroll",()=>{if(pinned||active?.matches(":focus"))position();else hide();});window.addEventListener("resize",hide);
+ backdrop.addEventListener("garage-dispose",()=>{hide();window.removeEventListener("resize",hide);},{once:true});
 }
 function refreshGarageSection(section,focusSelector){
  const pageTop=app.querySelector(".menu-shell").scrollTop,panelTop=el("garage-section-modal").querySelector(".garage-modal").scrollTop;
@@ -298,7 +335,7 @@ function developmentCard(){
 function aeroCard(){
  return `<div class="aero-panel"><div class="panel-heading"><span class="eyebrow">${career.weekend ? "WEEKEND LOCKED" : "FREE TO SWITCH"}</span></div><p class="hint">${career.weekend ? "Your aero package is fixed for this weekend." : level(career.upgrades,"aero") ? "Choose your package before qualifying. Switching is free." : "Buy Aerodynamics I to unlock both specialist packages. Choose before qualifying."}</p><div class="aero-packages">${Object.entries(AERO_PACKAGES).map(([key,pack])=>{
   const locked=key!=="balanced"&&!level(career.upgrades,"aero"),selected=(career.aeroSpec || "balanced")===key;
-  return `<button class="aero-choice ${selected?"selected":""}" data-aero-spec="${key}" aria-pressed="${selected}" ${locked || career.weekend ? "disabled" : ""}><b>${pack.name}${selected?" ✓":""}</b><span>${pack.desc}</span><small>${locked ? "UNLOCK AT AERO I" : key==="downforce" ? "+10% high-speed support · +8% drag" : key==="lowDrag" ? "−8% drag · −5% high-speed support" : "Even balance"}</small></button>`;
+  return `<button class="aero-choice ${selected?"selected":""}" data-aero-spec="${key}" aria-pressed="${selected}" ${locked || career.weekend ? "disabled" : ""}><b>${pack.name}${selected?" ✓":""}</b><span>${pack.desc}</span><small>${locked ? "UNLOCK AT AERO I" : aeroPackageSummary(key)}</small></button>`;
  }).join("")}</div></div>`;
 }
 function rivalDevelopmentCard(){
@@ -306,7 +343,7 @@ function rivalDevelopmentCard(){
  return `<div class="rivals-panel"><p class="hint">Teams fund parts from race and sponsor income. They pay the same prices and use the same upgrade effects. Budgets are per car, averaged across each team's drivers.</p>${career.teams.map(t=>{
   const yours=t.teamIndex===career.profile.teamIndex,upgrades=yours?career.upgrades:t.upgrades,budget=yours?career.cash:t.budget,count=Object.values(upgrades).reduce((a,b)=>a+b,0),pack=snapshot.find(x=>x.teamIndex===t.teamIndex)?.aeroSpec || "balanced";
   const bought=t.history[0]?.purchases || [];
-  return `<details class="team-development-row"><summary><b style="--team:${TEAMS[t.teamIndex].color}">${TEAMS[t.teamIndex].name}${yours ? " · YOU" : ""}</b><span>${count} ${count===1?"level":"levels"}</span><small>${money(budget)}</small></summary><div class="team-parts">${Object.entries(UPGRADES).filter(([key])=>level(upgrades,key)>0).map(([key,u])=>`<span>${u.name} ${level(upgrades,key)}</span>`).join("") || "Factory specification"}</div><p class="hint">${AERO_PACKAGES[pack]?.name || "Balanced"} package${!yours && bought.length ? " · Latest: "+bought.map(b=>UPGRADES[b.key].name+" "+b.level+" ("+money(b.cost)+")").join(", ") : ""}</p></details>`;
+  return `<details class="team-development-row"><summary><b style="--team:${TEAMS[t.teamIndex].color}">${TEAMS[t.teamIndex].name}${yours ? " · YOU" : ""}</b><span>${count} ${count===1?"level":"levels"}</span><small>${money(budget)}</small></summary><div class="team-parts">${Object.entries(UPGRADES).filter(([key])=>level(upgrades,key)>0).map(([key,u])=>`<button type="button" class="team-upgrade-info" data-upgrade-info="${key}" data-upgrade-level="${level(upgrades,key)}" aria-expanded="false">${u.name} ${level(upgrades,key)}<span aria-hidden="true">ⓘ</span></button>`).join("") || "Factory specification"}</div><p class="hint">${AERO_PACKAGES[pack]?.name || "Balanced"} package${!yours && bought.length ? " · Latest: "+bought.map(b=>UPGRADES[b.key].name+" "+b.level+" ("+money(b.cost)+")").join(", ") : ""}</p></details>`;
  }).join("")}</div>`;
 }
 function showUpgradePreview(key){

@@ -29,7 +29,9 @@ test('V10 development improves measured acceleration and aero packages suit diff
  const before=developmentBench(emptyUpgrades()),after=developmentBench({...emptyUpgrades(),engine:1});
  assert.ok(after.accelerate<before.accelerate*.96);
  const c=newCareer(profile);assert.equal(setAeroPackage(c,'lowDrag'),false);c.upgrades.aero=3;c.upgrades.engine=2;
- selectTrack('velocity');assert.ok(developmentBench(c.upgrades,'lowDrag').lap<developmentBench(c.upgrades,'downforce').lap);
+ // The mirrored ±10% balance rewards Low drag on the fast oval; mixed
+ // circuits can favour Balanced or High downforce despite their straights.
+ selectTrack('sunset');assert.ok(developmentBench(c.upgrades,'lowDrag').lap<developmentBench(c.upgrades,'downforce').lap);
  selectTrack('harbour');assert.ok(developmentBench(c.upgrades,'downforce').lap<developmentBench(c.upgrades,'lowDrag').lap);
  assert.equal(setAeroPackage(c,'downforce'),true);c.weekend={};assert.equal(setAeroPackage(c,'lowDrag'),false);
  assert.equal(loadCareer({getItem:()=>JSON.stringify(c)}).aeroSpec,'downforce');
