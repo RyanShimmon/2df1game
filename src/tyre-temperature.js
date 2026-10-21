@@ -1,3 +1,4 @@
+import {level} from "./development.js";
 // FL, FR, RL, RR. Temperatures are degrees Celsius; wear is permanent.
 export const WHEELS = ['FL','FR','RL','RR'];
 export const THERMAL = {
@@ -14,7 +15,7 @@ export function holdOptimalTemperature(car){
 }
 export function prepareTyres(car,set=null,grid=false){
   const spec=THERMAL[car.tyre] || THERMAL.M;
-  const prepared=spec.low-(grid ? -4 : 9);
+  const prepared=spec.low-(grid ? -4 : 9-level(car.upgrades,"crew")*1.5);
   car.tyreTemperatures=valid(set?.temperatures) ? set.temperatures.map(t=>Math.max(prepared,t)) : Array(4).fill(prepared);
   car.wheelWear=valid(set?.wheelWear) ? [...set.wheelWear] : Array(4).fill(car.wear || 0);
   if(car.tyreTemperatureEnabled===false)holdOptimalTemperature(car);
@@ -81,11 +82,13 @@ export function updateTyreTemperatures(car,dt,load={}){
     const power=throttle*moving*(front ? .35 : 1.25+2.2*clamp(load.wheelspin || 0,0,1));
     const sliding=slide*moving*(front ? 1.1 : 2); // Capped: one slide cannot cause runaway heat.
     const heat=parked ? 0 : (roll+cornerHeat+braking+power+sliding+dryWet*6*moving)*spec.heat;
-    const equilibrium=target+heat/cooling;
+    const excessCooling=parked ? 0 : level(car.upgrades,"tyres")*.006*clamp((temp-spec.high)/20,0,1);
+    const rate=cooling+excessCooling;
+    const equilibrium=target+heat/rate;
     // Warm-up remains responsive, but the carcass absorbs sustained heat gradually.
     // Cooling retains full authority so backing off actually helps recovery.
     const response=equilibrium>temp && temp>=spec.low ? .55 : 1;
-    return clamp(equilibrium+(temp-equilibrium)*Math.exp(-cooling*dt*response),ambient,175);
+    return clamp(equilibrium+(temp-equilibrium)*Math.exp(-rate*dt*response),ambient,175);
   });
   if(car.tyreSet)car.tyreSet.temperatures=[...car.tyreTemperatures];
 }

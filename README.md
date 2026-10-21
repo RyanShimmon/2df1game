@@ -1,6 +1,6 @@
 # V10 — Grand Prix
 
-Version **1.3.1**.
+Version **1.4**.
 
 A local browser game with top-down V10 racing, 22 cars, five tyre types, dynamic weather, qualifying and a saved career. Requires Node.js 18 or newer; no dependency installation is needed.
 
@@ -79,9 +79,37 @@ The quick-race circuit selector offers all 12 circuits. Existing active weekends
 
 Each career round requires Q1 → Q2 → Q3 knockouts: 22 → 16 → 10 cars. Stage clocks are 18, 15 and 13 minutes; best times reset between stages. Grid positions 17–22 come from Q1, 11–16 from Q2, and 1–10 from Q3. Equal times favour the earlier lap. All cars start in their pit garages. Press W / ↑ to leave whenever you choose; AI drivers leave at independently random times and wait again after each run. Each outing includes an out lap, one timed lap and an in lap. Additional laps cannot count until you return to your box and complete service. Fuel covers those three laps in Push mode, including the pit detour. Service refuels the car; a tyre change is optional and KEEP FITTED is the default. Actual set wear and distance persist. After service, release the throttle and press forward again to leave. You can finish the run early or end the stage to simulate the remainder. Eliminated players can simulate the remaining qualifying. No valid time means the back of that stage; the prototype allows a race start rather than modelling stewards' 107% waivers. Inter-session waiting breaks are skipped.
 
-Dry allocation is 13 sets: H1–H2, M1–M3, S1–S8, plus I1–I5 and W1–W2. Since practice is not playable, H2, M3 and S5–S8 are returned before Q1. S4 is reserved for Q3; Q3 participants return it afterwards, while eliminated drivers retain it for the race. Every physical set stores wear, distance and used status. Starting set choice is free among remaining sets. The pit selector chooses exact sets; compound keys choose the freshest available set of that type.
+The playable weekend pool is deliberately limited: two general-use Softs (S1–S2), one Medium (M1), one Hard (H1), two Intermediates (I1–I2) and one Wet (W1), plus a Soft (S4) reserved for Q3. Q3 participants return S4 afterwards; eliminated drivers retain it for the race. Unissued historical IDs remain marked as returned for save compatibility. Older weekends keep selected and used sets within the same compound quotas for every driver; excess stock is returned while its wear/history remains saved. Every physical set stores wear, distance and used status. Starting set choice is free among remaining sets. The pit selector chooses exact sets; compound keys choose the freshest available set of that type.
 
-Weekend state, weather, tyres, timing and grid save automatically. Reloading returns to the garage while preserving consumed tyres and completed laps. Finishing or retiring the race settles the round and starts a fresh allocation next weekend. Quick race uses unlimited replacement tyres. Remaining AI qualifying runs use a deterministic pace estimate; races and player qualifying runs use the driving model. Upgrades are locked after the weekend starts.
+Quick-race and career setup both show estimated tyre life at Balanced pace in suitable conditions, including upgrades and the selected physical set's remaining wear. Heat, sliding and other driving modes change the actual distance. Qualifying AI use a slower off-line route on out and in laps, hold their side for approaching timed cars, and merge for the final corner of an out lap when clear.
+
+Weekend state, weather, tyres, timing and grid save automatically. Reloading returns to the garage while preserving consumed tyres and completed laps. Finishing or retiring the race settles the round and starts a fresh allocation next weekend. Quick race uses unlimited replacement tyres. Upgrades are locked after the weekend starts.
+
+Simulated AI qualifying outings use the same driving, pit, weather, temperature and wear model as live outings. All 22 drivers use the same stock and eligibility rules. Wear is charged for actual physical distance, with the same fuel-mode, sliding and braking effects; AI personalities receive no hidden wear discount. Player and AI braking share the same front-tyre grip calculation (compound, permanent wear, heat and surface water); low grip also extends AI braking lookahead. Used sets retain aggregate and individual-wheel wear through sessions, service, saves and the race. Exhausted stock cannot create replacement tyres. Expired qualifying sessions can close even when an opponent has no tyres left to set a time.
+
+## Car and team development
+
+The garage has nine development paths. Each purchase opens a review with measured before/after estimates before charging the quoted price. Levels persist across seasons; prices rise by 60% of the base cost per existing level. Parts and package choices lock for the whole weekend at the start of Q1. Existing four-path careers migrate without losing purchases, money, identity, results or physical tyre condition.
+
+| Path | Base cost | Maximum | Effect |
+| --- | ---: | ---: | --- |
+| V10 development | £6,000 | 5 | More power, with extra emphasis on low/mid-speed acceleration |
+| Fuel efficiency | £5,000 | 5 | 2% less fuel per level; qualifying receives a correspondingly lighter three-lap load |
+| Aerodynamics | £5,000 | 5 | More speed-dependent downforce; level 1 unlocks specialist packages |
+| Suspension & differential | £5,000 | 5 | Better traction and active countersteer recovery |
+| Brakes & balance | £4,500 | 5 | Better use of available tyre grip and steadier combined braking/cornering |
+| Tyre engineering | £4,500 | 5 | 7% less wear per level, gentler grip cliff and improved excess-heat dissipation |
+| Pit crew training | £3,500 | 4 | Lower maximum service time and warmer prepared replacement tyres |
+| Race engineer | £3,500 | 3 | Fuel/tyre estimates, then weather windows, then estimated pit rejoin traffic |
+| Commercial development | £4,500 | 3 | 10% more income per level on successfully completed sponsor contracts |
+
+Balanced, High downforce and Low drag aero packages can be switched without cost before a weekend. High downforce adds high-speed corner support but increases drag and lowers the clean-air speed ceiling. Low drag improves straight-line performance at the expense of cornering support. Normal clean-air speed remains capped at 330 km/h; a slipstream can exceed it. Brake and suspension upgrades never remove the underlying compound, wear, temperature and water penalties.
+
+Performance previews use a deterministic solo test car on the selected circuit, with ideal Medium tyres, six fuel laps and Balanced pace. They are comparisons, not promised lap times. Tyre-life and fuel figures use the same resource formulas as the game. Tyre engineering still extends life and softens the grip cliff with temperature simulation disabled; crew service improvements also remain active.
+
+Engineer advice appears through the race radio. The pause menu includes the full briefing, using your current pace, tyres, available stock, forecast, time penalties, teammate box occupancy and traffic. Weather crossover and rejoin positions are estimates. Commercial bonuses appear in sponsor offers, results and saved income, and never bypass contract conditions.
+
+AI teams use saved, seeded development preferences and their own budgets. Each starts with £7,000 per car and pays the same escalating upgrade costs as the player. Subsequent funding uses the average classification and earned contract income of the team's drivers at race end. They can buy up to two affordable parts before the next weekend and choose their aero package for the circuit. The garage's Team development view shows installed levels, budget, package and latest purchases. Both cars share their team's parts; the player's teammate shares the player's development. Weekend snapshots keep all equipment consistent across Q1, Q2, Q3 and the race. Team development never changes the equal physical tyre allocation or wear rules.
 
 ## Verify
 
@@ -172,3 +200,14 @@ Touch devices use a compact landscape race HUD, independent multi-touch pedals a
 Mobile tyre choices use the full paused tyre-set selector rather than compound shortcut icons, including Quick Race starting tyres. The timing board opens on demand and pauses driving, tyre-temperature details are tappable, and the weather forecast stays compact along the bottom. Race School replaces keyboard instructions with touch instructions for the selected steering mode. Rendering uses a lower pixel-density cap and fewer decorative/rain elements on mobile while retaining the same 22-car simulation and physics.
 
 Double-tap zoom is disabled on touch devices while menu/dialog scrolling and independent driving fingers remain supported. Fullscreen help and Settings → Play from Home Screen show platform-specific installation steps for Safari on iPhone and Chrome on Android. The standalone manifest includes Home Screen icons for both platforms.
+
+
+### Slipstream and adaptive opponents
+
+Following a nearby, aligned car at racing speed reduces drag for the player and AI. Strength depends on separation, lateral position, heading and speed; cars in pits, stationary cars, distant road sections and separate bridge levels cannot provide a tow. A strong tow can carry the car a little above 330 km/h. Drag reduction disappears quickly after pulling out; the speed gained fades over roughly 2–5 seconds rather than being cut immediately. The speed readout turns lime while receiving a useful tow. This is a calibrated game approximation of aerodynamic drag and momentum, not a wind-tunnel simulation.
+
+AI uses a continuous outside/apex/exit path built for each circuit. It plans braking from the actual path curvature, stopping distance and available tyre grip, with smooth lateral changes, space for cars alongside and individual pace, consistency and mistakes. Tyre condition and weather affect both braking and acceleration. The rendered racing-line assist remains removed.
+
+Each new race receives a fresh random seed. Every driver has an independent random stream plus personal risk, tyre-life targets, forecast horizon and compound preferences. Pit decisions are reviewed against actual/projected surface water, measured wear, remaining distance, compound requirements, pit time and teammate box traffic. There are no fixed pit-lap schedules. Career grid preparation chooses each opponent's own available physical set instead of overriding the whole grid with one recommended compound. Qualifying release times, set reuse, fallback lap estimates and AI service durations are seeded too. Identical seeds and events reproduce decisions for debugging; player tyre-button selections do not control opponents. To replay a Quick Race in a simulation, use `race.setup.aiSeed` from the original run.
+
+`tests/racecraft.test.js` exercises tow eligibility and momentum, real acceleration beyond 330, braking anticipation, dry/wet AI laps on all 12 circuits, driver independence, seeded replays, weather/wear/teammate reactions, and career/qualifying physical tyre allocation.

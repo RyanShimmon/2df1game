@@ -31,15 +31,16 @@ const setup = { laps: 8, fuel: 9.5, tyre: "M" },
   profile = { driverName: "Alex", teamIndex: 2 },
   upgrades = { engine: 0, aero: 0, tyres: 0, crew: 0 };
 const create = () => createWeekend(newCareer(profile), setup);
-test("13 allocated dry sets, six returned; reserved Q3 soft cannot be used early", () => {
+test("limited weekend stock shares four general-use dry sets and a reserved Q3 Soft", () => {
   const inv = tyreAllocation();
   assert.equal(inv.length, 20);
   assert.equal(
     inv.filter((t) => ["S", "M", "H"].includes(t.compound)).length,
     13,
   );
-  assert.equal(inv.filter((t) => t.returned).length, 6);
-  assert.equal(selectableSets(inv, "Q1").length, 13);
+  assert.equal(inv.filter((t) => t.returned).length, 12);
+  assert.deepEqual(selectableSets(inv, "Q1").map(t=>t.id), ["H1","M1","S1","S2","I1","I2","W1"]);
+  assert.equal(selectableSets(inv,"R").length,8);
   assert.ok(!selectableSets(inv, "Q2").some((t) => t.id === "S4"));
   assert.ok(selectableSets(inv, "Q3").some((t) => t.id === "S4"));
   assert.equal(Q_STAGES[2].duration, 13 * 60);

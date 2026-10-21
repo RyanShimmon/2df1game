@@ -1684,3 +1684,62 @@ input[type="range"] {
 .mobile-racing .touch-controls button,.mobile-racing .steering-stick { touch-action:none; }
 .mobile-game .modal { touch-action:pan-y; }
 .home-screen-help { margin-top:18px; width:100%; }
+
+.speed strong.drafting { color:var(--lime); text-shadow:0 0 12px #d8ff9b45; }
+
+/* Compact estimates stay readable in both the garage and quick-race setup. */
+.tyre-life { margin:18px 0; padding:14px; border:1px solid var(--line); border-radius:10px; }
+.tyre-life-heading { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:6px 12px; font-size:11px; }
+.tyre-life-heading > b { color:var(--lime); letter-spacing:.08em; }
+.tyre-life-heading > span { color:var(--muted); font-size:10px; }
+.tyre-life-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px 10px; margin:14px 0; }
+.tyre-life-grid > div { display:grid; grid-template-columns:auto 1fr; align-items:center; gap:4px 5px; font-size:11px; }
+.tyre-life-grid b { grid-column:2; font-size:13px; color:var(--tyre); }
+.tyre-life-remaining { display:flex; flex-wrap:wrap; justify-content:space-between; gap:5px 12px; font-size:11px; margin:12px 0 0; }
+.tyre-life-remaining strong { color:var(--lime); }
+.tyre-life .hint { margin:7px 0 0; }
+
+/* Development is a scrollable garage workflow with explicit purchase previews. */
+.development-stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; padding:13px 0 18px; border-bottom:1px solid var(--line); }
+.development-stats span { display:block; color:var(--muted); font-size:9px; letter-spacing:.06em; }
+.development-stats b { display:block; color:var(--lime); margin-top:5px; font-size:17px; }
+.development-group h4 { margin:22px 0 4px; color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.14em; }
+.development-group .upgrade { gap:18px; padding:17px 0; }
+.development-group .upgrade-info { min-width:0; }
+.development-group .levels { display:flex; align-items:center; }
+.development-group .levels span { color:var(--muted); font-size:10px; margin-left:7px; }
+.upgrade-review { flex:0 0 94px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; padding:12px 9px; }
+.upgrade-review span { color:var(--muted); font-size:9px; letter-spacing:.1em; }
+.upgrade-review b { font-size:12px; }
+.aero-panel,.rivals-panel { margin-top:20px; }
+.aero-packages { display:grid; gap:9px; margin-top:15px; }
+.aero-choice { text-align:left; padding:13px; color:inherit; background:#ffffff03; border:1px solid var(--line); border-radius:8px; }
+.aero-choice.selected { border-color:var(--lime); background:#d6fca108; }
+.aero-choice b,.aero-choice span,.aero-choice small { display:block; }
+.aero-choice span { margin-top:6px; color:var(--muted); font-size:11px; line-height:1.6; }
+.aero-choice small { color:var(--lime); font-size:10px; margin-top:8px; }
+.rivals-panel > details > summary { font-weight:700; cursor:pointer; }
+.rivals-panel > details > summary > span { float:right; color:var(--muted); font-size:11px; }
+.team-development-row { border-top:1px solid var(--line); padding:11px 0; }
+.team-development-row summary { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:12px; align-items:center; cursor:pointer; font-size:12px; }
+.team-development-row summary b { border-left:3px solid var(--team); padding-left:7px; }
+.team-development-row summary span,.team-development-row summary small { color:var(--muted); font-size:10px; }
+.team-parts { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; color:var(--muted); font-size:11px; }
+.team-parts span { border:1px solid var(--line); padding:5px 7px; border-radius:5px; }
+.upgrade-preview { max-width:740px; max-height:calc(100dvh - 32px); overflow:auto; }
+.upgrade-preview h2 { font-size:clamp(30px,5vw,46px); margin:16px 0; }
+.upgrade-preview .muted { font-size:14px; line-height:1.7; }
+.preview-column-labels { display:flex; justify-content:space-between; gap:15px; font-size:9px; color:var(--muted); letter-spacing:.1em; margin-top:25px; }
+.upgrade-metrics { margin:7px 0 17px; }
+.upgrade-metrics > div { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:16px; border-bottom:1px solid var(--line); padding:13px 0; font-size:13px; align-items:center; }
+.upgrade-metrics dd { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px; margin:0; text-align:right; }
+.upgrade-metrics dd span,.upgrade-metrics dd i { color:var(--muted); font-style:normal; }
+.upgrade-metrics dd b { color:var(--lime); }
+.preview-budget { display:flex; align-items:center; justify-content:space-between; margin:22px 0 15px; }
+.preview-budget span { color:var(--muted); font-size:12px; }
+#cancel-upgrade { width:100%; margin-top:12px; }
+.engineer-brief { border:1px solid var(--line); padding:16px; border-radius:9px; margin:20px 0; }
+.engineer-brief h3 { margin:0 0 10px; }
+.engineer-brief ul { padding-left:18px; margin:0; }
+.engineer-brief li { margin:10px 0; color:var(--muted); font-size:12px; line-height:1.7; }
+@media(max-width:600px) { .upgrade-metrics > div { grid-template-columns:1fr; gap:7px; } .upgrade-metrics dd { justify-content:flex-start; text-align:left; } .development-stats b { font-size:15px; } .development-group .upgrade { gap:10px; } .upgrade-review { flex-basis:83px; } }
