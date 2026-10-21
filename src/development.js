@@ -1,3 +1,5 @@
+import {sponsorMet} from "./sponsors.js";
+export {sponsorMet} from "./sponsors.js";
 // Shared development prices and mechanical effects: player and AI buy the same parts.
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export const UPGRADES={
@@ -95,10 +97,6 @@ export function developmentSnapshot(career,trackId){
  return career.teams.map(t=>t.teamIndex===career.profile?.teamIndex
   ? {teamIndex:t.teamIndex,upgrades:normalizeUpgrades(career.upgrades),aeroSpec:career.aeroSpec || "balanced"}
   : {teamIndex:t.teamIndex,upgrades:normalizeUpgrades(t.upgrades),aeroSpec:level(t.upgrades,"aero") ? fast ? "lowDrag" : technical ? "downforce" : "balanced" : "balanced"});
-}
-export function sponsorMet(id,row){
- const legal=!row.dnf && row.legal!==false;
- return legal && (id==="finish" || id==="top15" && row.position<=15 || id==="points" && row.position<=10 || id==="clean" && !row.penalties && (row.contacts || 0)<=2);
 }
 export function fundTeams(career,result,sponsors,difficultyBonus=0){
  migrateDevelopment(career);const round=(career.season-1)*6+career.round;

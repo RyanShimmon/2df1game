@@ -1,3 +1,5 @@
+import {SPONSORS,sponsorMet} from "./sponsors.js";
+export {SPONSORS} from "./sponsors.js";
 import {engineerReport} from "./engineer.js";
 import {UPGRADES,AERO_PACKAGES,emptyUpgrades,normalizeUpgrades,level,upgradePrice,fuelMultiplier,sponsorPayout,aeroPackage,aeroGrip,setAeroPackage,createTeamDevelopment,migrateDevelopment,developTeams,developmentSnapshot,fundTeams} from "./development.js";
 export {UPGRADES,AERO_PACKAGES,fuelMultiplier,sponsorPayout,setAeroPackage,developTeams,developmentSnapshot};
@@ -53,32 +55,6 @@ export const TEAMS = [
   { name: "Haas", color: "#d9e0e1", accent: "#d82a40", pace: 0.98 },
   { name: "Audi", color: "#a5adb0", accent: "#f34b2d", pace: 0.975 },
   { name: "Cadillac", color: "#ededeb", accent: "#22252b", pace: 0.97 },
-];
-export const SPONSORS = [
-  {
-    id: "finish",
-    name: "NORTHLINE",
-    desc: "Finish the race with legal tyre usage.",
-    amount: 3500,
-  },
-  {
-    id: "top15",
-    name: "APEX WORKS",
-    desc: "Finish in the top 15 with legal tyre usage.",
-    amount: 6500,
-  },
-  {
-    id: "clean",
-    name: "CLEAR SIGNAL",
-    desc: "Finish with no penalties and at most 2 contacts.",
-    amount: 4500,
-  },
-  {
-    id: "points",
-    name: "VELOCITY",
-    desc: "Score points: finish in the top 10.",
-    amount: 10000,
-  },
 ];
 export const POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
 export function normalizeProfile(profile) {
@@ -169,15 +145,8 @@ export function settleCareer(career, result) {
   const difficultyBonus=legal ? Math.round(basePrize*DIFFICULTIES[difficulty].prizeBonus) : 0;
   const prize=basePrize+difficultyBonus;
   const sponsor = SPONSORS.find((s) => s.id === career.sponsor);
-  const met =
-    legal &&
-    sponsor &&
-    (sponsor.id === "finish" ||
-      (sponsor.id === "top15" && result.position <= 15) ||
-      (sponsor.id === "clean" &&
-        result.penalties === 0 &&
-        result.contacts <= 2) ||
-      (sponsor.id === "points" && points > 0));
+  const gridPosition=result.gridPosition ?? ((career.weekend?.grid?.indexOf(21) ?? -1)+1);
+  const met=legal && sponsor && sponsorMet(sponsor.id,{...result,gridPosition});
   const sponsorBaseBonus=met ? sponsor.amount : 0;
   const bonus=met ? sponsorPayout(career.upgrades,sponsor.amount) : 0;
   const commercialBonus=bonus-sponsorBaseBonus;
@@ -441,6 +410,21 @@ export function selectTrack(id="northline") {
   PIT_LANE=makePitLane();APEXES=findApexes();AI_LINE=buildRacingLine(TRACK,sample,APEXES);
   PIT_MARKERS={entry:samplePit(0),exit:samplePit(PIT_LANE.length)};
   return TRACK;
+}
+// Follow the on-track tail of the real pit route, reaching its painted edge
+// only at the entrance. Blend from the racing line instead of hugging grass.
+export function aiPitApproach(s){
+ const distance=wrap(TRACK.pitEntry-s+TRACK.length/2,TRACK.length)-TRACK.length/2;
+ if(distance>300 || distance< -180)return null;
+ const offsetAt=at=>{
+  const toEntry=wrap(TRACK.pitEntry-at+TRACK.length/2,TRACK.length)-TRACK.length/2;
+  const progress=Math.max(0,TRACK.pitEntry-PIT_ROUTE_ENTRY-toEntry);
+  const span=TRACK.length-PIT_ROUTE_ENTRY+PIT_ROUTE_EXIT;
+  const routeOffset=180*smootherStep(progress/400)*smootherStep((span-progress)/400);
+  const blend=smootherStep((300-toEntry)/180);
+  return racingPoint(AI_LINE,at).offset*(1-blend)+routeOffset*blend;
+ };
+ return {distance,offset:offsetAt(s),slope:(offsetAt(s+4)-offsetAt(s-4))/8};
 }
 export const trackLayer=s=>(TRACK.bridges || []).some(([a,b])=>wrap(s,TRACK.length)>=a && wrap(s,TRACK.length)<=b) ? 1 : 0;
 export function bankingGrip(s) {
@@ -1147,6 +1131,7 @@ export class Race {
       const p = this.player;
       this.result = {
         position: this.classification().indexOf(p) + 1,
+        gridPosition:p.gridPosition,
         difficulty:this.difficulty,
         legal: tyreRuleMet(p),
         dnf: p.dnf,
@@ -1168,7 +1153,7 @@ export class Race {
     this.engineerMessageIndex=(this.engineerMessageIndex || 0)+1;
     this.say(report.items[index]);
   }
-  raceField(){return this.classification().map((c,i)=>({id:c.id,teamIndex:TEAMS.indexOf(c.team),position:i+1,dnf:c.dnf,legal:tyreRuleMet(c),contacts:c.contacts,penalties:c.penalties}));}
+  raceField(){return this.classification().map((c,i)=>({id:c.id,teamIndex:TEAMS.indexOf(c.team),position:i+1,dnf:c.dnf,legal:tyreRuleMet(c),contacts:c.contacts,penalties:c.penalties,gridPosition:c.gridPosition,stops:c.stops}));}
   stepPlayer(c, dt, input) {
     if(this.autoPitLimiter) {
       this.pitLimiter=!!c.pit;
@@ -1351,16 +1336,14 @@ export class Race {
     const water=c.trackWetness || 0;
     const style=c.driverStyle,ai=c.ai;
     const shouldPit=this.qualifying ? c.qState==='in' : this.reviewAIStrategy(c,remain);
-    const pos = wrap(c.s, TRACK.length);
-    if (
-      pos >= TRACK.pitEntry &&
-      pos < TRACK.pitEntry + 80 && c.offset >= TRACK.width/2+8 &&
-      shouldPit &&
-      remain > 0.6
-    ) {
-      c.weatherTarget = this.qualifying ? recommendedTyre(water) : c.ai.strategy.choice?.compound;
-      this.enterPit(c);
-      if (c.pit) {if(c.slipstream){c.slipstream.strength=0;c.slipstream.carry=0;}return;}
+    const pitApproach=shouldPit ? aiPitApproach(c.s) : null;
+    if(pitApproach && pitApproach.distance<=0 && c.offset>=TRACK.width/2-8 && remain>.6){
+      const entrance=pitEntranceLocation(c.x,c.y);
+      if(entrance.separation<=PIT_LANE.width/2-3 && Math.cos(angleDiff(c.angle,entrance.angle))>0){
+        c.weatherTarget=this.qualifying ? recommendedTyre(water) : c.ai.strategy.choice?.compound;
+        this.enterPit(c);
+        if(c.pit){if(c.slipstream){c.slipstream.strength=0;c.slipstream.carry=0;}return;}
+      }
     }
     const curvature=angleDiff(sample(c.s+15).angle,sample(c.s-15).angle)/30;
     const path=racingPoint(AI_LINE,c.s);
@@ -1391,27 +1374,24 @@ export class Race {
     let target=brakingTarget(AI_LINE,c.s,grip(c),braking*.82,maximumSpeed(c),commitment);
     if(yielding) target=Math.min(target*.82,210);
     if(mistake)target*=mistake==='wide' ? .88 : .94;
-    if (shouldPit && pos > TRACK.pitEntry - 220) target = Math.min(target, 80);
-    const pitApproach=shouldPit && pos>TRACK.pitEntry-800 && pos<TRACK.pitEntry+80;
+    if(pitApproach)target=Math.min(target,Math.sqrt(PIT_SPEED**2+2*braking*.82*Math.max(0,pitApproach.distance-25)));
     const lane=planRacingLane(c,AI_LINE,this.traffic || this.cars,{time:this.time,
       allowPass:!pitApproach&&!mistake&&ai.mode!=="conserve"&&(!this.qualifying||c.qState==="timed"),
       yieldOffset:yielding ? courtesy.offset : null});
     let desiredOffset=lane.offset;
     target=Math.min(target,lane.followingSpeed);
     if(mistake==="wide")desiredOffset=clamp(path.offset+(ai.mistakeSide || -Math.sign(curvature))*22,lane.min,lane.max);
-    // AI also steers off the circuit before crossing the pit entrance.
-    if(shouldPit && pos > TRACK.pitEntry-800 && pos < TRACK.pitEntry+80)
-      desiredOffset=TRACK.width/2+12;
+    if(pitApproach)desiredOffset=pitApproach.offset;
     const demand=c.speed*c.speed*Math.abs(path.curvature)/(225*Math.max(.08,grip(c)));
     const excess=Math.max(0,demand-(.94+.08*style.wetSkill));
     const slipTarget=pitApproach ? 0 : -Math.sign(curvature)*clamp(excess*.3+
       (mistake==="oversteer" ? .2 : 0),0,.28);
     ai.slip+=(slipTarget-ai.slip)*(1-Math.exp(-(slipTarget ? 3 : (5+style.wetSkill*3)*(1+level(c.upgrades,"suspension")*.06))*dt));
     c.sideSpeed+=(c.speed*Math.sin(ai.slip)-(c.sideSpeed || 0))*(1-Math.exp(-5*dt));
-    const lateralCap=clamp(c.speed*.35,0,78);
+    const lateralCap=clamp(c.speed*(pitApproach ? .85 : .35),0,pitApproach ? 100 : 78);
     const slope=(racingPoint(AI_LINE,c.s+30).offset-racingPoint(AI_LINE,c.s-30).offset)/60;
-    let feedForward=yielding||pitApproach ? 0 : slope*c.speed/clamp(1-curvature*c.offset,.5,1.5);
-    if(desiredOffset<=lane.min+.1&&feedForward<0 || desiredOffset>=lane.max-.1&&feedForward>0)feedForward=0;
+    let feedForward=(pitApproach ? pitApproach.slope : yielding ? 0 : slope)*c.speed/clamp(1-curvature*c.offset,.5,1.5);
+    if(!pitApproach && (desiredOffset<=lane.min+.1&&feedForward<0 || desiredOffset>=lane.max-.1&&feedForward>0))feedForward=0;
     const lineVelocity=clamp(feedForward+(desiredOffset-c.offset)*2.4,-lateralCap,lateralCap);
     const lateralAcceleration=180*Math.max(.25,grip(c));
     ai.lineVelocity+=clamp((lineVelocity-ai.lineVelocity)*10,-lateralAcceleration,lateralAcceleration)*dt;

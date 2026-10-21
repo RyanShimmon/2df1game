@@ -13,6 +13,12 @@ import {
   angleDiff,
   interpolatedCar,
 } from "./core.js";
+// One opaque asphalt colour prevents translucent round joins from building
+// blue patches where curved road strokes meet.
+export function asphaltColour(wetness=0){
+ const water=Math.max(0,Math.min(1,Number(wetness)||0))*.4;
+ return "rgb("+[52,61,66].map((dry,i)=>Math.round(dry+([110,150,177][i]-dry)*water)).join(",")+")";
+}
 export function countdownPulse(countdown) {
   if(countdown<=0 || countdown>4) return 0;
   const phase=(4-countdown)%1;
@@ -148,19 +154,9 @@ export class Renderer {
     ctx.setLineDash([20, 20]);
     ctx.stroke(this.road);
     ctx.setLineDash([]);
-    ctx.strokeStyle = "#343d42";
-    ctx.lineWidth = 126;
+    ctx.strokeStyle = asphaltColour(race?.weather?.wetness);
+    ctx.lineWidth = TRACK.width;
     ctx.stroke(this.road);
-    if(race?.weather) {
-      // One continuous road stroke: sector drainage affects physics, but never
-      // leaves butt-capped rectangles or holes in the visible wet surface.
-      ctx.save();
-      ctx.lineCap="round";ctx.lineJoin="round";
-      ctx.strokeStyle=`rgba(110,150,177,${race.weather.wetness*.4})`;
-      ctx.lineWidth=TRACK.width;
-      ctx.stroke(this.road);
-      ctx.restore();
-    }
     for(const [a,b] of TRACK.banks) {
       ctx.save();ctx.strokeStyle="#b5a68c";ctx.lineWidth=3;ctx.setLineDash([18,18]);
       for(const offset of [-46,-35]) {ctx.beginPath();for(let d=a;d<=b;d+=8){const p=sample(d),x=p.x-Math.sin(p.angle)*offset,y=p.y+Math.cos(p.angle)*offset;d===a ? ctx.moveTo(x,y) : ctx.lineTo(x,y);}ctx.stroke();}
@@ -329,8 +325,7 @@ export class Renderer {
       ctx.strokeStyle="#c9c9b5";ctx.lineWidth=142;ctx.stroke(road);
       ctx.shadowBlur=0;ctx.shadowOffsetY=0;
       ctx.strokeStyle="#df655e";ctx.lineWidth=136;ctx.setLineDash([20,20]);ctx.stroke(road);ctx.setLineDash([]);
-      ctx.strokeStyle="#343d42";ctx.lineWidth=TRACK.width;ctx.stroke(road);
-      if(race?.weather.wetness){ctx.strokeStyle=`rgba(110,150,177,${race.weather.wetness*.4})`;ctx.stroke(road);}
+      ctx.strokeStyle=asphaltColour(race?.weather?.wetness);ctx.lineWidth=TRACK.width;ctx.stroke(road);
       ctx.restore();
     }
   }

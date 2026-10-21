@@ -17,14 +17,15 @@ test('smaller weekend pool retains physical wear between sessions rather than re
  assert.equal(selectableSets(inv,'Q2').filter(t=>t.compound==='W').length,1);
 });
 test('old saves reduce unused excess sets once while preserving used, worn and selected sets',()=>{
- const c=newCareer(profile),w=createWeekend(c,setup);c.weekend=w;delete w.allocationVersion;
+ const c=newCareer(profile),w=createWeekend(c,setup);c.weekend=w;delete w.allocationVersion;delete w.softSetNumbering;
+ for(const inv of w.inventories)for(const t of inv)if(t.compound==='S')t.reserved=t.id==='S4';
  for(const inv of w.inventories)for(const t of inv)t.returned=['H2','M3','S5','S6','S7','S8'].includes(t.id);
  const old=w.inventories[21],used=old.find(t=>t.id==='M2'),worn=old.find(t=>t.id==='I3');
  Object.assign(used,{wear:.35,used:true,distance:22000});worn.wear=.1;
- w.selectedSetId='S3';w.phase='Q2';w.elapsed=107;w.results=[{id:21,time:36,at:90}];
+ const selected=old.find(t=>t.id==='S3');w.selectedSetId='S3';w.phase='Q2';w.elapsed=107;w.results=[{id:21,time:36,at:90}];
  assert.equal(ensureWeekend(c,setup),w);
  assert.equal(used.wear,.35);assert.equal(used.distance,22000);assert.equal(used.returned,false);
- assert.equal(worn.returned,false);assert.equal(old.find(t=>t.id==='S3').returned,false);
+ assert.equal(worn.returned,false);assert.equal(selected.returned,false);assert.equal(w.selectedSetId,selected.id);
  assert.equal(old.find(t=>t.id==='I4').returned,true);assert.equal(old.find(t=>t.id==='W2').returned,true);
  assert.equal(w.phase,'Q2');assert.equal(w.elapsed,107);assert.equal(w.results[0].time,36);
  const before=JSON.stringify(w);migrateWeekend(w);assert.equal(JSON.stringify(w),before);
@@ -82,6 +83,6 @@ for(const track of CIRCUITS)test(`${track.name}: qualifying AI yields, prepares 
 test('Q3 AI favour the returned Q3 Soft over spending an equally fresh race set',()=>{
  const w=createWeekend(newCareer(profile),setup);w.phase='Q3';w.active=Array.from({length:22},(_,i)=>i);
  w.weather.pattern='dry';w.weather.wetness=0;w.weather.sectors.fill(0);
- const q=new QualifyingRun(w,'S4',{},profile);
- for(const c of q.cars.filter(c=>!c.player))assert.equal(c.tyreSet.id,'S4');
+ const q=new QualifyingRun(w,'S3',{},profile);
+ for(const c of q.cars.filter(c=>!c.player))assert.equal(c.tyreSet.id,'S3');
 });

@@ -100,11 +100,11 @@ test('AI development is seeded, budgeted, charged at the same prices and purchas
 });
 test('opponent income uses their classification and sponsor conditions, then funds the next round',()=>{
  const c=newCareer(profile);developTeams(c,42);const before=structuredClone(c.teams);
- const field=TEAMS.flatMap((_,teamIndex)=>[0,1].map(n=>({teamIndex,position:teamIndex*2+n+1,legal:true,dnf:false,contacts:0,penalties:0})));
+ const field=TEAMS.flatMap((_,teamIndex)=>[0,1].map(n=>({teamIndex,position:teamIndex*2+n+1,legal:true,dnf:false,contacts:0,penalties:0,gridPosition:Math.min(22,teamIndex*2+n+4),stops:1})));
  settleCareer(c,{position:6,legal:true,dnf:false,field});
  for(const t of c.teams.filter(t=>t.teamIndex!==profile.teamIndex)){
   const contract=SPONSORS[(t.teamIndex+1)%SPONSORS.length],rows=field.filter(r=>r.teamIndex===t.teamIndex);
-  const earned=Math.round(rows.reduce((sum,row)=>sum+2500+(23-row.position)*300+((contract.id==='finish'||contract.id==='clean'||contract.id==='top15'&&row.position<=15||contract.id==='points'&&row.position<=10)?sponsorPayout(t.upgrades,contract.amount):0),0)/2);
+  const earned=Math.round(rows.reduce((sum,row)=>sum+2500+(23-row.position)*300+((['finish','clean','noContact','noPenalty','oneStop'].includes(contract.id)||contract.id==='top15'&&row.position<=15||contract.id==='points'&&row.position<=10||contract.id==='top5'&&row.position<=5||contract.id==='podium'&&row.position<=3||contract.id==='win'&&row.position===1||contract.id==='gain3'&&row.gridPosition-row.position>=3||contract.id==='gain6'&&row.gridPosition-row.position>=6)?sponsorPayout(t.upgrades,contract.amount):0),0)/2);
   assert.equal(t.budget,before[t.teamIndex].budget+earned);
  }
  developTeams(c,42);for(const t of c.teams.filter(t=>t.teamIndex!==profile.teamIndex))assert.equal(t.lastRound,2);

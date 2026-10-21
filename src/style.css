@@ -1746,3 +1746,17 @@ input[type="range"] {
 .engineer-brief ul { padding-left:18px; margin:0; }
 .engineer-brief li { margin:10px 0; color:var(--muted); font-size:12px; line-height:1.7; }
 @media(max-width:600px) { .upgrade-metrics > div { grid-template-columns:1fr; gap:7px; } .upgrade-metrics dd { justify-content:flex-start; text-align:left; } .development-stats b { font-size:15px; } .development-group .upgrade { gap:10px; } .upgrade-review { flex-basis:83px; } }
+
+/* Keep qualifying controls out from under the central telemetry panel. */
+.race-top { z-index:4; }
+body:not(.mobile-racing) .race-actions { max-width:max(100px,calc((100vw - 560px)/2 - 24px)); flex-wrap:wrap; justify-content:flex-end; }
+#qualifying-speed { min-width:70px; font-variant-numeric:tabular-nums; }
+.mobile-racing #qualifying-speed { min-width:0; }
+.mobile-racing .pit-panel .end-session { grid-column:1/-1; margin:4px 0 0; padding:6px; min-height:30px; }
+#qualifying-progress { z-index:110; }
+#qualifying-progress h2 { margin:18px 0; }
+#qualifying-progress progress { width:100%; margin-top:22px; accent-color:var(--lime); }
+
+#qualifying-progress-title:focus { outline:none; }
+
+#knockout-title { margin:18px 0; outline:none; }

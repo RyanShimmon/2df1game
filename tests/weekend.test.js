@@ -41,8 +41,8 @@ test("limited weekend stock shares four general-use dry sets and a reserved Q3 S
   assert.equal(inv.filter((t) => t.returned).length, 12);
   assert.deepEqual(selectableSets(inv, "Q1").map(t=>t.id), ["H1","M1","S1","S2","I1","I2","W1"]);
   assert.equal(selectableSets(inv,"R").length,8);
-  assert.ok(!selectableSets(inv, "Q2").some((t) => t.id === "S4"));
-  assert.ok(selectableSets(inv, "Q3").some((t) => t.id === "S4"));
+  assert.ok(!selectableSets(inv, "Q2").some((t) => t.id === "S3"));
+  assert.ok(selectableSets(inv, "Q3").some((t) => t.id === "S3"));
   assert.equal(Q_STAGES[2].duration, 13 * 60);
 });
 test("22→16→10 knockouts set final positions by their own stage, with fresh stage times", () => {
@@ -66,7 +66,7 @@ test("22→16→10 knockouts set final positions by their own stage, with fresh 
   assert.equal(new Set(w.grid).size, 22);
   assert.equal(w.grid[0], 21);
   assert.equal(w.sessions.length, 3);
-  assert.ok(w.inventories[21].find((t) => t.id === "S4").returned);
+  assert.ok(w.inventories[21].find((t) => t.id === "S3").returned);
 });
 test("eliminated driver keeps their position, and unused reserved Q3 set becomes race available", () => {
   const w = create();
@@ -74,7 +74,7 @@ test("eliminated driver keeps their position, and unused reserved Q3 set becomes
   assert.ok(!w.active.includes(21));
   finishRemainingQualifying(w, upgrades, profile);
   assert.equal(w.grid.indexOf(21), 21);
-  assert.ok(selectableSets(w.inventories[21], "R").some((t) => t.id === "S4"));
+  assert.ok(selectableSets(w.inventories[21], "R").some((t) => t.id === "S3"));
 });
 test("equal times are resolved by earliest lap, and worse later laps never replace best", () => {
   const w = create();

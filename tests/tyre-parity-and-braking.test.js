@@ -20,14 +20,15 @@ test('all 22 drivers receive identical independent stock and the exact same elig
  assert.equal(w.inventories[21].find(t=>t.id==='S1').wear,0);
 });
 test('legacy spare sets cannot leave AI or player with a larger usable compound allowance',()=>{
- const w=weekend();w.allocationVersion=2;
+ const w=weekend();w.allocationVersion=2;delete w.softSetNumbering;
+ for(const inv of w.inventories)for(const t of inv)if(t.compound==='S')t.reserved=t.id==='S4';
  for(const inv of w.inventories)for(const t of inv){t.returned=false;t.used=true;t.wear=.1+Number(t.id.slice(1))*.03;t.distance=5000;}
- w.selectedSetId='S3';const before=w.inventories.map(inv=>inv.map(t=>t.wear));migrateWeekend(w);
+ const selected=w.inventories[21].find(t=>t.id==='S3');w.selectedSetId='S3';const before=w.inventories.map(inv=>inv.map(t=>t.wear));migrateWeekend(w);
  for(const inv of w.inventories){
   for(const [compound,quota] of Object.entries(WEEKEND_QUOTA))assert.equal(inv.filter(t=>!t.returned&&!t.reserved&&t.compound===compound).length,quota);
   assert.equal(inv.filter(t=>!t.returned&&t.reserved).length,1);
  }
- assert.equal(w.inventories[21].find(t=>t.id==='S3').returned,false);
+ assert.equal(selected.returned,false);assert.equal(w.selectedSetId,selected.id);
  assert.deepEqual(w.inventories.map(inv=>inv.map(t=>t.wear)),before);
 });
 test('AI tyre care changes decisions rather than granting free wear reduction for identical driving',()=>{
