@@ -31,7 +31,7 @@ export function upgradePreview(career,key,{tyreTemperatureEnabled=true}={}){
  const rows={
  engine:[metric("0–250 km/h",before.accelerate,after.accelerate,"s",2),metric(`${before.rollStart}–${before.rollEnd} km/h`,before.highSpeed,after.highSpeed,"s",2)],
  efficiency:[metric("Fuel for 24 balanced laps",before.fuel,after.fuel," fuel laps")],
- aero:[metric("Reference corner speed",before.corner,after.corner," km/h"),metric("Available packages",level(career.upgrades,"aero")?"3":"1","3")],
+ aero:[metric("Reference corner speed",before.corner,after.corner," km/h")],
  suspension:[metric("Traction support",before.traction,after.traction,"%"),metric("Countersteer support",before.recovery,after.recovery,"%")],
  brakes:[metric("250–0 km/h",before.braking,after.braking,"s",2)],
  tyres:[metric("Soft life",before.soft,after.soft," laps"),metric("Medium life",before.medium,after.medium," laps")],

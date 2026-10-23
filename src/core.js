@@ -463,14 +463,14 @@ export function liveInterval(leader,car) {
 }
 export function cleanAirTopSpeed(car){
   const mode=car.drive==='save' ? .89 : car.drive==='push' ? 1.06 : 1;
-  const pack=aeroPackage(car.upgrades,car.aeroSpec,car.aeroUnlocked);
+  const pack=aeroPackage(car.upgrades,car.aeroSpec);
   return Math.min(MAX_SPEED,MAX_SPEED*(1+level(car.upgrades,"engine")*.035)*(car.pace || 1)*(1-car.fuel*.0006)*mode)*pack.top;
 }
 export function maximumSpeed(car){return cleanAirTopSpeed(car)+18*(car.slipstream?.carry || 0);}
 export function acceleration(car) {
   const basePower=90*(car.pace || 1)*(1-car.fuel*.002);
   const power=basePower*(1+level(car.upgrades,"engine")*.07);
-  const pack=aeroPackage(car.upgrades,car.aeroSpec,car.aeroUnlocked);
+  const pack=aeroPackage(car.upgrades,car.aeroSpec);
   // Engine development adds thrust at every speed without increasing aerodynamic drag.
   const drag=basePower*.82*(Math.max(0,car.speed)/MAX_SPEED)**1.3*pack.drag;
   const tow=car.slipstream?.strength || 0;
@@ -793,7 +793,6 @@ export class Race {
     this.pitLimiter = false;
     this.autoPitLimiter = true;
     this.nextTyre = setup.tyre === "M" ? "H" : "M";
-    this.player.aeroUnlocked=mode==="quick";
     this.nextAeroSpec = this.player.aeroSpec;
     for(const car of this.cars){car.tyreTemperatureEnabled=setup.tyreTemperatureEnabled!==false;prepareTyres(car,null,true);}
     this.tyreTemperatureEnabled=setup.tyreTemperatureEnabled!==false;
@@ -856,7 +855,7 @@ export class Race {
   }
   canSelectAero() {
     const c=this.player;
-    return !this.done && (c.aeroUnlocked || level(c.upgrades,"aero")>0) &&
+    return !this.done &&
       (!this.qualifying || !!c.pit && (c.garage || c.pit.stage==="service"));
   }
   selectAero(spec) {

@@ -44,6 +44,7 @@ import {
   validWeekend,
   QualifyingRun,
   nextQualifyingSession,
+  resumeQualifyingSession,
   finishQualifyingStage,
   finishRemainingQualifyingAsync,
   prepareRace,
@@ -131,7 +132,7 @@ function tyreLifeIndicator(selected={compound:setup.tyre,wear:0}) {
   return `<section class="tyre-life" aria-label="Average tyre life"><div class="tyre-life-heading"><b>AVERAGE TYRE LIFE</b><span>Balanced pace · suitable conditions</span></div><div class="tyre-life-grid">${["S","M","H","I","W"].map(compound=>`<div style="--tyre:${TYRES[compound].color}"><i class="tyre-dot"></i><span>${TYRES[compound].name}</span><b>≈ ${estimatedTyreLife(compound,{upgrades}).toFixed(1).replace(/\.0$/,"")} laps</b></div>`).join("")}</div><p class="tyre-life-remaining">${selected.id ? selected.id+" · " : ""}${TYRES[selected.compound].name} selected <strong>≈ ${remaining.toFixed(1)} laps remaining</strong></p><p class="hint">Estimate for this car. Push, heat and sliding shorten tyre life.</p></section>`;
 }
 function header() {
-  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.5.0</div></header>`;
+  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.5.1</div></header>`;
 }
 function tabs() {
   return `<div class="tabs"><button class="tab ${screen === "quick" ? "active" : ""}" data-screen="quick">Quick race</button><button class="tab ${screen === "career" ? "active" : ""}" data-screen="career">Career garage</button><button class="tab" data-action="school">Race School</button><button class="tab" data-action="help">How to drive ↗</button><button class="tab" data-action="settings">Settings</button></div>`;
@@ -337,9 +338,9 @@ function developmentCard(){
  }).join("")}</div>`).join("")}<p class="hint">Review an upgrade to see its measured effects before buying. Development locks when qualifying starts. Aero changes remain available in the pit box for 10 seconds of extra service.</p></div>`;
 }
 function aeroCard(){
- return `<div class="aero-panel"><div class="panel-heading"><span class="eyebrow">${career.weekend ? "CHANGE IN PIT BOX · +10s" : "FREE TO SWITCH"}</span></div><p class="hint">${career.weekend ? "Use Choose aero on the track screen. Changing the package adds 10 seconds to pit service." : level(career.upgrades,"aero") ? "Choose your package before qualifying. Switching is free." : "Buy Aerodynamics I to unlock both specialist packages. Choose before qualifying."}</p><div class="aero-packages">${Object.entries(AERO_PACKAGES).map(([key,pack])=>{
-  const locked=key!=="balanced"&&!level(career.upgrades,"aero"),selected=(career.aeroSpec || "balanced")===key;
-  return `<button class="aero-choice ${selected?"selected":""}" data-aero-spec="${key}" aria-pressed="${selected}" ${locked || career.weekend ? "disabled" : ""}><b>${pack.name}${selected?" ✓":""}</b><span>${pack.desc}</span><small>${locked ? "UNLOCK AT AERO I" : aeroPackageSummary(key)}</small></button>`;
+ return `<div class="aero-panel"><div class="panel-heading"><span class="eyebrow">${career.weekend ? "CHANGE IN PIT BOX · +10s" : "FREE TO SWITCH"}</span></div><p class="hint">${career.weekend ? "Use Choose aero on the track screen. Changing the package adds 10 seconds to pit service." : "All packages are available. Choose before qualifying for a free change."}</p><div class="aero-packages">${Object.entries(AERO_PACKAGES).map(([key,pack])=>{
+  const selected=(career.aeroSpec || "balanced")===key;
+  return `<button class="aero-choice ${selected?"selected":""}" data-aero-spec="${key}" aria-pressed="${selected}" ${career.weekend ? "disabled" : ""}><b>${pack.name}${selected?" ✓":""}</b><span>${pack.desc}</span><small>${aeroPackageSummary(key)}</small></button>`;
  }).join("")}</div></div>`;
 }
 function rivalDevelopmentCard(){
@@ -694,7 +695,7 @@ async function completeQualifying(run=null){
  progress.innerHTML='<section class="modal" role="dialog" aria-modal="true" aria-labelledby="qualifying-progress-title"><div class="eyebrow">QUALIFYING</div><h2 id="qualifying-progress-title" tabindex="-1">Completing AI runs…</h2><p class="muted" role="status" aria-live="polite" id="qualifying-progress-detail">Updating opponent lap times and tyre wear.</p><progress aria-label="Completing qualifying"></progress></section>';
  app.appendChild(progress);el("qualifying-progress-title").focus();
  const yieldControl=()=>new Promise(resolve=>setTimeout(()=>{
-  el("qualifying-progress-detail").textContent=`${career.weekend.phase} · Updating opponent lap times and tyre wear.`;
+  const detail=el("qualifying-progress-detail");if(detail)detail.textContent=`${career.weekend.phase} · Updating opponent lap times and tyre wear.`;
   resolve();
  },0));
  try{
@@ -704,22 +705,51 @@ async function completeQualifying(run=null){
   notice=outcome?.through ? `Qualified in P${outcome.position}. ${outcome.phase} is ready.` : outcome?.eliminated ? `Knocked out in ${outcome.stage} · final P${outcome.position}. Starting P${outcome.gridPosition}. Complete the remaining sessions to set the rest of the grid.` : `Qualifying complete. Starting P${career.weekend.grid.indexOf(21)+1}.`;
   const next=outcome?.through && run ? nextQualifyingSession(run,career.upgrades,career.profile) : null;
   if(next){
-    race=next;selectedWeekendSet=next.player.tyreSet.id;resetDrivingInput();accumulator=0;
-    raceUI();race.say(`Qualified in P${outcome.position}. ${outcome.phase} · crew ready. Choose tyres and aero, then leave when ready.`);updateHUD();save();
-  }else{save();menu();if(outcome?.eliminated)showQualifyingKnockout(outcome);}
+    openQualifyingGarage(next,`Qualified in P${outcome.position}. ${outcome.phase} · crew ready. Choose tyres and aero, then leave when ready.`);
+  }else if(outcome?.eliminated){save();showQualifyingKnockout(outcome);}
+  else if(career.weekend.phase==="R"){save();showRacePreparation();}
+  else throw Error("The next session has no available tyre set.");
  }catch(error){
-  console.error("Qualifying completion failed",error);notice="Qualifying progress saved. Try completing the session again from the garage.";save();menu();
+  console.error("Qualifying completion failed",error);save();showQualifyingRecovery(run);
  }finally{
-  progress.remove();background.forEach(node=>node.inert=false);if(race)paused=wasPaused;accumulator=0;
+  progress.remove();background.forEach(node=>node.inert=false);
+  if(race)paused=!!app.querySelector("#race-preparation,#qualifying-recovery,#qualifying-knockout") || race===run && wasPaused;
+  accumulator=0;
  }
+}
+function openQualifyingGarage(run,message="Crew ready. Choose tyres and aero, then leave when ready.") {
+  race=run;selectedWeekendSet=run.player.tyreSet.id;resetDrivingInput();accumulator=0;paused=false;
+  raceUI();race.say(message);updateHUD();save();
+}
+function showRacePreparation() {
+  if(career.weekend?.phase!=="R")return;
+  el("qualifying-knockout")?.remove();el("qualifying-recovery")?.remove();el("race-preparation")?.remove();el("qualifying-results")?.remove();
+  resetDrivingInput();accumulator=0;paused=true;
+  const box=document.createElement("div");box.className="modal-backdrop";box.id="race-preparation";
+  box.innerHTML=`<section class="modal tyre-picker-modal" role="dialog" aria-modal="true" aria-label="Race preparation">${weekendCard()}</section>`;
+  app.appendChild(box);bindWeekend();const title=box.querySelector("h3");title.tabIndex=-1;title.focus();
+  box.addEventListener("keydown",event=>garageDialogKeys(event,box,()=>{}));
+}
+function showQualifyingRecovery(run) {
+  el("qualifying-recovery")?.remove();el("qualifying-results")?.remove();paused=true;resetDrivingInput();
+  const box=document.createElement("div");box.id="qualifying-recovery";box.className="modal-backdrop";
+  box.innerHTML='<section class="modal" role="dialog" aria-modal="true" aria-labelledby="qualifying-recovery-title"><h2 id="qualifying-recovery-title">Session saved</h2><p class="muted">Your qualifying progress is safe. Continue here to reopen the pit garage or finish the session.</p><button class="primary" id="retry-qualifying">CONTINUE QUALIFYING →</button></section>';
+  app.appendChild(box);el("retry-qualifying").onclick=()=>{
+    box.remove();
+    const next=run && nextQualifyingSession(run,career.upgrades,career.profile);
+    if(next){openQualifyingGarage(next);return;}
+    if(career.weekend.phase==="R"){showRacePreparation();return;}
+    if(run && career.weekend.phase===run.stage.name)run.sessionEnded=false;
+    completeQualifying(run && career.weekend.active.includes(21) ? run : null);
+  };
+  el("retry-qualifying").focus();box.addEventListener("keydown",event=>garageDialogKeys(event,box,()=>{}));
 }
 function showQualifyingKnockout(result){
  const box=document.createElement("div");box.className="modal-backdrop";box.id="qualifying-knockout";
  const gap=result.playerTime!==null&&result.cutoffTime!==null ? result.playerTime-result.cutoffTime : null;
  box.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-labelledby="knockout-title"><div class="eyebrow">FINAL ${result.stage} CLASSIFICATION</div><h2 id="knockout-title" tabindex="-1">Knocked out in ${result.stage}</h2><p class="muted">${result.playerTime===null ? "No valid timed lap was banked." : result.provisionalPosition<=result.keep ? "The remaining AI runs improved the cutoff after you ended the session." : `The top ${result.keep} advanced. You finished outside the cutoff.`}</p><div class="result-line"><span>Your final position</span><b>P${result.position} · top ${result.keep} advanced</b></div><div class="result-line"><span>Your best lap</span><b>${result.playerTime===null ? "No valid lap" : time(result.playerTime)}</b></div><div class="result-line"><span>Final cutoff</span><b>${time(result.cutoffTime ?? Infinity)}${gap!==null&&gap>0 ? " · +"+gap.toFixed(3)+"s needed" : ""}</b></div><div class="result-line"><span>Race starting position</span><b>P${result.gridPosition}</b></div><button class="primary" id="knockout-continue">COMPLETE REMAINING QUALIFYING →</button></section>`;
- app.appendChild(box);const shell=app.querySelector(".menu-shell");shell.inert=true;
- const close=()=>{box.remove();shell.inert=false;app.querySelector('[data-action="finish-qualifying"]')?.focus({preventScroll:true});};
- el("knockout-continue").onclick=()=>{close();completeQualifying();};box.addEventListener("keydown",e=>{if(e.key==="Escape"){e.preventDefault();e.stopPropagation();close();}});
+ el("qualifying-results")?.remove();app.appendChild(box);
+ el("knockout-continue").onclick=()=>{box.remove();completeQualifying();};box.addEventListener("keydown",event=>garageDialogKeys(event,box,()=>{}));
  el("knockout-title").focus();
 }
 function mountMobileSetupPicker(){
@@ -853,7 +883,7 @@ function showAeroPicker() {
   const close=openStrategyPicker(backdrop,running,el("browse-race-aero"));
   const refresh=()=>{
     backdrop.querySelectorAll("[data-choose-aero]").forEach(button=>{const active=button.dataset.chooseAero===selected;button.classList.toggle("selected",active);button.setAttribute("aria-pressed",active);});
-    el("aero-selection-note").textContent=!canChange ? !level(running.player.upgrades,"aero") ? "Unlock specialist packages with Aerodynamics I in Career." : "In qualifying, choose your aero while stopped in the pit box." : selected===fitted ? "Keep fitted package · no additional service" : `${AERO_PACKAGES[selected].name} · +10s at ${running.player.garage || running.player.pit?.stage==="service" ? "this stop" : "your next stop"}`;
+    el("aero-selection-note").textContent=!canChange ? "In qualifying, choose your aero while stopped in the pit box." : selected===fitted ? "Keep fitted package · no additional service" : `${AERO_PACKAGES[selected].name} · +10s at ${running.player.garage || running.player.pit?.stage==="service" ? "this stop" : "your next stop"}`;
   };
   backdrop.querySelector("[data-close-aero]").onclick=close;backdrop.onclick=event=>{if(event.target===backdrop)close();};
   backdrop.querySelectorAll("[data-choose-aero]").forEach(button=>button.onclick=()=>{selected=button.dataset.chooseAero;refresh();});
@@ -910,8 +940,9 @@ function showTyreSetPicker(quickStart=false) {
     } else {
       selectedWeekendSet=set.id;w.selectedSetId=set.id;w.selectedPhase=w.phase;w.startSetId=set.id;
       const top=app.querySelector(".menu-shell")?.scrollTop || 0;
-      close();save();menu();
-      app.querySelector(".menu-shell").scrollTop=top;
+      close();save();
+      if(el("race-preparation"))showRacePreparation();
+      else {menu();app.querySelector(".menu-shell").scrollTop=top;}
       app.querySelector("[data-action=browse-weekend-tyres]")?.focus({preventScroll:true});
     }
   };
@@ -1210,18 +1241,17 @@ function showResults() {
     if (race.settled) return;
     race.settled = true;
     save();
-    const stage = race.stage.name,
-      best = race.player.bestLap;
-    const b = document.createElement("div");
-    b.className = "modal-backdrop";
-    b.innerHTML = `<section class="modal"><div class="eyebrow">${stage} / RUN COMPLETE</div><h2>${Number.isFinite(best) ? "Lap time banked" : "No valid lap"}</h2><p class="muted">Best: ${time(best)} · ${race.player.tyreSet.id} · ${Math.round(Math.max(0, 1 - race.player.wear) * 100)}% tyre life remaining. You can reuse this set or fit another for your next run.</p><button class="primary" id="q-return">BACK TO QUALIFYING GARAGE →</button><button class="ghost end-session" id="q-advance" ${!qualifyingReady(race.weekend) ? "disabled" : ""}>${pendingFirstRuns(race.weekend).length ? "Waiting for opponents to complete a first run" : !qualifyingReady(race.weekend) ? "Complete your first timed lap before ending the session" : `END ${stage} & ADVANCE`}</button></section>`;
+    const run=race,w=run.weekend,stage=run.stage.name,best=w.results.find(r=>r.id===21)?.time ?? run.player.bestLap;
+    const expired=w.elapsed>=run.stage.duration;
+    const b=document.createElement("div");b.className="modal-backdrop";b.id="qualifying-results";
+    b.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-labelledby="qualifying-results-title"><div class="eyebrow">${stage} / ${expired ? "SESSION" : "RUN"} COMPLETE</div><h2 id="qualifying-results-title">${Number.isFinite(best) ? "Lap time banked" : "No valid lap"}</h2><p class="muted">Best: ${time(best)} · ${run.player.tyreSet.id} · ${Math.round(Math.max(0,1-run.player.wear)*100)}% tyre life remaining.</p>${!expired ? '<button class="primary" id="q-return">RETURN TO PIT BOX →</button>' : ''}<button class="${expired ? "primary" : "ghost end-session"}" id="q-advance" ${!run.canEndSession() ? "disabled" : ""}>${run.sessionAction()}</button></section>`;
     app.appendChild(b);
-    el("q-return").onclick = () => menu();
-    el("q-advance").onclick = () => {
-      if(!qualifyingReady(career.weekend))return;
-      const run=new QualifyingRun(career.weekend,race.player.tyreSet.id,career.upgrades,career.profile);
-      completeQualifying(run);
-    };
+    el("q-return")?.addEventListener("click",()=>{
+      const next=resumeQualifyingSession(run,career.upgrades,career.profile);
+      if(next)openQualifyingGarage(next);else showQualifyingRecovery(run);
+    });
+    el("q-advance").onclick=()=>completeQualifying(run);
+    b.addEventListener("keydown",event=>garageDialogKeys(event,b,()=>{}));el("q-advance").focus();
     return;
   }
 

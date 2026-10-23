@@ -1,6 +1,6 @@
 # V10 — Grand Prix
 
-Version **1.5.0**.
+Version **1.5.1**.
 
 A local browser game with top-down V10 racing, 22 cars, five tyre types, dynamic weather, qualifying and a saved career. Requires Node.js 18 or newer; no dependency installation is needed.
 
@@ -95,7 +95,7 @@ The garage has nine development paths. Each purchase opens a review with measure
 | --- | ---: | ---: | --- |
 | V10 development | £6,000 | 5 | 7% more engine power per level across the full speed range |
 | Fuel efficiency | £5,000 | 5 | 2% less fuel per level; qualifying receives a correspondingly lighter three-lap load |
-| Aerodynamics | £5,000 | 5 | More speed-dependent downforce; level 1 unlocks specialist packages |
+| Aerodynamics | £5,000 | 5 | More speed-dependent downforce with all packages |
 | Suspension & differential | £5,000 | 5 | Better traction and active countersteer recovery |
 | Brakes & balance | £4,500 | 5 | Better use of available tyre grip and steadier combined braking/cornering |
 | Tyre engineering | £4,500 | 5 | 7% less wear per level, gentler grip cliff and improved excess-heat dissipation |
@@ -226,6 +226,8 @@ Easy, Normal, Hard and Expert use separate corner commitment, braking margins an
 
 Advancing Q1 to Q2 or Q2 to Q3 keeps the driver on track, stationary in the pit garage. The next session retains the physical tyre set and its wear where eligible, the completed aero setup, fuel mode and time multiplier; timing resets for the new stage. Incomplete aero service is not granted by advancing.
 
-Choose aero offers High downforce and Low drag; 6/7 provide desktop shortcuts beside the tyre controls. Career packages retain the Aerodynamics I unlock, while Quick Race permits both setup options without awarding chassis upgrades. Queue a race change before entering the pits, or update it during service. Qualifying changes are made while stopped in the box. A change adds ten seconds after tyre and penalty service and applies only after the crew finishes. Pit crew upgrades do not reduce this aero work. Selecting the fitted package cancels the remaining aero task without cancelling tyre/penalty work. A completed package carries into later sessions and the race.
+Choose aero offers High downforce and Low drag; 6/7 provide desktop shortcuts beside the tyre controls. Both Career and Quick Race allow the packages from the start; paid aero upgrades improve grip rather than unlock setup choices. Queue a race change before entering the pits, or update it during service. Qualifying changes are made while stopped in the box. A change adds ten seconds after tyre and penalty service and applies only after the crew finishes. Pit crew upgrades do not reduce this aero work. Selecting the fitted package cancels the remaining aero task without cancelling tyre/penalty work. A completed package carries into later sessions and the race.
 
 Tyre and aero dialogs pause the session, including AI and weather. Clicking a card stages a choice; Confirm applies it and resumes the previous pause state. Closing without confirmation discards the staged choice. Mobile exposes the two dialogs alongside Request pit; desktop keeps the quick shortcuts.
+
+Qualifying completion, expired-session results, knockout classification and race preparation remain over the circuit. Returning after a stranded outing reopens the same session in the pit box; advancement uses the completed run and opens the next garage without a menu detour.

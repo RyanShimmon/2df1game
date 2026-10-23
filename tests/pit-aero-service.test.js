@@ -9,7 +9,7 @@ const approx=(a,b)=>assert.ok(Math.abs(a-b)<1e-7,`${a} != ${b}`);
 function qualifying(){const career=newCareer(profile);career.upgrades.aero=1;const w=createWeekend(career,setup);career.weekend=w;const q=new QualifyingRun(w,'S1',career.upgrades,profile);q.cars=[q.player];q.pitRandom=()=>0;return q;}
 function race(){const r=new Race(setup,{aero:1,crew:0});r.cars=[r.player];r.pitRandom=()=>0;return r;}
 function box(r){r.enterPit(r.player);Object.assign(r.player.pit,{distance:r.player.pit.boxDistance,stage:'entry'});r.player.speed=0;r.stepPit(r.player,.01,{});}
-function wait(r,seconds){for(let i=0;i<Math.round(seconds*100);i++)r.stepPit(r.player,.01,{});}
+function wait(r,seconds){for(let i=0;i<Math.round(seconds*100)&&r.player.pit;i++)r.stepPit(r.player,.01,{});}
 test.afterEach(()=>selectTrack('northline'));
 test('race queues aero without changing physics, then adds exactly ten seconds after tyres and penalty',()=>{
  const r=race(),c=r.player,top=cleanAirTopSpeed(c);c.penalty=5;
@@ -69,9 +69,9 @@ test('unfinished aero work is not granted by advancing, and completed work carri
  const w=next.weekend;w.phase='R';w.grid=Array.from({length:22},(_,i)=>i);w.raceStarted=false;
  const r=new Race(w.setup,next.player.upgrades,'career',profile);prepareRace(r,w,'M1');assert.equal(r.player.aeroSpec,'downforce');
 });
-test('quick races allow aero setup while career keeps its existing development unlock',()=>{
- const quick=new Race(setup,{});assert.equal(quick.selectAero('lowDrag'),true);box(quick);wait(quick,15.6);assert.equal(quick.player.aeroSpec,'lowDrag');assert.ok(cleanAirTopSpeed(quick.player)>330);
- const c=newCareer(profile),w=createWeekend(c,setup),q=new QualifyingRun(w,'S1',c.upgrades,profile);assert.equal(q.selectAero('lowDrag'),false);assert.equal(quick.selectAero('invalid'),false);
+test('both quick race and a zero-upgrade career allow aero setup',()=>{
+ const quick=new Race(setup,{});quick.pitRandom=()=>0;assert.equal(quick.selectAero('lowDrag'),true);box(quick);wait(quick,15.6);assert.equal(quick.player.aeroSpec,'lowDrag');assert.ok(cleanAirTopSpeed(quick.player)>330);
+ const c=newCareer(profile),w=createWeekend(c,setup),q=new QualifyingRun(w,'S1',c.upgrades,profile);assert.equal(q.selectAero('lowDrag'),true);q.cars=[q.player];for(let i=0;i<202;i++)q.step(.05,{});assert.equal(q.player.aeroSpec,'lowDrag');assert.equal(q.player.upgrades.aero,0);assert.equal(quick.selectAero('invalid'),false);
 });
 test('each engine level increases acceleration across all speeds and packages without changing the aero or draft cap',()=>{
  const r=race(),c=r.player;c.drive='push';c.fuel=1;c.pace=1;

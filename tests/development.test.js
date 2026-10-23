@@ -28,7 +28,7 @@ test('all purchases use quoted escalating costs and caps, and development cannot
 test('V10 development improves measured acceleration and aero packages suit different circuits',()=>{
  const before=developmentBench(emptyUpgrades()),after=developmentBench({...emptyUpgrades(),engine:1});
  assert.ok(after.accelerate<before.accelerate*.96);
- const c=newCareer(profile);assert.equal(setAeroPackage(c,'lowDrag'),false);c.upgrades.aero=3;c.upgrades.engine=2;
+ const c=newCareer(profile);assert.equal(setAeroPackage(c,'lowDrag'),true);assert.equal(loadCareer({getItem:()=>JSON.stringify(c)}).aeroSpec,'lowDrag');c.upgrades.aero=3;c.upgrades.engine=2;
  // The mirrored ±10% balance rewards Low drag on the fast oval; mixed
  // circuits can favour Balanced or High downforce despite their straights.
  selectTrack('sunset');assert.ok(developmentBench(c.upgrades,'lowDrag').lap<developmentBench(c.upgrades,'downforce').lap);

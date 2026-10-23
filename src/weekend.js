@@ -306,7 +306,15 @@ export const QUALIFYING_FUEL=getQualifyingFuel();
 export function nextQualifyingSession(previous,upgrades,profile) {
   const w=previous.weekend;
   if(w.phase===previous.stage.name || !Q_STAGES.some(q=>q.name===w.phase) || !w.active.includes(21))return null;
-  const available=selectableSets(w.inventories[21],w.phase);
+  return qualifyingGarage(previous,upgrades,profile);
+}
+export function resumeQualifyingSession(previous,upgrades,profile) {
+  const w=previous.weekend,stage=Q_STAGES.find(q=>q.name===w.phase);
+  if(!stage || w.phase!==previous.stage.name || !w.active.includes(21) || w.elapsed>=stage.duration)return null;
+  return qualifyingGarage(previous,upgrades,profile);
+}
+function qualifyingGarage(previous,upgrades,profile) {
+  const w=previous.weekend,available=selectableSets(w.inventories[21],w.phase);
   const set=available.find(t=>t.id===previous.player.tyreSet?.id) ||
     available.filter(t=>t.compound===previous.player.tyre).sort((a,b)=>a.wear-b.wear)[0] || available[0];
   if(!set)return null;

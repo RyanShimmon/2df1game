@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {newCareer,loadCareer} from '../src/core.js';
 import {createWeather} from '../src/weather.js';
-import {createWeekend,ensureWeekend,QualifyingRun,recordLap,stageOrder,finishQualifyingStage} from '../src/weekend.js';
+import {createWeekend,ensureWeekend,QualifyingRun,nextQualifyingSession,resumeQualifyingSession,recordLap,stageOrder,finishQualifyingStage} from '../src/weekend.js';
 import {driveQualifyingOuting} from './qualifying-driver.js';
 
 const profile={driverName:'Test',teamIndex:2};
@@ -68,4 +68,27 @@ test('final position comes from the completed classification when missing AI tim
  assert.equal(outcome.cutoffTime,session.results.find(r=>r.id===session.order[15]).time);
  assert.equal(w.phase,'Q2');assert.equal(w.sessions.length,1);
  assert.equal(outcome.gridPosition,session.order.indexOf(21)+1);
+});
+
+for(const stage of ['Q1','Q2'])test(`${stage}: advancing an expired run opens the next garage without recreating the finished run`,()=>{
+ const {career,q:first}=create();let q=first;
+ if(stage==='Q2'){
+  for(const id of q.weekend.active)recordLap(q.weekend,id,id===21?20:35,id);
+  q.time=q.stage.duration-q.stageStart-.01;for(const c of q.cars)c.qReleaseAt=Infinity;q.step(.05,{});assert.equal(q.done,true);assert.equal(q.weekend.elapsed,q.stage.duration);q.endSession();q=nextQualifyingSession(q,career.upgrades,profile);
+ }
+ for(const id of q.weekend.active)recordLap(q.weekend,id,id===21?20:35,id);
+ q.player.tyreSet.wear=.41;q.player.wear=.41;
+ q.time=q.stage.duration-q.stageStart-.01;for(const c of q.cars)c.qReleaseAt=Infinity;q.step(.05,{});assert.equal(q.done,true);assert.equal(q.weekend.elapsed,q.stage.duration);
+ const runCount=q.weekend.runCount,result=q.endSession(),next=nextQualifyingSession(q,career.upgrades,profile);
+ assert.equal(result.through,true);assert.equal(next.stage.name,stage==='Q1'?'Q2':'Q3');
+ assert.equal(next.player.garage,true);assert.equal(next.player.wear,.41);assert.equal(next.weekend.runCount,1);
+ assert.ok(runCount>=1);assert.equal(next.weekend.elapsed,0);assert.equal(next.weekend.results.length,0);
+});
+test('returning from a stranded outing reopens the same track garage with banked times, wear and aero intact',()=>{
+ const {career,q}=create();recordLap(q.weekend,21,25,10);
+ q.weekend.setup.aeroSpec='lowDrag';q.player.aeroSpec='lowDrag';q.player.tyreSet.wear=.4;q.player.wear=.4;
+ q.time=160;q.endRun();const before=structuredClone(q.weekend.results),next=resumeQualifyingSession(q,career.upgrades,profile);
+ assert.equal(next.stage.name,'Q1');assert.equal(next.player.garage,true);assert.equal(next.player.aeroSpec,'lowDrag');
+ assert.equal(next.player.wear,.4);assert.equal(next.weekend.elapsed,160);assert.deepEqual(next.weekend.results,before);
+ next.weekend.elapsed=next.stage.duration;assert.equal(resumeQualifyingSession(next,career.upgrades,profile),null);
 });
