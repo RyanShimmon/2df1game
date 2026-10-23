@@ -30,6 +30,6 @@ test('dry asphalt wears wets faster than intermediates and both faster than thei
  assert.ok(wear('I',0)>wear('I',.5)*2.3);
 });
 test('career calendar prioritises long races while retaining one shorter sprint',()=>{
- assert.equal(WEEKENDS.length,6);assert.equal(WEEKENDS.filter(w=>w.laps>=20).length,5);
+ assert.equal(WEEKENDS.length,12);assert.equal(WEEKENDS.filter(w=>w.laps>=20).length,11);
  assert.equal(WEEKENDS[0].laps,24);assert.equal(WEEKENDS[3].laps,14);
 });

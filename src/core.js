@@ -1,3 +1,4 @@
+import {SEASON_LENGTH} from "./calendar.js";
 import {SPONSORS,sponsorMet} from "./sponsors.js";
 export {SPONSORS} from "./sponsors.js";
 import {engineerReport} from "./engineer.js";
@@ -37,10 +38,10 @@ export function estimatedTyreLife(compound, {wear=0, upgrades={}, mode="balanced
   return tyre.life*Math.max(0,1-wear)/(effort*weatherWear*(1-clamp(upgrades.tyres || 0,0,5)*.07));
 }
 export const DIFFICULTIES = {
-  easy:{name:"Easy",pace:.94,skill:-.08,prizeBonus:0},
-  normal:{name:"Normal",pace:1,skill:0,prizeBonus:0},
-  hard:{name:"Hard",pace:1.035,skill:.05,prizeBonus:.05},
-  expert:{name:"Expert",pace:1.065,skill:.09,prizeBonus:.10},
+  easy:{name:"Easy",pace:.78,skill:-.08,braking:.50,throttle:.70,prizeBonus:0},
+  normal:{name:"Normal",pace:.94,skill:0,braking:.72,throttle:.86,prizeBonus:0},
+  hard:{name:"Hard",pace:1.02,skill:.05,braking:.86,throttle:.94,prizeBonus:.05},
+  expert:{name:"Expert",pace:1.10,skill:.09,braking:.96,throttle:1,prizeBonus:.10},
 };
 export const normalizeDifficulty=value=>Object.hasOwn(DIFFICULTIES,value) ? value : "normal";
 export const TEAMS = [
@@ -74,6 +75,7 @@ export function normalizeProfile(profile) {
 export function newCareer(profile = null) {
   return {
     version: 1,
+    calendarVersion:2,
     profile: normalizeProfile(profile),
     cash: 7000,
     round: 1,
@@ -107,7 +109,7 @@ export function loadCareer(storage) {
       c.cash < 0 ||
       !Number.isInteger(c.round) ||
       c.round < 1 ||
-      c.round > 6 ||
+      c.round > SEASON_LENGTH ||
       !Number.isInteger(c.season) ||
       c.season < 1 ||
       !Array.isArray(c.history) ||
@@ -169,7 +171,7 @@ export function settleCareer(career, result) {
     sponsor: sponsor?.name || null,
   });
   career.history = career.history.slice(0, 30);
-  const seasonEnded = career.round === 6;
+  const seasonEnded = career.round === SEASON_LENGTH;
   const seasonBonus = seasonEnded ? career.seasonPoints * 150 : 0;
   career.cash += seasonBonus;
   career.round++;
@@ -461,14 +463,16 @@ export function liveInterval(leader,car) {
 }
 export function cleanAirTopSpeed(car){
   const mode=car.drive==='save' ? .89 : car.drive==='push' ? 1.06 : 1;
-  const pack=aeroPackage(car.upgrades,car.aeroSpec);
+  const pack=aeroPackage(car.upgrades,car.aeroSpec,car.aeroUnlocked);
   return Math.min(MAX_SPEED,MAX_SPEED*(1+level(car.upgrades,"engine")*.035)*(car.pace || 1)*(1-car.fuel*.0006)*mode)*pack.top;
 }
 export function maximumSpeed(car){return cleanAirTopSpeed(car)+18*(car.slipstream?.carry || 0);}
 export function acceleration(car) {
-  const power=90*(1+level(car.upgrades,"engine")*(.045+.025*(1-clamp(car.speed/280,0,1))))*(car.pace || 1)*(1-car.fuel*.002);
-  const pack=aeroPackage(car.upgrades,car.aeroSpec);
-  const drag=power*.82*(Math.max(0,car.speed)/MAX_SPEED)**1.3*pack.drag;
+  const basePower=90*(car.pace || 1)*(1-car.fuel*.002);
+  const power=basePower*(1+level(car.upgrades,"engine")*.07);
+  const pack=aeroPackage(car.upgrades,car.aeroSpec,car.aeroUnlocked);
+  // Engine development adds thrust at every speed without increasing aerodynamic drag.
+  const drag=basePower*.82*(Math.max(0,car.speed)/MAX_SPEED)**1.3*pack.drag;
   const tow=car.slipstream?.strength || 0;
   // The aero package scales the clean-air ceiling; a tow reduces resistance.
   // Once clear, the additional kinetic energy decays instead of a speed snap.
@@ -789,6 +793,8 @@ export class Race {
     this.pitLimiter = false;
     this.autoPitLimiter = true;
     this.nextTyre = setup.tyre === "M" ? "H" : "M";
+    this.player.aeroUnlocked=mode==="quick";
+    this.nextAeroSpec = this.player.aeroSpec;
     for(const car of this.cars){car.tyreTemperatureEnabled=setup.tyreTemperatureEnabled!==false;prepareTyres(car,null,true);}
     this.tyreTemperatureEnabled=setup.tyreTemperatureEnabled!==false;
     this.message = "Get ready. Find your braking points.";
@@ -848,6 +854,32 @@ export class Race {
       this.say("Pit speeding. 5-second penalty.");
     }
   }
+  canSelectAero() {
+    const c=this.player;
+    return !this.done && (c.aeroUnlocked || level(c.upgrades,"aero")>0) &&
+      (!this.qualifying || !!c.pit && (c.garage || c.pit.stage==="service"));
+  }
+  selectAero(spec) {
+    if(!this.canSelectAero() || !AERO_PACKAGES[spec])return false;
+    const c=this.player,p=c.pit;
+    this.nextAeroSpec=spec;
+    if(p && !p.serviced && p.stage!=="service")p.nextAeroSpec=spec;
+    if(p && (p.stage==="service" || c.garage)) {
+      if((p.nextAeroSpec || c.aeroSpec)===spec)return true;
+      // Tyre/penalty work is followed by ten seconds of aero work. Changing
+      // the order restarts only the unfinished aero task, never the tyre job.
+      const otherWork=Math.max(0,(p.timer || 0)-(p.aeroRemaining || 0));
+      p.nextAeroSpec=spec;
+      p.aeroRemaining=spec===c.aeroSpec ? 0 : 10;
+      p.timer=otherWork+p.aeroRemaining;p.aeroServiceSeconds=p.aeroRemaining;
+      if(p.serviced){p.previousSet=c.tyreSet;p.nextSet=c.tyreSet;p.nextTyre=c.tyre;}
+      p.serviced=p.timer===0;p.stage=p.serviced ? "exit" : "service";
+      c.speed=0;c.qNeedsRelease=true;
+    }
+    this.say(spec===c.aeroSpec ? "Keeping the fitted aero package." :
+      AERO_PACKAGES[spec].name+" selected · adds 10 seconds in the pit box.");
+    return true;
+  }
   enterPit(car) {
     let nextSet = null;
     const aiChoice=!car.player ? (!this.qualifying && car.ai.strategy.choice) || this.chooseAITyres(car,this.qualifying ? 3 : undefined)[0]?.set : null;
@@ -897,6 +929,7 @@ export class Race {
           : aiChoice?.compound || car.weatherTarget || chooseNextTyre(car, this.laps)),
       nextSet,
       previousSet: car.tyreSet,
+      nextAeroSpec: car.player ? this.nextAeroSpec : car.aeroSpec,
       entryWear:car.wear,entryWater:car.trackWetness || 0,entryTime:this.time,
     };
     if(!car.player && !this.qualifying){
@@ -930,9 +963,17 @@ export class Race {
     if(p.stage==="service")updateTyreTemperatures(car,dt);
     if(car.player && this.autoPitLimiter) this.pitLimiter=true;
     if (p.stage === "service") {
-      p.timer -= dt;
+      p.timer = Math.max(0,p.timer-dt);
+      p.aeroRemaining=Math.min(p.aeroRemaining || 0,p.timer);
       car.speed = 0;
       if (p.timer <= 0) {
+        if(p.nextAeroSpec && p.nextAeroSpec!==car.aeroSpec) {
+          car.aeroSpec=p.nextAeroSpec;
+          if(car.player){
+            this.nextAeroSpec=car.aeroSpec;
+            if(this.weekend)this.weekend.setup.aeroSpec=car.aeroSpec;
+          }
+        }
         car.tyre = p.nextTyre;
         car.used.add(car.tyre);
         car.wear = p.nextSet?.wear || 0;
@@ -942,6 +983,7 @@ export class Race {
         car.history.push({
           lap: Math.max(1, Math.floor(car.s / TRACK.length) + 1),
           tyre: car.tyre,
+          aeroSpec:car.aeroSpec,aeroSeconds:p.aeroServiceSeconds || 0,
           time: this.time,
           entryTime:p.entryTime,wear:p.entryWear,water:p.entryWater,
           reason:car.player ? "requested" : car.ai.strategy.reason || (this.qualifying ? "in lap" : "tyres"),
@@ -1013,7 +1055,9 @@ export class Race {
         p.stage = "service";
         car.speed = 0;
         p.serviceDuration=this.qualifying && p.nextSet===p.previousSet ? 2.3 : tyreServiceTime(car.upgrades.crew,this.pitRandom || (car.player ? Math.random : car.aiRandom));
-        p.timer=p.serviceDuration+car.penalty;
+        p.aeroRemaining=p.nextAeroSpec && p.nextAeroSpec!==car.aeroSpec ? 10 : 0;
+        p.aeroServiceSeconds=p.aeroRemaining;
+        p.timer=p.serviceDuration+car.penalty+p.aeroRemaining;
         car.penalty = 0;
         if (car.player)
           this.say(
@@ -1287,7 +1331,7 @@ export class Race {
   }
   chooseAIStartingTyre(c){
     const water=trackWater(this.weather,c.s,TRACK.length,c.offset);
-    const ranked=rankTyres(c,{tyres:TYRES,remaining:this.laps,water,futureWater:forecastWater(this.weather,c.ai.strategy.forecastHorizon),lapTime:Math.max(25,TRACK.length/205),pitLoss:18,starting:true});
+    const ranked=rankTyres(c,{tyres:TYRES,remaining:this.laps,water,futureWater:this.freezeWeather ? c.trackWetness : forecastWater(this.weather,c.ai.strategy.forecastHorizon),lapTime:Math.max(25,TRACK.length/205),pitLoss:18,starting:true});
     if(!ranked.length)return null;
     const options=ranked.filter(o=>o.score<ranked[0].score+2.8),weights=options.map(o=>Math.exp(-(o.score-ranked[0].score)/(1+c.ai.strategy.risk)));
     let pick=c.aiRandom()*weights.reduce((a,b)=>a+b,0);
@@ -1296,7 +1340,7 @@ export class Race {
   }
   chooseAITyres(c,remaining=this.laps-raceProgress(c)/TRACK.length){
     return rankTyres(c,{tyres:TYRES,remaining,water:c.trackWetness || 0,
-      futureWater:forecastWater(this.weather,c.ai.strategy.forecastHorizon),
+      futureWater:this.freezeWeather ? c.trackWetness : forecastWater(this.weather,c.ai.strategy.forecastHorizon),
       lapTime:Math.max(25,TRACK.length/205),pitLoss:Math.max(12,PIT_LANE.length/PIT_SPEED-(TRACK.length-TRACK.pitEntry+TRACK.pitExit)/210+3.7),qualifying:!!this.qualifying});
   }
   reviewAIStrategy(c,remaining){
@@ -1336,7 +1380,13 @@ export class Race {
     const water=c.trackWetness || 0;
     const style=c.driverStyle,ai=c.ai;
     const shouldPit=this.qualifying ? c.qState==='in' : this.reviewAIStrategy(c,remain);
-    const pitApproach=shouldPit ? aiPitApproach(c.s) : null;
+    // Commit to the next entrance when the request begins. In qualifying the
+    // timed lap ends just AFTER some circuits' pit entries: that is the start
+    // of an in lap, not permission to cut sideways into the boxes behind us.
+    if(!shouldPit)ai.pitEntryS=null;
+    else if(ai.pitEntryS==null || c.s>ai.pitEntryS+180)
+      ai.pitEntryS=c.s+wrap(TRACK.pitEntry-c.s,TRACK.length);
+    const pitApproach=shouldPit && c.s>=ai.pitEntryS-300 ? aiPitApproach(c.s) : null;
     if(pitApproach && pitApproach.distance<=0 && c.offset>=TRACK.width/2-8 && remain>.6){
       const entrance=pitEntranceLocation(c.x,c.y);
       if(entrance.separation<=PIT_LANE.width/2-3 && Math.cos(angleDiff(c.angle,entrance.angle))>0){
@@ -1370,8 +1420,11 @@ export class Race {
     c.drive=yielding ? (c.qState==="in" ? "save" : "balanced") : mustSave || (!this.qualifying && ai.mode==="conserve") ? "save" : this.qualifying || ai.mode==="attack" ? "push" : "balanced";
     const modePace=c.drive==="save" ? .94 : c.drive==="push" ? 1.035 : 1;
     const braking=brakingDeceleration(c);
-    const commitment=clamp((c.pace || 1)*style.pace*ai.pace*modePace*(1-c.fuel*.002),.72,1.065);
-    let target=brakingTarget(AI_LINE,c.s,grip(c),braking*.82,maximumSpeed(c),commitment);
+    // Difficulty changes how closely the driver uses the same mechanical limits.
+    // Separate braking and throttle skills remain meaningful on fast circuits.
+    const skill=DIFFICULTIES[this.difficulty];
+    const commitment=clamp(.88*(c.pace || 1)*style.pace*ai.pace*modePace*(1-c.fuel*.002),.65,1.02);
+    let target=brakingTarget(AI_LINE,c.s,grip(c),braking*skill.braking,maximumSpeed(c),commitment);
     if(yielding) target=Math.min(target*.82,210);
     if(mistake)target*=mistake==='wide' ? .88 : .94;
     if(pitApproach)target=Math.min(target,Math.sqrt(PIT_SPEED**2+2*braking*.82*Math.max(0,pitApproach.distance-25)));
@@ -1388,23 +1441,27 @@ export class Race {
       (mistake==="oversteer" ? .2 : 0),0,.28);
     ai.slip+=(slipTarget-ai.slip)*(1-Math.exp(-(slipTarget ? 3 : (5+style.wetSkill*3)*(1+level(c.upgrades,"suspension")*.06))*dt));
     c.sideSpeed+=(c.speed*Math.sin(ai.slip)-(c.sideSpeed || 0))*(1-Math.exp(-5*dt));
-    const lateralCap=clamp(c.speed*(pitApproach ? .85 : .35),0,pitApproach ? 100 : 78);
-    const slope=(racingPoint(AI_LINE,c.s+30).offset-racingPoint(AI_LINE,c.s-30).offset)/60;
-    let feedForward=(pitApproach ? pitApproach.slope : yielding ? 0 : slope)*c.speed/clamp(1-curvature*c.offset,.5,1.5);
+    // Follow the path's lateral velocity directly; smooth only the recovery
+    // toward it. Filtering both together made the car lag each apex and then
+    // countersteer repeatedly, even when it was alone on the circuit.
+    const slope=pitApproach ? pitApproach.slope : yielding ? 0 : path.slope;
+    const progressRate=c.speed/Math.hypot(clamp(1-curvature*c.offset,.5,1.5),slope);
+    let feedForward=pitApproach || yielding ? slope*progressRate :
+      (racingPoint(AI_LINE,c.s+progressRate*dt).offset-path.offset)/dt;
     if(!pitApproach && (desiredOffset<=lane.min+.1&&feedForward<0 || desiredOffset>=lane.max-.1&&feedForward>0))feedForward=0;
-    const lineVelocity=clamp(feedForward+(desiredOffset-c.offset)*2.4,-lateralCap,lateralCap);
-    const lateralAcceleration=180*Math.max(.25,grip(c));
-    ai.lineVelocity+=clamp((lineVelocity-ai.lineVelocity)*10,-lateralAcceleration,lateralAcceleration)*dt;
+    const recovery=clamp((desiredOffset-c.offset)*2.4-c.sideSpeed,-55,55);
+    ai.recoveryVelocity=(ai.recoveryVelocity || 0)+clamp((recovery-(ai.recoveryVelocity || 0))*8,-180*Math.max(.25,grip(c)),180*Math.max(.25,grip(c)))*dt;
+    ai.lineVelocity=clamp(feedForward+ai.recoveryVelocity,-c.speed*.85-c.sideSpeed,c.speed*.85-c.sideSpeed);
     c.offset+=ai.lineVelocity*dt+c.sideSpeed*dt;
     c.sliding=clamp(Math.abs(ai.slip)/.2,0,1);
     const oldSpeed=c.speed;
-    const accel = acceleration(c) * clamp(accelerationGrip(c), 0.25, 1);
+    const accel = acceleration(c) * clamp(accelerationGrip(c), 0.25, 1)*skill.throttle;
     c.speed += clamp(target - c.speed, -braking * dt, accel * dt)-overspeedDrag(c)*dt;
     c.speed = Math.max(0, c.speed);
     if(!pitApproach && Math.abs(c.offset)>TRACK.width/2) c.speed=Math.max(0,c.speed-(6+c.speed*.65)*dt);
     if(!pitApproach) updateTrackLimits(c,dt,Math.abs(c.offset));
     if (c.fuel <= 0) c.speed = Math.max(0, c.speed - 55 * dt);
-    const forward=Math.sqrt(Math.max(c.speed*c.speed*.4,(c.speed*Math.cos(ai.slip))**2-(ai.lineVelocity+c.sideSpeed)**2));
+    const forward=Math.sqrt(Math.max(0,(c.speed*Math.cos(ai.slip))**2-(ai.lineVelocity+c.sideSpeed)**2));
     const delta=forward*dt/clamp(1-curvature*c.offset,.5,1.5);
     c.s += delta;
     const loc = sample(c.s);

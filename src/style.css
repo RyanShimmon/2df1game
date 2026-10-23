@@ -1760,3 +1760,29 @@ body:not(.mobile-racing) .race-actions { max-width:max(100px,calc((100vw - 560px
 #qualifying-progress-title:focus { outline:none; }
 
 #knockout-title { margin:18px 0; outline:none; }
+
+/* Pit strategy choices share one compact row; both dialogs use explicit confirmation. */
+.aero-shortcuts { display:flex; gap:8px; margin:8px 0; }
+.aero-shortcut { display:flex; align-items:center; justify-content:center; gap:8px; flex:1; padding:6px 10px; }
+.aero-shortcut svg { width:24px; height:24px; }
+.pit-picker-buttons { display:flex; gap:8px; margin:10px 0; }
+.pit-panel .pit-picker-buttons > button { flex:1; min-width:0; margin:0; padding:10px 8px; font-size:12px; }
+#race-aero-note { margin:8px 0; font-size:11px; }
+.aero-picker-modal { width:min(760px,94vw); max-height:88dvh; overflow:auto; }
+.aero-picker-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:20px; }
+.aero-picker-grid .aero-choice { margin:0; }
+.aero-choice svg { width:36px; height:36px; }
+.picker-confirm { margin-top:24px; padding-top:16px; border-top:1px solid #3b4d51; }
+.picker-confirm .primary { margin-top:12px; width:100%; }
+.picker-confirm .hint { margin:10px 0; }
+.mobile-racing .pit-panel .aero-shortcuts { display:none; }
+.mobile-racing .pit-picker-buttons { display:contents; }
+.mobile-racing .pit-panel { grid-template-columns:1fr 1fr 1fr; }
+.mobile-racing .pit-panel .pit-picker-buttons > button { height:30px; min-height:30px; padding:4px; font-size:9px; line-height:1.1; }
+.mobile-racing .pit-panel .browse-tyres { grid-column:2; grid-row:2; }
+.mobile-racing .pit-panel .browse-aero { grid-column:3; grid-row:2; }
+.mobile-racing #race-aero-note { grid-column:1/-1; margin:0; font-size:8px; text-align:center; }
+.mobile-game .aero-picker-grid { gap:10px; margin-top:12px; }
+.mobile-game .aero-picker-grid .aero-choice { padding:12px; }
+.mobile-game .aero-picker-grid .aero-choice b { font-size:16px; }
+@media(max-width:500px) { .aero-picker-grid { grid-template-columns:1fr; } }

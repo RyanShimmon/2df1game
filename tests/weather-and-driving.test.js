@@ -310,7 +310,9 @@ test("late pit requests wait for the next entry instead of teleporting cars back
 
 test("an entire changing-weather race reaches the finish and AI changes between wet and dry tyres", () => {
   const r = new Race(
-    { laps: 16, tyre: "M", fuel: 18.5, weather: "wetToDry", aiSeed:42 },
+    // Faster racing lines can finish a short race before a late slick stop pays
+    // back. Use a long race to exercise the complete wet-to-dry crossover.
+    { laps: 24, tyre: "M", fuel: 28, weather: "wetToDry", aiSeed:42 },
     upgrades,
   );
   r.player.player = false;

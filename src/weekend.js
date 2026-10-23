@@ -12,16 +12,8 @@ import {
   rainAt,
 } from "./weather.js";
 import { selectTrack, normalizeDifficulty, Race, TRACK, TYRES, sample, clamp, PIT_LANE, samplePit, wrap, capturePoses, tyreServiceTime } from "./core.js";
-export const WEEKENDS = [
-  { name: "Northline Opener", track:"northline", laps: 24, weather: "showers" },
-  { name: "Velocity Trophy", track:"velocity", laps: 24, weather: "wetToDry" },
-  { name: "Sunset Grand Prix", track:"sunset", laps: 20, weather: "dry" },
-  { name: "Harbour Sprint", track:"harbour", laps: 14, weather: "lateRain" },
-  { name: "Crossover Challenge", track:"crossover", laps: 24, weather: "showers" },
-  { name: "Alpine Finale", track:"alpine", laps: 24, weather: "lateRain" },
-];
-export const weekendSchedule = (round) =>
-  WEEKENDS[(round - 1) % WEEKENDS.length];
+import {weekendSchedule} from "./calendar.js";
+export {WEEKENDS,weekendSchedule} from "./calendar.js";
 export function migrateWeekend(w) {
   if (!w) return;
   if(w.setup && !w.setup.track) w.setup.track="northline";
@@ -203,11 +195,11 @@ export function stageOrder(w) {
     return w.active.indexOf(a) - w.active.indexOf(b);
   });
 }
-function* simulateAIQualifyingSteps(w,upgrades,profile) {
+function* simulateAIQualifyingSteps(w,upgrades,profile,options={}) {
   const stage=Q_STAGES.find(q=>q.name===w.phase);
   const ids=w.active.filter(id=>id!==21 && !w.results.some(r=>r.id===id));
   if(!stage || w.elapsed>=stage.duration || !ids.length)return;
-  const q=new QualifyingRun(w,null,upgrades,profile,{aiOnly:true,driverIds:ids});
+  const q=new QualifyingRun(w,null,upgrades,profile,{...options,aiOnly:true,driverIds:ids});
   // Two complete outings where the remaining clock and real tyre stock allow.
   // This is the same weather, pit, temperature and wear simulation as live play.
   for(let i=0;i<20*(stage.duration+90) && !q.done;i++){
@@ -230,10 +222,10 @@ async function responsiveSimulation(steps,{yieldControl=()=>new Promise(resolve=
  return result.value;
 }
 export function simulateAIQualifying(w,upgrades,profile){return exhaustSimulation(simulateAIQualifyingSteps(w,upgrades,profile));}
-function* finishQualifyingStageSteps(w, upgrades, profile) {
+function* finishQualifyingStageSteps(w, upgrades, profile, options={}) {
   if (w.phase === "R") return;
   const stage = Q_STAGES.find((q) => q.name === w.phase);
-  yield* simulateAIQualifyingSteps(w,upgrades,profile);
+  yield* simulateAIQualifyingSteps(w,upgrades,profile,options);
   if(w.phase!==stage.name)return null;
   const order = stageOrder(w);
   const session={name:stage.name,keep:stage.keep,order:[...order],results:w.results.map(r=>({...r}))};
@@ -311,6 +303,19 @@ export function getQualifyingFuel(upgrades={}) {
   return +((laps*(.85+.25*1.18)+.06)*fuelMultiplier(upgrades)).toFixed(2);
 }
 export const QUALIFYING_FUEL=getQualifyingFuel();
+export function nextQualifyingSession(previous,upgrades,profile) {
+  const w=previous.weekend;
+  if(w.phase===previous.stage.name || !Q_STAGES.some(q=>q.name===w.phase) || !w.active.includes(21))return null;
+  const available=selectableSets(w.inventories[21],w.phase);
+  const set=available.find(t=>t.id===previous.player.tyreSet?.id) ||
+    available.filter(t=>t.compound===previous.player.tyre).sort((a,b)=>a.wear-b.wear)[0] || available[0];
+  if(!set)return null;
+  w.selectedSetId=set.id;w.selectedPhase=w.phase;
+  const next=new QualifyingRun(w,set.id,upgrades,profile);
+  next.player.drive=previous.player.drive;next.player.qNeedsRelease=true;
+  next.timeScale=previous.timeScale;
+  return next;
+}
 export class QualifyingRun extends Race {
   constructor(w, setId, upgrades, profile, options={}) {
     selectTrack(w.setup.track);
@@ -320,6 +325,7 @@ export class QualifyingRun extends Race {
     const selected = selectableSets(w.inventories[21], w.phase).find(t => t.id === (requestedSet?.id ?? setId));
     if (!selected && !options.aiOnly) throw Error("Select an available tyre set");
     this.qualifying = true;
+    this.freezeWeather=!!options.freezeWeather;
     this.profile=profile;
     this.timeScale=1;
     this.weather = w.weather;
@@ -403,7 +409,7 @@ export class QualifyingRun extends Race {
     p.previousSet=c.tyreSet;p.nextSet=set;p.nextTyre=set.compound;
     p.serviced=false;p.stage="service";c.speed=0;
     p.serviceDuration=set===c.tyreSet ? 2.3 : tyreServiceTime(c.upgrades.crew,this.pitRandom || c.aiRandom);
-    p.timer=Math.max(p.timer || 0,p.serviceDuration);
+    p.timer=Math.max(0,(p.timer || 0)-(p.aeroRemaining || 0),p.serviceDuration)+(p.aeroRemaining || 0);
     c.qNeedsRelease=true;
     this.say("Tyres selected. Minimum service wait, then press W / ↑ when ready to leave.");
     return true;
@@ -427,16 +433,17 @@ export class QualifyingRun extends Race {
   *endSessionSteps() {
     if (this.sessionEnded || !this.canEndSession()) return null;
     const provisionalPosition=stageOrder(this.weekend).indexOf(21)+1;
-    this.sessionEnded=true;this.finishingSession=true;
+    this.sessionEnded=true;this.finishingSession=true;this.freezeWeather=true;
     // Withdraw the player; fast-forward the remaining AI outings before the cutoff is decided.
     this.player.garage=true;this.player.speed=0;
     this.player.qState="garage";this.player.pit=null;
-    // Simulate the rest of the session with repeated AI outings, fresh choices and weather.
+    // Keep the conditions the player chose to finish in. Remaining AI outings
+    // still use real tyres and wear, but cannot gain an AI-only drying-track advantage.
     // Headless completion uses the same 50 ms physics step as offline qualifying.
     for(let i=0;i<20*(this.stage.duration+90) && !this.done;i++){this.step(.05,{});yield;}
     this.endRun();
     if(this.weekend.phase!==this.stage.name)return null;
-    const session=yield* finishQualifyingStageSteps(this.weekend,this.player.upgrades,this.profile);
+    const session=yield* finishQualifyingStageSteps(this.weekend,this.player.upgrades,this.profile,{freezeWeather:true});
     if(!session)return null;
     // Read the completed stage's banked times, including any previously missing AI results.
     const rank=session.order.indexOf(21)+1;
@@ -488,7 +495,7 @@ export class QualifyingRun extends Race {
     dt=Math.min(dt,.05);
     capturePoses(this.cars);
     this.time+=dt;
-    advanceWeather(this.weather,dt);
+    if(!this.freezeWeather)advanceWeather(this.weather,dt);
     this.weekend.elapsed=Math.min(this.stage.duration,this.stageStart+this.time);
     this.traffic=this.cars.map(c=>({id:c.id,x:c.x,y:c.y,angle:c.angle,team:c.team.name,boxRequested:!!c.ai.strategy.pitRequested,s:c.s,speed:c.speed,offset:c.offset,pit:c.pit,
       garage:c.garage,qState:c.qState,finished:c.finished,dnf:c.dnf}));
@@ -519,7 +526,7 @@ export class QualifyingRun extends Race {
           if(c.player) {
             this.nextSetId=c.tyreSet.id;
             this.nextTyre=c.tyre;
-            this.say("Service complete. Choose tyres here, then press W / ↑ to leave when ready.");
+            this.say("Service complete. Choose tyres or aero here, then press W / ↑ to leave when ready.");
           }
         }
       } else if(c.player) {

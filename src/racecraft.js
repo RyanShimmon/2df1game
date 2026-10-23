@@ -1,3 +1,4 @@
+import {optimizeRacingLine} from "./racing-line.js";
 import {tyreWeatherGrip, rainAt} from './weather.js';
 import {selectableSets} from './tyre-stock.js';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -9,41 +10,34 @@ export function seededRandom(seed){
 }
 export function driverSeed(seed,id){return (Math.imul((seed>>>0)^0x9e3779b9,(id+1)*2+1)^0x85ebca6b)>>>0;}
 
-// A continuous, bounded outside/apex/exit path. Curvature and braking are
-// measured on this actual path, rather than on a constant-offset centreline.
+// Cache immutable geometry; repeated races on a circuit need no new optimization.
+const racingLines=new Map();
 export function buildRacingLine(track,sample,apexes){
-  const count=Math.ceil(track.length/22),step=track.length/count;
-  const margin=track.width/2-22;
-  let offsets=Array.from({length:count},(_,i)=>{
-    const s=i*step;let offset=0;
-    for(const apex of apexes){
-      const d=wrap(s-apex.s+track.length/2,track.length)-track.length/2;
-      if(Math.abs(d)>450)continue;
-      offset+=Math.sign(apex.k)*margin*(Math.exp(-((d/100)**2))-.78*Math.exp(-(((d+210)/120)**2))-.6*Math.exp(-(((d-190)/130)**2)));
-    }
-    return clamp(offset,-margin,margin);
-  });
-  for(let pass=0;pass<8;pass++)offsets=offsets.map((v,i)=>(offsets[wrap(i-1,count)]+2*v+offsets[(i+1)%count])/4);
-  const points=offsets.map((offset,i)=>{const p=sample(i*step);return {s:i*step,offset,x:p.x-Math.sin(p.angle)*offset,y:p.y+Math.cos(p.angle)*offset};});
+  const key=JSON.stringify([track.id,track.width,track.anchors ?? track.pts?.map(p=>[p.x,p.y]) ?? track.length]);
+  if(racingLines.has(key))return racingLines.get(key);
+  const optimized=optimizeRacingLine(track,sample);
+  const {points,step}=optimized,count=points.length;
   for(let i=0;i<count;i++){
     const a=points[wrap(i-1,count)],b=points[i],c=points[(i+1)%count];
     b.angle=Math.atan2(c.y-a.y,c.x-a.x);
     const ab=Math.hypot(b.x-a.x,b.y-a.y),bc=Math.hypot(c.x-b.x,c.y-b.y),ac=Math.hypot(c.x-a.x,c.y-a.y);
     b.curvature=2*((b.x-a.x)*(c.y-b.y)-(b.y-a.y)*(c.x-b.x))/Math.max(1,ab*bc*ac);
     b.distanceScale=(ab+bc)/(2*step);
+    b.slope=(c.offset-a.offset)/(2*step);
   }
   const finalApex=apexes.at(-1)?.s ?? track.length*.94;
   // Prefer the road edge least used by the racing line; hold it through linked
   // corners instead of repeatedly sweeping from one edge to the other.
   const edge=track.width/2-14;
   const conflict=side=>points.filter(p=>Math.abs(p.offset-side*edge)<30).length;
-  return {points,step,length:track.length,width:track.width,
+  const line={...optimized,length:track.length,width:track.width,
     yieldSide:conflict(-1)<=conflict(1) ? -1 : 1,
     finalCornerStart:Math.max(track.length*.5,finalApex-180)};
+  racingLines.set(key,line);return line;
 }
 export function racingPoint(line,s){
   const f=wrap(s,line.length)/line.step,i=Math.floor(f),t=f-i,a=line.points[i],b=line.points[(i+1)%line.points.length];
-  return {offset:a.offset+(b.offset-a.offset)*t,angle:a.angle+angleDiff(b.angle,a.angle)*t,curvature:a.curvature+(b.curvature-a.curvature)*t,distanceScale:a.distanceScale+(b.distanceScale-a.distanceScale)*t};
+  return {slope:(a.slope || 0)+((b.slope || 0)-(a.slope || 0))*t,offset:a.offset+(b.offset-a.offset)*t,angle:a.angle+angleDiff(b.angle,a.angle)*t,curvature:a.curvature+(b.curvature-a.curvature)*t,distanceScale:a.distanceScale+(b.distanceScale-a.distanceScale)*t};
 }
 // Out/in laps yield away from the fast line. A side is held while a timed
 // car approaches, avoiding a last-second sweep across its path. Out laps may
@@ -73,6 +67,13 @@ export function qualifyingLane(car,line,traffic){
       if(Math.abs(fastLine)>8) car.ai.yieldSide=fastLine>=0 ? -1 : 1;
       car.ai.yieldFor=approaching.id;
     }
+  }
+  // With a clear road, anticipate the next section's racing line. Cross only
+  // while no car is near; once a timed car approaches, hold the chosen edge.
+  // A fixed edge for the entire lap blocks the fast line through half the bends.
+  if(!nearby.length && Math.abs(look.offset)>16 && !car.ai.yieldFor &&
+    Math.abs(car.offset-car.ai.yieldSide*(line.width/2-14))<12){
+    car.ai.yieldSide=look.offset>0 ? -1 : 1;
   }
   const preparing=car.qState==="out" && pos>=line.finalCornerStart;
   const mergeBlocked=preparing && nearby.some(other=>{
@@ -139,11 +140,12 @@ export function planRacingLane(car,line,traffic,{time=0,allowPass=true,yieldOffs
 }
 export function brakingTarget(line,s,grip,braking,top,commitment=1){
   const horizon=clamp(top*top/(2*Math.max(braking,1))+110,220,Math.min(3000,line.length/2));
-  let target=top;
+  let target=top,distance=0;
   for(let d=0;d<=horizon;d+=30){
     const p=racingPoint(line,s+d);
+    if(d)distance+=30*(p.distanceScale || 1);
     const corner=Math.min(top,Math.sqrt(225*Math.max(.001,grip)/Math.max(Math.abs(p.curvature),.0001))*commitment);
-    target=Math.min(target,Math.sqrt(corner*corner+2*braking*Math.max(0,d-18)));
+    target=Math.min(target,Math.sqrt(corner*corner+2*braking*Math.max(0,distance-18)));
   }
   return Math.max(10,target);
 }

@@ -8,7 +8,11 @@ import {driveQualifyingOuting} from './qualifying-driver.js';
 const profile={driverName:'Test',teamIndex:2};
 const setup={track:'northline',laps:24,fuel:28,tyre:'S',aiSeed:42,difficulty:'easy'};
 function create(){
- const career=newCareer(profile),w=createWeekend(career,setup);
+ const career=newCareer(profile);
+ // This regression concerns advancement of a competitive, physically driven
+ // lap; give the test driver a developed car against the improved AI lines.
+ Object.assign(career.upgrades,{engine:5,aero:5,brakes:5});
+ const w=createWeekend(career,setup);
  career.weekend=w;w.weather=createWeather('dry');
  return {career,q:new QualifyingRun(w,'S1',career.upgrades,profile)};
 }

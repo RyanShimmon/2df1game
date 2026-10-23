@@ -189,7 +189,7 @@ test("clean sponsor checks collisions and pit penalties, season rolls over", () 
     }).bonus,
     0,
   );
-  c.round = 6;
+  c.round = 12;
   c.sponsor = "points";
   const r = settleCareer(c, {
     position: 1,

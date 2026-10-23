@@ -1,6 +1,6 @@
 # V10 — Grand Prix
 
-Version **1.4.3**.
+Version **1.5.0**.
 
 A local browser game with top-down V10 racing, 22 cars, five tyre types, dynamic weather, qualifying and a saved career. Requires Node.js 18 or newer; no dependency installation is needed.
 
@@ -62,7 +62,7 @@ AI commits to one target and side for an overtake, follows slower traffic when b
 
 ## Career and weekends
 
-Name your driver and choose one of 11 teams. Every team starts with £7,000 and a slower development car. Sign one sponsor per race, earn position money and upgrade your car. The top ten score 25/18/15/12/10/8/6/4/2/1. A six-round season pays an additional £150 per season point.
+Name your driver and choose one of 11 teams. Every team starts with £7,000 and a slower development car. Sign one sponsor per race, earn position money and upgrade your car. The top ten score 25/18/15/12/10/8/6/4/2/1. A 12-round season visits every circuit once and pays an additional £150 per season point.
 
 Career race distance is fixed by the weekend, not selected by the player:
 
@@ -89,11 +89,11 @@ Simulated AI qualifying outings use the same driving, pit, weather, temperature 
 
 ## Car and team development
 
-The garage has nine development paths. Each purchase opens a review with measured before/after estimates before charging the quoted price. Levels persist across seasons; prices rise by 60% of the base cost per existing level. Parts and package choices lock for the whole weekend at the start of Q1. Existing four-path careers migrate without losing purchases, money, identity, results or physical tyre condition.
+The garage has nine development paths. Each purchase opens a review with measured before/after estimates before charging the quoted price. Levels persist across seasons; prices rise by 60% of the base cost per existing level. Purchased development levels lock for the weekend at the start of Q1; aero packages can still be changed through pit service. Existing four-path careers migrate without losing purchases, money, identity, results or physical tyre condition.
 
 | Path | Base cost | Maximum | Effect |
 | --- | ---: | ---: | --- |
-| V10 development | £6,000 | 5 | More power, with extra emphasis on low/mid-speed acceleration |
+| V10 development | £6,000 | 5 | 7% more engine power per level across the full speed range |
 | Fuel efficiency | £5,000 | 5 | 2% less fuel per level; qualifying receives a correspondingly lighter three-lap load |
 | Aerodynamics | £5,000 | 5 | More speed-dependent downforce; level 1 unlocks specialist packages |
 | Suspension & differential | £5,000 | 5 | Better traction and active countersteer recovery |
@@ -105,11 +105,11 @@ The garage has nine development paths. Each purchase opens a review with measure
 
 Balanced, High downforce and Low drag aero packages can be switched without cost before a weekend. High downforce gives +10% reference cornering speed and −10% top speed; Low drag gives −10% reference cornering speed and +10% top speed under the same conditions. Lateral force scales with the square of the corner-speed multiplier. The package scales both drag and the clean-air speed ceiling, including for AI; the fully powered ceilings are 297 / 330 / 363 km/h respectively for High downforce / Balanced / Low drag, before slipstream. Brake and suspension upgrades never remove the underlying compound, wear, temperature and water penalties.
 
-Performance previews use a deterministic solo test car on the selected circuit, with ideal Medium tyres, six fuel laps and Balanced pace. They are comparisons, not promised lap times. Tyre-life and fuel figures use the same resource formulas as the game. Tyre engineering still extends life and softens the grip cliff with temperature simulation disabled; crew service improvements also remain active.
+Performance previews use a deterministic solo test car on the selected circuit, with ideal Medium tyres, six fuel laps and Balanced pace. The high-speed engine comparison uses Push at 75–95% of the package ceiling. Engine upgrades add 7% power per level across the entire speed range without adding drag. They are comparisons, not promised lap times. Tyre-life and fuel figures use the same resource formulas as the game. Tyre engineering still extends life and softens the grip cliff with temperature simulation disabled; crew service improvements also remain active.
 
 Engineer advice appears through the race radio. The pause menu includes the full briefing, using your current pace, tyres, available stock, forecast, time penalties, teammate box occupancy and traffic. Weather crossover and rejoin positions are estimates. Commercial bonuses appear in sponsor offers, results and saved income, and never bypass contract conditions.
 
-AI teams use saved, seeded development preferences and their own budgets. Each starts with £7,000 per car and pays the same escalating upgrade costs as the player. Subsequent funding uses the average classification and earned contract income of the team's drivers at race end. They can buy up to two affordable parts before the next weekend and choose their aero package for the circuit. The garage's Team development view shows installed levels, budget, package and latest purchases. Hover or focus an installed upgrade to see its effects at that level; tap to open or dismiss the same popup on mobile. Escape dismisses the popup first, then closes the garage panel. Both cars share their team's parts; the player's teammate shares the player's development. Weekend snapshots keep all equipment consistent across Q1, Q2, Q3 and the race. Team development never changes the equal physical tyre allocation or wear rules.
+AI teams use saved, seeded development preferences and their own budgets. Each starts with £7,000 per car and pays the same escalating upgrade costs as the player. Subsequent funding uses the average classification and earned contract income of the team's drivers at race end. They can buy up to two affordable parts before the next weekend and choose their aero package for the circuit. The garage's Team development view shows installed levels, budget, package and latest purchases. Hover or focus an installed upgrade to see its effects at that level; tap to open or dismiss the same popup on mobile. Escape dismisses the popup first, then closes the garage panel. Both cars share their team's parts; the player's teammate shares the player's development. Weekend snapshots keep purchased upgrade levels consistent across Q1, Q2, Q3 and the race; completed player aero changes update that driver’s package. Team development never changes the equal physical tyre allocation or wear rules.
 
 ## Verify
 
@@ -214,4 +214,18 @@ Each new race receives a fresh random seed. Every driver has an independent rand
 
 Qualifying time and stage controls remain above the telemetry layer and wrap into the available screen space. Ending a session displays a progress dialog while the same AI lap, weather, service and tyre simulation runs in small chunks, keeping the page responsive. Repeated activation cannot advance a stage twice. AI pit approaches follow the original paved route’s on-track tail, stay inside the circuit before the entry, and hand over at the painted entrance without a sideways snap.
 
-When a session is ended early, later AI runs can change a provisional qualifying position. A Q1/Q2 knockout shows the final position, best lap, cutoff and confirmed race grid slot before the remaining sessions can be completed. The outcome is saved with the weekend; a successful Q1/Q2 finish still advances to the next stage.
+When a session is ended early, remaining AI outings keep the weather and surface water present at the moment of the click. Opponents still drive repeated laps with real tyre wear and can improve a provisional position, but cannot benefit from an AI-only drying track. Weather continues normally while the player stays in the session and resumes in the next stage. A Q1/Q2 knockout shows the final position, best lap, cutoff and confirmed race grid slot before the remaining sessions can be completed. The outcome is saved with the weekend; a successful Q1/Q2 finish still advances to the next stage.
+
+## Racing line and difficulty calibration
+
+The AI reference path minimizes an estimated whole-lap time using curvature limits and forward/backward acceleration and braking envelopes. Smooth lateral adjustments consider linked corners together, so a fast exit into the next bend can take priority over an isolated apex. Flat-out corners avoid unnecessary outside/inside swings. The driver follows that path directly, with damped recovery after traffic or a slide; passing sides remain committed until there is room to return. Out/in laps move away from the upcoming racing line only when nearby traffic permits, then hold their side for approaching timed cars. Pit requests target the next entrance, including a complete qualifying in lap on circuits whose entrance precedes the finish line.
+
+Easy, Normal, Hard and Expert use separate corner commitment, braking margins and throttle application. They share the same car, tyre and speed limits. `tests/racing-line-pace.test.js` measures increasing pace and stable path tracking at every difficulty on all twelve circuits; `tests/qualifying-conditions.test.js` replays the 32.80-second Velocity Q1 case through live and saved-garage completion. `tests/season-calendar.test.js` checks the twelve-round season and migration of older team accounting without duplicate income or purchases.
+
+### Pit setup and qualifying continuity
+
+Advancing Q1 to Q2 or Q2 to Q3 keeps the driver on track, stationary in the pit garage. The next session retains the physical tyre set and its wear where eligible, the completed aero setup, fuel mode and time multiplier; timing resets for the new stage. Incomplete aero service is not granted by advancing.
+
+Choose aero offers High downforce and Low drag; 6/7 provide desktop shortcuts beside the tyre controls. Career packages retain the Aerodynamics I unlock, while Quick Race permits both setup options without awarding chassis upgrades. Queue a race change before entering the pits, or update it during service. Qualifying changes are made while stopped in the box. A change adds ten seconds after tyre and penalty service and applies only after the crew finishes. Pit crew upgrades do not reduce this aero work. Selecting the fitted package cancels the remaining aero task without cancelling tyre/penalty work. A completed package carries into later sessions and the race.
+
+Tyre and aero dialogs pause the session, including AI and weather. Clicking a card stages a choice; Confirm applies it and resumes the previous pause state. Closing without confirmation discards the staged choice. Mobile exposes the two dialogs alongside Request pit; desktop keeps the quick shortcuts.

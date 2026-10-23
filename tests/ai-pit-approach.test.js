@@ -27,3 +27,13 @@ for(const circuit of CIRCUITS)test(`${circuit.name}: race and qualifying AI stay
   assert.equal(c.trackLimits,0);
  }
 });
+
+test('an in lap starting just past the pit entrance targets the next lap, without turning back into the boxes',()=>{
+ const r=new Race({track:'velocity',laps:8,fuel:10,tyre:'M',weather:'dry',aiSeed:42}),c=r.cars[0];
+ const s=2*TRACK.length+2,loc=sample(s),offset=racingPoint(AI_LINE,s).offset;
+ Object.assign(c,{s,offset,x:loc.x-Math.sin(loc.angle)*offset,y:loc.y+Math.cos(loc.angle)*offset,angle:loc.angle,speed:200,qState:'in'});
+ r.qualifying=true;r.cars=[c];r.traffic=[c];c.ai.nextDecision=Infinity;
+ for(let i=0;i<60;i++){r.time+=1/60;r.stepAI(c,1/60);assert.equal(c.pit,null);}
+ assert.ok(c.ai.pitEntryS>s+TRACK.length*.9,'the just-passed entrance is not a valid target');
+ assert.ok(Math.abs(c.offset)<TRACK.width/2,'stay on the road for the in lap');
+});
