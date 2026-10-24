@@ -63,7 +63,7 @@ for(const circuit of CIRCUITS)test(`${circuit.name}: AI follows a bounded corner
   assert.ok(c.finished&&!c.dnf,`${weather}: failed to finish`);assert.ok(c.trackLimits<=1,`${weather}: ${c.trackLimits} limits`);assert.ok(jump<20,`${weather}: movement jump ${jump}`);
  }
 });
-function simulate(seed,playerTyre='M',weather='showers',seconds=210){
+function simulate(seed,playerTyre='M',weather='showers',seconds=360){
  const r=new Race({...setup,aiSeed:seed,tyre:playerTyre,weather});r.countdown=0;r.cars=r.cars.filter(c=>!c.player);
  for(let i=0;i<seconds*30;i++)r.step(1/30);
  return r.cars.map(c=>({id:c.id,tyre:c.tyre,s:c.s,speed:c.speed,wear:c.wear,stops:c.stops,history:c.history,decision:c.ai.strategy.reason}));
@@ -84,7 +84,7 @@ test('AI strategy reacts to wear, changing conditions, remaining distance and te
  plan.nextReview=0;c.wear=.98;assert.equal(r.reviewAIStrategy(c,8),true);
  plan.pitRequested=false;plan.nextReview=0;c.wear=.1;r.traffic=[];
  assert.equal(r.reviewAIStrategy(c,1.8),true);assert.equal(plan.reason,'compound rule');assert.notEqual(plan.choice.compound,'M');
- c.trackWetness=1;r.weather.wetness=1;r.weather.sectors.fill(1);r.weather.pattern='lateRain';r.weather.elapsed=220;
+ c.trackWetness=1;r.weather.wetness=1;r.weather.sectors.fill(1);r.weather.points=[[0,.9],[2000,.9]];r.weather.rain=.9;r.weather.elapsed=220;
  plan.nextReview=0;plan.pitRequested=false;c.wear=.1;
  assert.equal(r.reviewAIStrategy(c,10),true);assert.equal(plan.choice.compound,'W');assert.equal(plan.reason,'weather crossover');
 });

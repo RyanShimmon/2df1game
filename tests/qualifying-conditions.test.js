@@ -13,7 +13,10 @@ for(const saved of [false,true])test(`Velocity Q1: a leading 32.80 lap survives 
   q.step(1/60,{});if(q.time>=90&&!w.results.some(r=>r.id===21))recordLap(w,21,32.8,q.time);
  }
  assert.equal(stageOrder(w)[0],21);assert.equal(q.sessionAction(),'Move to Q2');
- assert.ok(w.weather.wetness>.5);assert.equal(w.weather.rain,0);
+ assert.ok(w.weather.wetness>.5);
+ // A clearing arrives just as the player ends Q1. Further AI runs must not
+ // receive the drying-track advantage that caused the reported knockout.
+ w.weather.points=[[0,0],[5000,0]];w.weather.rain=0;
  if(saved){q.endRun();c=loadCareer({getItem:()=>JSON.stringify(c)});w=c.weekend;q=new QualifyingRun(w,'W1',c.upgrades,profile);}
  const weather=structuredClone(w.weather),banked=structuredClone(w.results.find(r=>r.id===21));
  const outcome=await q.endSessionAsync({yieldControl:async()=>{}});

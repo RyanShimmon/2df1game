@@ -1,5 +1,6 @@
 import {driveQualifyingOuting} from "./qualifying-driver.js";
 import test from "node:test";
+import {createWeather} from "../src/weather.js";
 import assert from "node:assert/strict";
 import {
   Race,
@@ -87,7 +88,7 @@ test("equal times are resolved by earliest lap, and worse later laps never repla
 test("qualifying runs one timed lap between its out and in laps, returning to the serviced box", () => {
   const w = create();
   const q = new QualifyingRun(w, "S1", upgrades, profile);
-  w.weather.pattern="dry";
+  w.weather=createWeather("dry",{seed:1});
   driveQualifyingOuting(q);
   assert.equal(q.player.stops,1);
   assert.ok(q.player.garage);

@@ -39,19 +39,19 @@ const upgrades = { engine: 0, aero: 0, tyres: 0, crew: 0 },
 const make = () =>
   new Race({ laps: 12, fuel: 14, tyre: "M", weather: "dry" }, upgrades);
 test("rain builds water and grip changes; the circuit dries gradually and unevenly", () => {
-  const w = createWeather("showers");
+  const w = createWeather("wetToDry",{seed:42});
   for (let i = 0; i < 1600; i++) advanceWeather(w, 0.1);
   assert.ok(w.rain > 0.7);
   assert.ok(w.wetness > 0.7);
   const wet = w.wetness;
-  for (let i = 0; i < 700; i++) advanceWeather(w, 0.1);
+  advanceWeather(w,w.points.find(p=>p[1]===0)[0]-w.elapsed+30);
   assert.equal(w.rain, 0);
   assert.ok(w.wetness > 0 && w.wetness < wet);
   assert.ok(new Set(w.sectors.map((s) => s.toFixed(3))).size > 1);
   assert.ok(
     trackWater(w, 100, TRACK.length, 0) < trackWater(w, 100, TRACK.length, 50),
   );
-  for (let i = 0; i < 3500; i++) advanceWeather(w, 0.1);
+  advanceWeather(w,600);
   assert.ok(w.wetness < 0.05);
   assert.match(forecast(w), /Dry/);
 });
@@ -310,14 +310,14 @@ test("late pit requests wait for the next entry instead of teleporting cars back
 
 test("an entire changing-weather race reaches the finish and AI changes between wet and dry tyres", () => {
   const r = new Race(
-    // Faster racing lines can finish a short race before a late slick stop pays
-    // back. Use a long race to exercise the complete wet-to-dry crossover.
-    { laps: 24, tyre: "M", fuel: 28, weather: "wetToDry", aiSeed:42 },
+    // Longer fronts can cover a whole short race. Use the long Velocity event
+    // and a known clearing to exercise the complete wet-to-dry crossover.
+    { track:"velocity", laps: 24, tyre: "M", fuel: 28, weather: "wetToDry", aiSeed:42, weatherSeed:4 },
     upgrades,
   );
   r.player.player = false;
   r.countdown = 0;
-  for (let i = 0; i < 60000 && !r.done; i++) r.step(1 / 60);
+  for (let i = 0; i < 108000 && !r.done; i++) r.step(1 / 60);
   assert.ok(r.done && !r.result.dnf);
   assert.ok(r.player.used.has("I") || r.player.used.has("W"));
   // A reactive strategy can cover wet-to-dry conditions in two or more stops.

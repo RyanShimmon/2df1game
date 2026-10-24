@@ -11,6 +11,7 @@ import {CIRCUITS,circuitById} from "./tracks.js";
 export {CIRCUITS,circuitById};
 import {
   createWeather,
+  raceWeatherDuration,
   advanceWeather,
   trackWater,
   tyreWeatherGrip,
@@ -724,14 +725,14 @@ export class Race {
     this.laps = setup.laps;
     this.mode = mode;
     this.difficulty=normalizeDifficulty(setup.difficulty);
-    this.weather = createWeather(setup.weather || "dry");
+    this.aiSeed=(setup.aiSeed ?? Math.floor(Math.random()*2147483646)+1) >>> 0;
+    this.raceSeed=this.aiSeed;
+    this.weather = createWeather(setup.weather || "dry",{seed:setup.weatherSeed ?? (this.raceSeed^0x9e3779b9)>>>0,duration:raceWeatherDuration(this.laps,TRACK.length)});
     this.time = 0;
     this.countdown = 4;
     this.cars = Array.from({ length: 22 }, (_, i) =>
       createCar(i, setup, upgrades, mode),
     );
-    this.aiSeed=(setup.aiSeed ?? Math.floor(Math.random()*2147483646)+1) >>> 0;
-    this.raceSeed=this.aiSeed;
     this.setup.aiSeed=this.raceSeed;
     this.aiRandom=()=>{
       this.aiSeed=(Math.imul(this.aiSeed,1664525)+1013904223)>>>0;

@@ -50,9 +50,9 @@ test('slicks remain controllable at low speed in standing water',()=>{
  assert.ok(r.player.sliding<1e-10);assert.ok(Math.abs(r.player.sideSpeed)<.01);
 });
 test('rain developing during a session gives the same slick grip and sliding as identical wet starting conditions',()=>{
- const changing=createWeather('lateRain');
- for(let i=0;i<3000;i++)advanceWeather(changing,.1);
- assert.ok(changing.wetness>.99);
+ const changing=createWeather('showers',{seed:42});
+ for(let i=0;i<18000&&changing.wetness<.95;i++)advanceWeather(changing,.1);
+ assert.ok(changing.wetness>=.95);
  const start=water(changing.wetness);start.rain=changing.rain;start.sectors=[...changing.sectors];
  const a=carRace('S',changing),b=carRace('S',start);
  a.player.speed=b.player.speed=220;

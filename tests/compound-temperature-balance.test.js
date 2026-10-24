@@ -9,8 +9,8 @@ function pushLaps(tyre,water,track='northline',pitStart=false){
  let peak=-Infinity,lap=0;const results=[];
  for(let i=0;i<60*600 && lap<2 && !r.done;i++){
   const wet=typeof water==='function' ? water(lap) : water;
-  if(wet){r.weather.pattern='showers';r.weather.elapsed=90;r.weather.rain=.85;r.weather.sectors.fill(wet);r.weather.wetness=wet;}
-  else {r.weather.pattern='dry';r.weather.sectors.fill(0);r.weather.wetness=0;}
+  if(wet){r.weather.points=[[0,.85],[4000,.85]];r.weather.rain=.85;r.weather.sectors.fill(wet);r.weather.wetness=wet;}
+  else {r.weather.points=[[0,0],[4000,0]];r.weather.rain=0;r.weather.sectors.fill(0);r.weather.wetness=0;}
   const goal=sample(p.s+clamp(p.speed*.55,35,100));
   const steer=clamp(angleDiff(Math.atan2(goal.y-p.y,goal.x-p.x),p.angle)*3.5,-1,1),target=targetSpeed(p)*.94;
   r.step(1/60,{steer,throttle:p.speed<target,brake:p.speed>target+3});peak=Math.max(peak,...p.tyreTemperatures);

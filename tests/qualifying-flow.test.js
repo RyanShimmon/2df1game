@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {newCareer,TRACK,resources} from '../src/core.js';
 import {createWeekend,QualifyingRun,QUALIFYING_FUEL,selectableSets} from '../src/weekend.js';
-import {createWeather,weatherTimeline,rainAt} from '../src/weather.js';
+import {createWeather,advanceWeather,weatherTimeline,rainAt} from '../src/weather.js';
 import {driveQualifyingOuting} from './qualifying-driver.js';
 const profile={driverName:'Alex',teamIndex:2}, upgrades={engine:0,aero:0,tyres:0,crew:0};
 function create(){const w=createWeekend(newCareer(profile),{laps:12,fuel:14,tyre:'S'}); w.weather=createWeather('dry'); return new QualifyingRun(w,'S1',upgrades,profile);}
@@ -60,11 +60,12 @@ test('intermediate and wet sets remain selectable in dry Q1, Q2, Q3 and race pre
     assert.ok(selectableSets(q.player.tyreInventory,phase).some(t=>t.compound===tyre));
 });
 test('forecast advances across rain changes and predicts water remaining after rain ends',()=>{
-  const w=createWeather('showers');const timeline=weatherTimeline(w);
-  assert.equal(timeline[0].time,0); assert.equal(timeline.at(-1).time,360);
-  assert.equal(w.elapsed,0,'forecast cannot advance live weather');
+  const w=createWeather('wetToDry',{seed:42});advanceWeather(w,w.points.find(p=>p[1]===0)[0]-120);
+  const now=w.elapsed,timeline=weatherTimeline(w);
+  assert.equal(timeline[0].time,now); assert.ok(Math.abs(timeline.at(-1).time-now-360)<1e-8);
+  assert.equal(w.elapsed,now,'forecast cannot advance live weather');
   for(const p of timeline) assert.equal(p.rain,rainAt(w,p.time));
-  const drying=timeline.find(p=>p.time===210);
+  const drying=timeline.find(p=>p.rain===0);
   assert.equal(drying.rain,0); assert.ok(drying.water>.2);
   assert.ok(timeline.at(-1).water<drying.water);
 });

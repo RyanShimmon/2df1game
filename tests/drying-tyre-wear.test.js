@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {Race,TRACK,resources,sample,grip,angleDiff,selectTrack} from '../src/core.js';
 import {createWeather,advanceWeather,trackWater} from '../src/weather.js';
 test.afterEach(()=>selectTrack('northline'));
-function driedWeather(pattern){const w=createWeather(pattern);for(let i=0;i<600;i++)advanceWeather(w,1);return w;}
+function driedWeather(pattern){const w=createWeather(pattern,{seed:42});advanceWeather(w,w.points.at(-1)[0]+600);return w;}
 test('all slicks recover identical dry wear after a wet start or mid-race rain',()=>{
  for(const pattern of ['wetToDry','showers']){
   const w=driedWeather(pattern);assert.equal(w.wetness,0);assert.ok(w.sectors.every(x=>x===0));
@@ -19,9 +19,10 @@ test('all slicks recover identical dry wear after a wet start or mid-race rain',
  }
 });
 test('soft wear rises continuously as the same surface dries and reaches its original dry rate',()=>{
- const w=createWeather('wetToDry');advanceWeather(w,120);let previous=0;
- for(let t=120;t<=600;t++){
-  if(t>120)advanceWeather(w,1);
+ const w=createWeather('wetToDry',{seed:42});advanceWeather(w,w.points.find(p=>p[1]===0)[0]);let previous=0;
+ assert.ok(w.wetness>0);
+ for(let t=0;t<=600;t++){
+  if(t>0)advanceWeather(w,1);
   const p=new Race({laps:16,fuel:18,tyre:'S',weather:'dry'}).player;
   p.trackWetness=trackWater(w,1000,TRACK.length,0);resources(p,0,TRACK.length);
   assert.ok(p.wear>=previous-1e-12);previous=p.wear;

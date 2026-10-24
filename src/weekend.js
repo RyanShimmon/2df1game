@@ -5,13 +5,14 @@ export {tyreAllocation,selectableSets,WEEKEND_SET_IDS} from "./tyre-stock.js";
 import {prepareTyres,updateTyreTemperatures,coolStoredSets} from "./tyre-temperature.js";
 import {
   createWeather,
+  migrateWeather,
+  raceWeatherDuration,
   advanceWeather,
   trackWater,
   tyreWeatherGrip,
   recommendedTyre,
-  rainAt,
 } from "./weather.js";
-import { selectTrack, normalizeDifficulty, Race, TRACK, TYRES, sample, clamp, PIT_LANE, samplePit, wrap, capturePoses, tyreServiceTime } from "./core.js";
+import { makeTrack, circuitById, selectTrack, normalizeDifficulty, Race, TRACK, TYRES, sample, clamp, PIT_LANE, samplePit, wrap, capturePoses, tyreServiceTime } from "./core.js";
 import {weekendSchedule} from "./calendar.js";
 export {WEEKENDS,weekendSchedule} from "./calendar.js";
 export function migrateWeekend(w) {
@@ -68,13 +69,17 @@ export function migrateWeekend(w) {
     w.softSetNumbering=1;
   }
   w.allocationVersion=3;
-  if (!w.weather) w.weather = createWeather(weekendSchedule(w.round).weather);
+  w.setup.weatherSeed ??= (w.setup.aiSeed^0x9e3779b9)>>>0;
+  w.setup.weatherDuration ??= raceWeatherDuration(w.setup.laps,makeTrack(circuitById(w.setup.track)).length);
+  if (!w.weather) w.weather = createWeather(w.setup.weather || weekendSchedule(w.round).weather,{seed:w.setup.weatherSeed,duration:46*60});
+  migrateWeather(w.weather,{seed:w.setup.weatherSeed,duration:46*60});
 }
 export function startRaceWeather(w) {
   if (w.raceWeatherReady) return;
   migrateWeekend(w);
-  w.weather.elapsed = 0;
-  w.weather.rain = rainAt(w.weather, 0);
+  const next=createWeather(w.setup.weather,{seed:(w.setup.weatherSeed^0xa511e9b3)>>>0,duration:w.setup.weatherDuration,
+    wetness:w.weather.wetness,sectors:w.weather.sectors,initialRain:w.weather.rain});
+  Object.assign(w.weather,next);
   w.raceWeatherReady = true;
 }
 export const Q_STAGES = [
@@ -85,6 +90,9 @@ export const Q_STAGES = [
 export function createWeekend(career, setup) {
   const schedule = weekendSchedule(career.round);
   developTeams(career,setup.aiSeed);
+  const aiSeed=setup.aiSeed ?? Math.floor(Math.random()*2147483646)+1;
+  const weatherSeed=setup.weatherSeed ?? (aiSeed^0x9e3779b9)>>>0;
+  const weatherDuration=raceWeatherDuration(schedule.laps,makeTrack(circuitById(schedule.track)).length);
   return {
     version: 1,
     tyreModelVersion: 2,
@@ -96,7 +104,7 @@ export function createWeekend(career, setup) {
       ...setup,
       track:schedule.track,
       difficulty:normalizeDifficulty(setup.difficulty),
-      aiSeed:setup.aiSeed ?? Math.floor(Math.random()*2147483646)+1,
+      aiSeed,weatherSeed,weatherDuration,
       laps: schedule.laps,
       fuel: +(schedule.laps * 1.15*fuelMultiplier(career.upgrades)).toFixed(1),
       weather: schedule.weather,
@@ -105,7 +113,7 @@ export function createWeekend(career, setup) {
       teamDevelopment:developmentSnapshot(career,schedule.track),
     },
     eventName: schedule.name,
-    weather: createWeather(schedule.weather),
+    weather: createWeather(schedule.weather,{seed:weatherSeed,duration:46*60}),
     conditions: { weather: "Dry", temperature: 24 },
     phase: "Q1",
     active: Array.from({ length: 22 }, (_, i) => i),

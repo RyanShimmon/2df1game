@@ -4,14 +4,14 @@ export const WEEKENDS = [
   {name:"Velocity Trophy", track:"velocity", laps:24, weather:"wetToDry"},
   {name:"Sunset Grand Prix", track:"sunset", laps:20, weather:"dry"},
   {name:"Harbour Sprint", track:"harbour", laps:14, weather:"lateRain"},
-  {name:"Crossover Challenge", track:"crossover", laps:24, weather:"showers"},
-  {name:"Alpine Grand Prix", track:"alpine", laps:24, weather:"lateRain"},
+  {name:"Crossover Challenge", track:"crossover", laps:24, weather:"dynamic"},
+  {name:"Alpine Grand Prix", track:"alpine", laps:24, weather:"sustainedRain"},
   {name:"Dunes Grand Prix", track:"dunes", laps:24, weather:"dry"},
-  {name:"Forest Run", track:"forest", laps:20, weather:"wetToDry"},
+  {name:"Forest Run", track:"forest", laps:20, weather:"intermediate"},
   {name:"Riviera Grand Prix", track:"riviera", laps:20, weather:"dry"},
   {name:"Metro Grand Prix", track:"metro", laps:24, weather:"showers"},
-  {name:"Canyon Grand Prix", track:"canyon", laps:24, weather:"dry"},
-  {name:"Aurora Finale", track:"aurora", laps:24, weather:"lateRain"},
+  {name:"Canyon Grand Prix", track:"canyon", laps:24, weather:"dynamic"},
+  {name:"Aurora Finale", track:"aurora", laps:24, weather:"dynamic"},
 ];
 export const SEASON_LENGTH=WEEKENDS.length;
 export const weekendSchedule=round=>WEEKENDS[(round-1)%SEASON_LENGTH];

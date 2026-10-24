@@ -53,7 +53,7 @@ import {
   migrateWeekend,
   startRaceWeather,
 } from "./weekend.js";
-import { forecast, recommendedTyre, rainAt, weatherTimeline } from "./weather.js";
+import { WEATHER_OPTIONS, createWeather, raceWeatherDuration, forecast, recommendedTyre, rainAt, weatherTimeline } from "./weather.js";
 import { Renderer } from "./render.js";
 const app = document.querySelector("#app"),
   renderer = new Renderer(document.querySelector("#world"));
@@ -66,7 +66,7 @@ let career = loadCareer(localStorage),
   saveWarning = "",
   notice = "",
   settlement = null;
-let setup = { track:"northline", laps: 16, startingPosition: 22, tyre: "M", fuel: 18.5, weather: "showers" },
+let setup = { track:"northline", laps: 16, startingPosition: 22, tyre: "M", fuel: 18.5, weather: "dynamic" },
   keys = new Set(),
   touch = { steer: 0, throttle: false, brake: false },
   last = performance.now(),
@@ -132,10 +132,16 @@ function tyreLifeIndicator(selected={compound:setup.tyre,wear:0}) {
   return `<section class="tyre-life" aria-label="Average tyre life"><div class="tyre-life-heading"><b>AVERAGE TYRE LIFE</b><span>Balanced pace · suitable conditions</span></div><div class="tyre-life-grid">${["S","M","H","I","W"].map(compound=>`<div style="--tyre:${TYRES[compound].color}"><i class="tyre-dot"></i><span>${TYRES[compound].name}</span><b>≈ ${estimatedTyreLife(compound,{upgrades}).toFixed(1).replace(/\.0$/,"")} laps</b></div>`).join("")}</div><p class="tyre-life-remaining">${selected.id ? selected.id+" · " : ""}${TYRES[selected.compound].name} selected <strong>≈ ${remaining.toFixed(1)} laps remaining</strong></p><p class="hint">Estimate for this car. Push, heat and sliding shorten tyre life.</p></section>`;
 }
 function header() {
-  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.5.1</div></header>`;
+  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.5.2</div></header>`;
 }
 function tabs() {
   return `<div class="tabs"><button class="tab ${screen === "quick" ? "active" : ""}" data-screen="quick">Quick race</button><button class="tab ${screen === "career" ? "active" : ""}" data-screen="career">Career garage</button><button class="tab" data-action="school">Race School</button><button class="tab" data-action="help">How to drive ↗</button><button class="tab" data-action="settings">Settings</button></div>`;
+}
+function quickWeatherDescription() {
+  setup.weatherSeed ??= Math.floor(Math.random()*4294967296);
+  const preview=createWeather(setup.weather,{seed:setup.weatherSeed,duration:raceWeatherDuration(setup.laps,TRACK.length)});
+  const condition=preview.rain>.6 ? "Heavy rain" : preview.rain>.05 ? "Light rain" : "Dry";
+  return `Start: ${condition} · ${Math.round(preview.wetness*100)}% track wetness. ${WEATHER_OPTIONS.find(option=>option.id===setup.weather)?.description || ""}`;
 }
 function setupCard() {
   const scheduled = screen === "career" ? weekendSchedule(career.round) : null;
@@ -151,7 +157,7 @@ function setupCard() {
     if (setup.fuel < setup.laps * 0.85 || setup.fuel > setup.laps * 1.35)
       setup.fuel = +(setup.laps * 1.15).toFixed(1);
   }
-  return `<section class="race-card"><div class="track-header"><h3>${TRACK.name}</h3><span class="badge">${scheduled ? scheduled.name : "DYNAMIC WEATHER"}</span></div><div class="specs"><span>GRID<b>22 cars</b></span><span>CHARACTER<b>${TRACK.character}</b></span><span>LAP LENGTH<b>${(TRACK.length/1000).toFixed(2)} km</b></span></div>${!scheduled ? `<div class="field weather-choice"><span class="field-label">Circuit</span><button class="circuit-picker-trigger" id="track-choice" aria-label="Choose circuit: ${TRACK.name}" aria-haspopup="dialog"><span><b>${TRACK.name}</b><small>Choose from 12 circuits</small></span><span aria-hidden="true">▦</span></button></div>` : ""}<div class="form-row"><div class="field">${scheduled ? `<span class="field-label">Race distance</span><div class="fixed-race-distance"><strong>${scheduled.laps} laps</strong><span>Weekend distance · ${DIFFICULTIES[settings.difficulty].name} AI</span></div>` : `<label for="laps">Race distance</label><select id="laps"><option value="8" ${setup.laps === 8 ? "selected" : ""}>8 laps · short race</option><option value="16" ${setup.laps === 16 ? "selected" : ""}>16 laps · strategy race</option><option value="24" ${setup.laps === 24 ? "selected" : ""}>24 laps · long race</option></select><label for="starting-position" class="starting-position-label">Starting position</label><select id="starting-position">${Array.from({length:22},(_,i)=>`<option value="${i+1}" ${(setup.startingPosition ?? 22)===i+1 ? "selected" : ""}>P${i+1}${i===0 ? " · pole position" : i===21 ? " · back of grid" : ""}</option>`).join("")}</select>`}</div><div class="field"><label>Starting compound</label><div class="compound-row">${compounds(setup.tyre, "start-tyre")}</div></div></div>${!scheduled ? `<div class="field weather-choice"><label for="weather-choice">Weather</label><select id="weather-choice"><option value="showers" ${setup.weather === "showers" ? "selected" : ""}>Dry → rain → drying</option><option value="wetToDry" ${setup.weather === "wetToDry" ? "selected" : ""}>Wet → drying</option><option value="lateRain" ${setup.weather === "lateRain" ? "selected" : ""}>Late rain</option><option value="dry" ${setup.weather === "dry" ? "selected" : ""}>Dry</option></select></div>` : ""}${scheduled ? `<div class="fuel-row"><span>Qualifying fuel</span><b>${getQualifyingFuel(career.upgrades).toFixed(2)} laps · fixed</b></div><p class="hint">Fuel is set for one out lap, one push lap and one in lap. Race fuel is chosen after qualifying.</p>` : `<div class="fuel-row"><span>Starting fuel <b id="fuel-value">${setup.fuel.toFixed(1)} laps</b></span><span id="fuel-risk"></span></div><input id="fuel" type="range" min="${setup.laps * 0.85}" max="${setup.laps * 1.35}" step="0.1" value="${setup.fuel}" aria-label="Starting fuel in laps"><p class="hint">Less fuel means less weight. Balanced driving uses ~1.10 fuel laps per lap; conserve to stretch it. No refuelling.</p>`}${tyreLifeIndicator()}<button class="primary" data-action="start"><span>${screen === "career" ? `START QUALIFYING · ROUND ${career.round}` : "TAKE TO THE GRID"}</span><span>→</span></button><div class="setup-summary">${TYRES[setup.tyre].name} start · use at least two compounds to finish legally.<br>Intermediates for damp tracks; wets for standing water.</div></section>`;
+  return `<section class="race-card"><div class="track-header"><h3>${TRACK.name}</h3><span class="badge">${scheduled ? scheduled.name : "DYNAMIC WEATHER"}</span></div><div class="specs"><span>GRID<b>22 cars</b></span><span>CHARACTER<b>${TRACK.character}</b></span><span>LAP LENGTH<b>${(TRACK.length/1000).toFixed(2)} km</b></span></div>${!scheduled ? `<div class="field weather-choice"><span class="field-label">Circuit</span><button class="circuit-picker-trigger" id="track-choice" aria-label="Choose circuit: ${TRACK.name}" aria-haspopup="dialog"><span><b>${TRACK.name}</b><small>Choose from 12 circuits</small></span><span aria-hidden="true">▦</span></button></div>` : ""}<div class="form-row"><div class="field">${scheduled ? `<span class="field-label">Race distance</span><div class="fixed-race-distance"><strong>${scheduled.laps} laps</strong><span>Weekend distance · ${DIFFICULTIES[settings.difficulty].name} AI</span></div>` : `<label for="laps">Race distance</label><select id="laps"><option value="8" ${setup.laps === 8 ? "selected" : ""}>8 laps · short race</option><option value="16" ${setup.laps === 16 ? "selected" : ""}>16 laps · strategy race</option><option value="24" ${setup.laps === 24 ? "selected" : ""}>24 laps · long race</option></select><label for="starting-position" class="starting-position-label">Starting position</label><select id="starting-position">${Array.from({length:22},(_,i)=>`<option value="${i+1}" ${(setup.startingPosition ?? 22)===i+1 ? "selected" : ""}>P${i+1}${i===0 ? " · pole position" : i===21 ? " · back of grid" : ""}</option>`).join("")}</select>`}</div><div class="field"><label>Starting compound</label><div class="compound-row">${compounds(setup.tyre, "start-tyre")}</div></div></div>${!scheduled ? `<div class="field weather-choice"><label for="weather-choice">Weather</label><select id="weather-choice" aria-describedby="weather-description">${WEATHER_OPTIONS.map(option=>`<option value="${option.id}" ${setup.weather===option.id ? "selected" : ""}>${option.name}</option>`).join("")}</select><p class="hint" id="weather-description">${quickWeatherDescription()}</p></div>` : ""}${scheduled ? `<div class="fuel-row"><span>Qualifying fuel</span><b>${getQualifyingFuel(career.upgrades).toFixed(2)} laps · fixed</b></div><p class="hint">Fuel is set for one out lap, one push lap and one in lap. Race fuel is chosen after qualifying.</p>` : `<div class="fuel-row"><span>Starting fuel <b id="fuel-value">${setup.fuel.toFixed(1)} laps</b></span><span id="fuel-risk"></span></div><input id="fuel" type="range" min="${setup.laps * 0.85}" max="${setup.laps * 1.35}" step="0.1" value="${setup.fuel}" aria-label="Starting fuel in laps"><p class="hint">Less fuel means less weight. Balanced driving uses ~1.10 fuel laps per lap; conserve to stretch it. No refuelling.</p>`}${tyreLifeIndicator()}<button class="primary" data-action="start"><span>${screen === "career" ? `START QUALIFYING · ROUND ${career.round}` : "TAKE TO THE GRID"}</span><span>→</span></button><div class="setup-summary">${TYRES[setup.tyre].name} start · use at least two compounds to finish legally.<br>Intermediates for damp tracks; wets for standing water.</div></section>`;
 }
 function showTrackPicker() {
   if(el("track-picker-modal")) return;
@@ -572,6 +578,7 @@ function bindMenu() {
   if (el("weather-choice"))
     el("weather-choice").onchange = (e) => {
       setup.weather = e.target.value;
+      el("weather-description").textContent=quickWeatherDescription();
       menu();
     };
   if(el("laps")) el("laps").onchange = (e) => {
@@ -619,6 +626,7 @@ function startRace(fromWeekend = false) {
   );
   if (screen === "career")
     prepareRace(race, career.weekend, selectedWeekendSet);
+  if(screen!=="career")delete setup.weatherSeed;
   settlement = null;
   paused = false;
   accumulator = 0;

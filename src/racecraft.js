@@ -1,5 +1,5 @@
 import {optimizeRacingLine} from "./racing-line.js";
-import {tyreWeatherGrip, rainAt} from './weather.js';
+import {tyreWeatherGrip, projectWeather, trackWater} from './weather.js';
 import {selectableSets} from './tyre-stock.js';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const wrap=(v,n)=>((v%n)+n)%n;
@@ -175,10 +175,8 @@ export function updateSlipstream(c,traffic,dt,{width,layer,length}){
   return state;
 }
 export function forecastWater(weather,seconds){
-  let water=weather.wetness || 0;
-  const drainage=.8+3*.07;
-  for(let d=0;d<seconds;d+=5){const dt=Math.min(5,seconds-d),rain=rainAt(weather,weather.elapsed+d+dt/2);water=clamp(water+(rain*.012-(1-rain)*(rain>.01 ? .0013 : .0038)*drainage)*dt,0,1);}
-  return clamp(water-(rainAt(weather,weather.elapsed+seconds)<.1 ? .06 : 0),0,1);
+  const projected=projectWeather(weather,seconds);
+  return projected.sectors.reduce((total,_,i)=>total+trackWater(projected,i,32,0),0)/32;
 }
 export function createStrategy(random){
   return {risk:random(),wearLimit:.65+random()*.2,reaction:1+random()*4,forecastHorizon:20+random()*50,

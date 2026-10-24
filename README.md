@@ -1,6 +1,6 @@
 # V10 — Grand Prix
 
-Version **1.5.1**.
+Version **1.5.2**.
 
 A local browser game with top-down V10 racing, 22 cars, five tyre types, dynamic weather, qualifying and a saved career. Requires Node.js 18 or newer; no dependency installation is needed.
 
@@ -40,7 +40,7 @@ Dry races require two different dry compounds. Using intermediate or wet tyres w
 
 ## Weather
 
-Quick race offers dry, showers, wet-to-dry and late-rain patterns. Career weather is assigned by weekend. Each Grand Prix starts a new forecast timeline while retaining the surface water and tyre condition from qualifying. Forecast, rainfall, track wetness and penalties appear in the HUD. A scrolling six-minute timebar along the bottom shows rainfall and predicted surface water, using the live drainage model.
+Quick race offers Varied weather, Changeable showers, Light rain (intermediate conditions), Sustained rain, Wet start → drying, Rain arriving later and Dry. Front timing, intensity and duration are generated once per event from a weather seed and saved with the weekend; different races get different forecasts. Quick Race shows the actual starting conditions before tyre selection, and starting the race uses that same forecast. Rain spells last several minutes, with duration also reflecting race length. Lighter rain can sustain intermediate conditions instead of inevitably saturating the circuit. Changeable fronts can strengthen, clear or return after a dry spell. Career rounds include the new weather types. Each Grand Prix receives a different forecast from qualifying while retaining current rainfall, surface water and tyre condition. Forecast, rainfall, track wetness and penalties appear in the HUD. The scrolling six-minute timebar and AI tyre forecasts use the same rainfall and runoff model as live physics. Older saves preserve their current surface and rain when migrating to the new weather model.
 
 Rain adds water to 32 track sectors. Different drainage rates and a drying racing line affect local grip. Rain stops before the road becomes dry: water disappears gradually. Slicks lose grip in rain; intermediates are best in damp conditions; wets are best in deeper water. Intermediates and wets wear faster on a drying road. AI drivers react to crossover conditions and retain the same finite inventory as the player.
 
