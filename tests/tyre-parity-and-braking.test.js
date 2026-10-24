@@ -45,7 +45,7 @@ for(const weather of ['dry','wetToDry'])test(`${weather}: skipped qualifying con
  const a=weekend();a.active=[0,21];a.weather=createWeather(weather);const b=structuredClone(a);
  simulateAIQualifying(a,{},profile);
  const q=new QualifyingRun(b,null,{},profile,{aiOnly:true,driverIds:[0]}),c=q.cars[0];
- for(let i=0;i<20*600 && c.stops<2 && !q.done;i++)q.step(.05);
+ for(let i=0;i<60*600 && c.stops<2 && !q.done;i++)q.step(1/60);
  q.endRun();assert.equal(c.stops,2);
  assert.deepEqual(a.inventories[0],b.inventories[0]);assert.deepEqual(a.results,b.results);
  const used=a.inventories[0].filter(t=>t.used);assert.ok(used.length>0);

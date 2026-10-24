@@ -69,6 +69,7 @@ export function migrateWeekend(w) {
     w.softSetNumbering=1;
   }
   w.allocationVersion=3;
+  restoreQualifyingGrid(w);
   w.setup.weatherSeed ??= (w.setup.aiSeed^0x9e3779b9)>>>0;
   w.setup.weatherDuration ??= raceWeatherDuration(w.setup.laps,makeTrack(circuitById(w.setup.track)).length);
   if (!w.weather) w.weather = createWeather(w.setup.weather || weekendSchedule(w.round).weather,{seed:w.setup.weatherSeed,duration:46*60});
@@ -173,7 +174,7 @@ export function fitSet(car, set) {
   car.used.add(set.compound);
 }
 export function recordLap(w, id, lap, at) {
-  if (!Number.isFinite(lap) || lap <= 0) return;
+  if (w.phase === "R" || !w.active.includes(id) || !Number.isFinite(lap) || lap <= 0) return;
   w.attempts ||= {};w.attempts[id]=(w.attempts[id] || 0)+1;
   const row = w.results.find((r) => r.id === id);
   if (!row) w.results.push({ id, time: lap, at });
@@ -193,7 +194,23 @@ export function pendingFirstRuns(w) {
 export function qualifyingReady(w) {
   return qualifyingExpired(w) || (pendingFirstRuns(w).length===0 && (w.attempts?.[21]>0 || w.results.some(r=>r.id===21)));
 }
+// Archived classifications are authoritative after a stage is completed. Live
+// results are cleared between stages and must never stand in for the final Q3 order.
+export function qualifyingClassification(w, stage=w.phase) {
+  const saved=w.sessions.find(session=>session.name===stage);
+  if(saved)return saved;
+  return {name:stage,order:stageOrder(w),results:w.results};
+}
+export function restoreQualifyingGrid(w) {
+  if(w.phase!=="R")return;
+  const sessions=Q_STAGES.map(stage=>w.sessions?.find(s=>s.name===stage.name));
+  if(sessions.some((s,i)=>!Array.isArray(s?.order) || s.order.length!==[22,16,10][i]))return;
+  const grid=[...sessions[2].order,...sessions[1].order.slice(10),...sessions[0].order.slice(16)];
+  if(new Set(grid).size!==22 || grid.some(id=>!Number.isInteger(id)||id<0||id>21))return;
+  w.grid=grid;
+}
 export function stageOrder(w) {
+  if(w.phase==="R")return [...w.grid];
   return [...w.active].sort((a, b) => {
     const x = w.results.find((r) => r.id === a),
       y = w.results.find((r) => r.id === b);
@@ -210,8 +227,8 @@ function* simulateAIQualifyingSteps(w,upgrades,profile,options={}) {
   const q=new QualifyingRun(w,null,upgrades,profile,{...options,aiOnly:true,driverIds:ids});
   // Two complete outings where the remaining clock and real tyre stock allow.
   // This is the same weather, pit, temperature and wear simulation as live play.
-  for(let i=0;i<20*(stage.duration+90) && !q.done;i++){
-    q.step(.05,{});
+  for(let i=0;i<60*(stage.duration+90) && !q.done;i++){
+    q.step(1/60,{});
     for(const c of q.cars)if(c.stops>=2)c.qReleaseAt=Infinity;
     if(q.cars.every(c=>c.stops>=2 || c.qUnavailable))break;
     yield;
@@ -245,6 +262,7 @@ function* finishQualifyingStageSteps(w, upgrades, profile, options={}) {
       if (reserved) reserved.returned = true;
     }
     w.phase = "R";
+    restoreQualifyingGrid(w);
     startRaceWeather(w);
   } else {
     w.grid = [...order.slice(stage.keep), ...w.grid];
@@ -265,6 +283,7 @@ function* finishRemainingQualifyingSteps(w,upgrades,profile){
 export function finishRemainingQualifying(w,upgrades,profile){return exhaustSimulation(finishRemainingQualifyingSteps(w,upgrades,profile));}
 export function finishRemainingQualifyingAsync(w,upgrades,profile,options){return responsiveSimulation(finishRemainingQualifyingSteps(w,upgrades,profile),options);}
 export function prepareRace(r, w, startId) {
+  restoreQualifyingGrid(w);
   if (w.phase !== "R" || w.grid.length !== 22)
     throw Error("Qualifying must be completed first");
   const requestedSet=w.inventories?.[21]?.find(t=>t.id===startId);
@@ -408,7 +427,7 @@ export class QualifyingRun extends Race {
     return true;
   }
   order() {
-    return stageOrder(this.weekend).map(id => this.cars.find(c => c.id === id)).filter(Boolean);
+    return qualifyingClassification(this.weekend,this.stage.name).order.map(id => this.cars.find(c => c.id === id)).filter(Boolean);
   }
   requestPit() {
     if (this.player.garage) { this.say("Crew ready. Press W / ↑ when you want to leave."); return; }
@@ -435,6 +454,8 @@ export class QualifyingRun extends Race {
   }
   canEndSession() { return this.weekend.phase===this.stage.name && this.weekend.active.includes(21) && qualifyingReady(this.weekend); }
   sessionAction() {
+    const completed=this.weekend.sessions.find(session=>session.name===this.stage.name);
+    if(completed)return `${this.stage.name} complete · P${completed.order.indexOf(21)+1}`;
     const waiting=pendingFirstRuns(this.weekend).length;
     if(waiting) return `Waiting for ${waiting} opponent${waiting===1 ? "" : "s"} to complete a first run`;
     if(!this.canEndSession())return "Complete your first timed lap before ending the session";
@@ -442,7 +463,7 @@ export class QualifyingRun extends Race {
     const timed=this.weekend.results.some(r=>r.id===21);
     return this.stage.name!=="Q3" && timed && rank<=this.stage.keep
       ? "Move to " + (this.stage.name==="Q1" ? "Q2" : "Q3")
-      : "End qualifying in P"+rank;
+      : this.stage.name==="Q3" ? "Finish Q3 · provisional P"+rank : "End qualifying in P"+rank;
   }
   endSession(){return exhaustSimulation(this.endSessionSteps());}
   endSessionAsync(options){return responsiveSimulation(this.endSessionSteps(),options);}
@@ -455,8 +476,9 @@ export class QualifyingRun extends Race {
     this.player.qState="garage";this.player.pit=null;
     // Keep the conditions the player chose to finish in. Remaining AI outings
     // still use real tyres and wear, but cannot gain an AI-only drying-track advantage.
-    // Headless completion uses the same 50 ms physics step as offline qualifying.
-    for(let i=0;i<20*(this.stage.duration+90) && !this.done;i++){this.step(.05,{});yield;}
+    // Use the same fixed physics step as live play; fast-forwarding changes
+    // how quickly we process frames, not the driving or timing model.
+    for(let i=0;i<60*(this.stage.duration+90) && !this.done;i++){this.step(1/60,{});yield;}
     this.endRun();
     if(this.weekend.phase!==this.stage.name)return null;
     const session=yield* finishQualifyingStageSteps(this.weekend,this.player.upgrades,this.profile,{freezeWeather:true});
@@ -570,17 +592,17 @@ export class QualifyingRun extends Race {
   }
 }
 
-export function qualifyingProgress(w, playerId=21) {
-  const stage=Q_STAGES.find(q=>q.name===w.phase);
+export function qualifyingProgress(w, playerId=21, stageName=w.phase) {
+  const stage=Q_STAGES.find(q=>q.name===stageName);
   if(!stage) return null;
-  const order=stageOrder(w), rank=order.indexOf(playerId)+1;
-  const cutoffId=order[w.phase==='Q3' ? 0 : stage.keep-1], cutoff=w.results.find(r=>r.id===cutoffId);
-  const player=w.results.find(r=>r.id===playerId);
-  const rival=w.results.find(r=>r.id===order[w.phase==='Q3' ? 0 : rank<=stage.keep ? stage.keep : stage.keep-1]);
+  const {order,results}=qualifyingClassification(w,stageName), rank=order.indexOf(playerId)+1;
+  const cutoffId=order[stageName==='Q3' ? 0 : stage.keep-1], cutoff=results.find(r=>r.id===cutoffId);
+  const player=results.find(r=>r.id===playerId);
+  const rival=results.find(r=>r.id===order[stageName==='Q3' ? 0 : rank<=stage.keep ? stage.keep : stage.keep-1]);
   return {keep:stage.keep,rank,cutoffId,cutoffTime:cutoff?.time??null,
     playerTime:player?.time??null,through:!!player && rank<=stage.keep,
     margin:player && rival ? player.time-rival.time : null,
-    final:w.phase==='Q3'};
+    final:stageName==='Q3'};
 }
 export function qualifyingStatus(car) {
   if(car.garage || car.pit) return 'PITS';

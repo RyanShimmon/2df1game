@@ -38,6 +38,8 @@ import {
   qualifyingReady,
   getQualifyingFuel,
   qualifyingProgress,
+  qualifyingClassification,
+  restoreQualifyingGrid,
   qualifyingStatus,
   selectableSets,
   ensureWeekend,
@@ -53,7 +55,7 @@ import {
   migrateWeekend,
   startRaceWeather,
 } from "./weekend.js";
-import { WEATHER_OPTIONS, createWeather, raceWeatherDuration, forecast, recommendedTyre, rainAt, weatherTimeline } from "./weather.js";
+import { WEATHER_OPTIONS, createWeather, raceWeatherDuration, forecast, recommendedTyre, rainAt, weatherTimeline, raceForecast } from "./weather.js";
 import { Renderer } from "./render.js";
 const app = document.querySelector("#app"),
   renderer = new Renderer(document.querySelector("#world"));
@@ -132,7 +134,7 @@ function tyreLifeIndicator(selected={compound:setup.tyre,wear:0}) {
   return `<section class="tyre-life" aria-label="Average tyre life"><div class="tyre-life-heading"><b>AVERAGE TYRE LIFE</b><span>Balanced pace · suitable conditions</span></div><div class="tyre-life-grid">${["S","M","H","I","W"].map(compound=>`<div style="--tyre:${TYRES[compound].color}"><i class="tyre-dot"></i><span>${TYRES[compound].name}</span><b>≈ ${estimatedTyreLife(compound,{upgrades}).toFixed(1).replace(/\.0$/,"")} laps</b></div>`).join("")}</div><p class="tyre-life-remaining">${selected.id ? selected.id+" · " : ""}${TYRES[selected.compound].name} selected <strong>≈ ${remaining.toFixed(1)} laps remaining</strong></p><p class="hint">Estimate for this car. Push, heat and sliding shorten tyre life.</p></section>`;
 }
 function header() {
-  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.5.2</div></header>`;
+  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.5.3</div></header>`;
 }
 function tabs() {
   return `<div class="tabs"><button class="tab ${screen === "quick" ? "active" : ""}" data-screen="quick">Quick race</button><button class="tab ${screen === "career" ? "active" : ""}" data-screen="career">Career garage</button><button class="tab" data-action="school">Race School</button><button class="tab" data-action="help">How to drive ↗</button><button class="tab" data-action="settings">Settings</button></div>`;
@@ -392,7 +394,7 @@ function tyreSetLabel(t) {
 }
 function weekendCard() {
   const w = career.weekend;
-  if (w.phase === "R") startRaceWeather(w);
+  if (w.phase === "R") {restoreQualifyingGrid(w);startRaceWeather(w);}
   const phase = w.phase,
     sets = selectableSets(w.inventories[21], phase),
     stage = Q_STAGES.find((q) => q.name === phase),
@@ -427,14 +429,16 @@ function weekendCard() {
           : TEAMS[
               id === career.profile.teamIndex * 2 + 1 ? 10 : Math.floor(id / 2)
             ].name;
-      const t = w.results.find((r) => r.id === id);
-      return `<div class="history-row"><b>P${i + 1}</b><span>${escapeHTML(modelName)}</span><span>${phase === "R" ? "GRID" : t ? time(t.time) : "NO TIME"}</span></div>`;
+      const classified=phase==="R" ? [...w.sessions].reverse().find(session=>session.order.includes(id)) : null;
+      const t = (classified?.results || w.results).find((r) => r.id === id);
+      return `<div class="history-row"><b>P${i + 1}</b><span>${escapeHTML(modelName)}</span><span>${classified ? classified.name+" · " : ""}${t ? time(t.time) : "NO TIME"}</span></div>`;
     })
     .join("");
-  return `<section class="race-card weekend-card"><div class="track-header"><h3>${phase === "R" ? "Race preparation" : phase + " qualifying"}</h3><span class="badge">${w.weather.rain > 0.6 ? "HEAVY RAIN" : w.weather.rain > 0.05 ? "RAIN" : w.weather.wetness > 0.1 ? "DRYING" : "DRY"} / ${Math.round(w.weather.wetness * 100)}% WET</span></div><p class="hint">${phase === "R" ? `Starting P${w.grid.indexOf(21) + 1} · ${w.setup.laps} laps · ${w.eventName || weekendSchedule(w.round).name} · ${DIFFICULTIES[normalizeDifficulty(w.setup.difficulty)].name} AI · choose any remaining set.` : eliminated ? "You have been knocked out. The remaining sessions will set the front of the grid." : `${w.active.length} cars · ${stage.keep} advance · ${Math.ceil((stage.duration - w.elapsed) / 60)} min remaining. Choose when to leave the garage. Each run has an out lap, one timed lap and an in lap.`}</p>${phase==="R"&&w.qualifyingOutcome?.eliminated ? `<p class="hint">${w.qualifyingOutcome.stage} knockout · final P${w.qualifyingOutcome.position}. The top ${w.qualifyingOutcome.keep} advanced.</p>` : ""}<div class="fuel-row"><span>${phase === "R" ? "Race starting set" : "Selected tyre set"}</span><b>${sets.find(t=>t.id===selectedWeekendSet) ? tyreSetLabel(sets.find(t=>t.id===selectedWeekendSet)) : "No available sets"}</b></div><button class="ghost browse-tyres" data-action="browse-weekend-tyres" aria-haspopup="dialog" ${!sets.length ? "disabled" : ""}>Choose tyre set · fresh & used</button>${phase === "R" ? `<div class="fuel-row"><span>Race fuel</span><b id="weekend-fuel-label">${w.setup.fuel.toFixed(1)} laps</b></div><input id="weekend-fuel" aria-label="Race fuel in laps" type="range" min="${w.setup.laps * 0.85}" max="${w.setup.laps * 1.35}" step=".1" value="${w.setup.fuel}">` : ""}${tyreLifeIndicator(sets.find(t=>t.id===selectedWeekendSet) || {compound:setup.tyre,wear:0})}<p class="hint">${forecast(w.weather)} · surface water carries over from qualifying.</p>${phase === "R" ? '<button class="primary" data-action="weekend-race">START GRAND PRIX →</button>' : eliminated ? '<button class="primary" data-action="finish-qualifying">COMPLETE QUALIFYING →</button>' : `<button class="primary" data-action="qualifying-run" ${!sets.length || w.elapsed >= stage.duration ? "disabled" : ""}>${w.runCount ? "ANOTHER RUN" : "DRIVE " + phase} →</button><button class="ghost end-session" data-action="end-qualifying" ${!qualifyingReady(w) ? "disabled" : ""}>${pendingFirstRuns(w).length ? `Waiting for ${pendingFirstRuns(w).length} opponents to complete a first run` : !qualifyingReady(w) ? "Complete your first timed lap before ending the session" : `END ${phase} & ADVANCE`}</button>`}${phase!=="R"&&!eliminated ? `<p class="hint">Ending early completes the AI runs in the current weather and track conditions. Positions can still change.</p>` : ""}<details class="weekend-results"><summary>${phase === "R" ? "Starting grid" : "Session timing"}</summary>${rows}</details><p class="save-note">Weekend allocation and qualifying progress save automatically.</p></section>`;
+  return `<section class="race-card weekend-card"><div class="track-header"><h3>${phase === "R" ? "Race preparation" : phase + " qualifying"}</h3><span class="badge">${w.weather.rain > 0.6 ? "HEAVY RAIN" : w.weather.rain > 0.05 ? "RAIN" : w.weather.wetness > 0.1 ? "DRYING" : "DRY"} / ${Math.round(w.weather.wetness * 100)}% WET</span></div><p class="hint">${phase === "R" ? `Starting P${w.grid.indexOf(21) + 1} · ${w.setup.laps} laps · ${w.eventName || weekendSchedule(w.round).name} · ${DIFFICULTIES[normalizeDifficulty(w.setup.difficulty)].name} AI · choose any remaining set.` : eliminated ? "You have been knocked out. The remaining sessions will set the front of the grid." : `${w.active.length} cars · ${stage.keep} advance · ${Math.ceil((stage.duration - w.elapsed) / 60)} min remaining. Choose when to leave the garage. Each run has an out lap, one timed lap and an in lap.`}</p>${phase==="R"&&w.qualifyingOutcome?.eliminated ? `<p class="hint">${w.qualifyingOutcome.stage} knockout · final P${w.qualifyingOutcome.position}. The top ${w.qualifyingOutcome.keep} advanced.</p>` : ""}<div class="fuel-row"><span>${phase === "R" ? "Race starting set" : "Selected tyre set"}</span><b>${sets.find(t=>t.id===selectedWeekendSet) ? tyreSetLabel(sets.find(t=>t.id===selectedWeekendSet)) : "No available sets"}</b></div><button class="ghost browse-tyres" data-action="browse-weekend-tyres" aria-haspopup="dialog" ${!sets.length ? "disabled" : ""}>Choose tyre set · fresh & used</button>${phase === "R" ? `<div class="fuel-row"><span>Race fuel</span><b id="weekend-fuel-label">${w.setup.fuel.toFixed(1)} laps</b></div><input id="weekend-fuel" aria-label="Race fuel in laps" type="range" min="${w.setup.laps * 0.85}" max="${w.setup.laps * 1.35}" step=".1" value="${w.setup.fuel}">` : ""}${tyreLifeIndicator(sets.find(t=>t.id===selectedWeekendSet) || {compound:setup.tyre,wear:0})}<p class="hint">${forecast(w.weather)} · surface water carries over from qualifying.</p>${phase === "R" ? '<button class="ghost race-forecast-trigger" data-action="race-forecast" aria-haspopup="dialog">Weather forecast <span aria-hidden="true">↗</span></button><button class="primary" data-action="weekend-race">START GRAND PRIX →</button>' : eliminated ? '<button class="primary" data-action="finish-qualifying">COMPLETE QUALIFYING →</button>' : `<button class="primary" data-action="qualifying-run" ${!sets.length || w.elapsed >= stage.duration ? "disabled" : ""}>${w.runCount ? "ANOTHER RUN" : "DRIVE " + phase} →</button><button class="ghost end-session" data-action="end-qualifying" ${!qualifyingReady(w) ? "disabled" : ""}>${pendingFirstRuns(w).length ? `Waiting for ${pendingFirstRuns(w).length} opponents to complete a first run` : !qualifyingReady(w) ? "Complete your first timed lap before ending the session" : `END ${phase} & ADVANCE`}</button>`}${phase!=="R"&&!eliminated ? `<p class="hint">Ending early completes the AI runs in the current weather and track conditions. Positions can still change.</p>` : ""}<details class="weekend-results"><summary>${phase === "R" ? "Starting grid" : "Session timing"}</summary>${rows}</details><p class="save-note">Weekend allocation and qualifying progress save automatically.</p></section>`;
 }
 function bindWeekend() {
   const w = career.weekend;
+  app.querySelector("[data-action=race-forecast]")?.addEventListener("click",showRaceForecast);
   app.querySelector("[data-action=browse-weekend-tyres]")?.addEventListener("click",()=>showTyreSetPicker());
   if (el("weekend-fuel"))
     el("weekend-fuel").oninput = (e) => {
@@ -709,25 +713,55 @@ async function completeQualifying(run=null){
  try{
   const outcome=run ? await run.endSessionAsync({yieldControl}) : await finishRemainingQualifyingAsync(career.weekend,career.upgrades,career.profile,{yieldControl});
   if(run&&!outcome)return;
+  if(race?.qualifying && el("position"))updateHUD();
   selectedWeekendSet=null;
   notice=outcome?.through ? `Qualified in P${outcome.position}. ${outcome.phase} is ready.` : outcome?.eliminated ? `Knocked out in ${outcome.stage} · final P${outcome.position}. Starting P${outcome.gridPosition}. Complete the remaining sessions to set the rest of the grid.` : `Qualifying complete. Starting P${career.weekend.grid.indexOf(21)+1}.`;
   const next=outcome?.through && run ? nextQualifyingSession(run,career.upgrades,career.profile) : null;
   if(next){
     openQualifyingGarage(next,`Qualified in P${outcome.position}. ${outcome.phase} · crew ready. Choose tyres and aero, then leave when ready.`);
   }else if(outcome?.eliminated){save();showQualifyingKnockout(outcome);}
-  else if(career.weekend.phase==="R"){save();showRacePreparation();}
+  else if(career.weekend.phase==="R"){save();showFinalQualifying();}
   else throw Error("The next session has no available tyre set.");
  }catch(error){
   console.error("Qualifying completion failed",error);save();showQualifyingRecovery(run);
  }finally{
   progress.remove();background.forEach(node=>node.inert=false);
-  if(race)paused=!!app.querySelector("#race-preparation,#qualifying-recovery,#qualifying-knockout") || race===run && wasPaused;
+  if(race)paused=!!app.querySelector("#race-preparation,#qualifying-final,#qualifying-recovery,#qualifying-knockout") || race===run && wasPaused;
   accumulator=0;
  }
 }
 function openQualifyingGarage(run,message="Crew ready. Choose tyres and aero, then leave when ready.") {
   race=run;selectedWeekendSet=run.player.tyreSet.id;resetDrivingInput();accumulator=0;paused=false;
   raceUI();race.say(message);updateHUD();save();
+}
+function showFinalQualifying() {
+  const w=career.weekend;
+  restoreQualifyingGrid(w);
+  el("qualifying-results")?.remove();el("qualifying-knockout")?.remove();
+  const session=qualifyingClassification(w,"Q3"),position=w.grid.indexOf(21)+1;
+  const ownSession=[...w.sessions].reverse().find(s=>s.order.includes(21));
+  const best=ownSession?.results.find(row=>row.id===21)?.time;
+  const box=document.createElement("div");box.id="qualifying-final";box.className="modal-backdrop";
+  box.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-labelledby="qualifying-final-title"><div class="eyebrow">FINAL QUALIFYING CLASSIFICATION</div><h2 id="qualifying-final-title" tabindex="-1">${position===1 ? "Pole position" : "Qualifying complete"}</h2><div class="result-line"><span>Grand Prix starting position</span><b>P${position}</b></div><div class="result-line"><span>${ownSession?.name || "Qualifying"} best lap</span><b>${time(best)}</b></div><p class="hint">All qualifying runs are complete. This is your confirmed starting position.</p><details class="weekend-results"><summary>Final Q3 times</summary>${session.order.map((id,i)=>`<div class="history-row"><b>P${i+1}</b><span>${id===21 ? escapeHTML(career.profile.driverName) : escapeHTML(race?.cars.find(c=>c.id===id)?.name || "Driver "+(id+1))}</span><span>${time(session.results.find(row=>row.id===id)?.time)}</span></div>`).join("")}</details><button class="primary" id="prepare-grand-prix">RACE PREPARATION →</button></section>`;
+  app.appendChild(box);paused=true;
+  el("prepare-grand-prix").onclick=()=>{box.remove();showRacePreparation();};
+  box.addEventListener("keydown",event=>garageDialogKeys(event,box,()=>{}));el("qualifying-final-title").focus();
+}
+function showRaceForecast() {
+  const w=career.weekend;
+  if(w?.phase!=="R" || el("race-forecast-modal"))return;
+  startRaceWeather(w);
+  const outlook=raceForecast(w.weather,{duration:w.setup.weatherDuration,laps:w.setup.laps});
+  const minute=seconds=>{const total=Math.round(seconds);return `${Math.floor(total/60)}:${String(total%60).padStart(2,"0")}`;};
+  const backdrop=document.createElement("div");backdrop.id="race-forecast-modal";backdrop.className="modal-backdrop";
+  const icon=rain=>`<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">${rain==="dry" ? '<circle cx="16" cy="16" r="6"/><path d="M16 2v4m0 20v4M2 16h4m20 0h4M6 6l3 3m14 14 3 3M6 26l3-3M23 9l3-3"/>' : '<path d="M8 20h16a6 6 0 0 0 0-12 9 9 0 0 0-17 3 5 5 0 0 0 1 9Z"/><path d="m12 24-2 4m12-4-2 4"/>'+(rain==="heavy" ? '<path d="m17 24-2 6m12-6-2 6"/>' : '')}</svg>`;
+  backdrop.innerHTML=`<section class="modal garage-modal race-forecast-modal" role="dialog" aria-modal="true" aria-labelledby="race-forecast-title"><div class="track-picker-heading"><div><div class="eyebrow">${escapeHTML(w.eventName)} · ${w.setup.laps} LAPS</div><h2 id="race-forecast-title" tabindex="-1">Weather forecast</h2></div><button class="ghost" data-close-forecast aria-label="Close weather forecast">×</button></div><p class="forecast-intro">Start to finish · about ${Math.round(outlook.duration/60)} minutes</p><ol class="race-forecast-list">${outlook.segments.map((segment,i)=>{
+    const low=Math.round(segment.minWater*100),high=Math.round(segment.maxWater*100);
+    return `<li class="forecast-spell forecast-${segment.rain}"><div class="forecast-spell-time"><b>${i===0 ? "START" : "THEN"}${i===outlook.segments.length-1 ? " → FINISH" : ""}</b><span>≈ ${minute(segment.start)}–${minute(segment.end)}</span><small>Laps ${segment.firstLap}${segment.lastLap!==segment.firstLap ? "–"+segment.lastLap : ""}</small></div><div class="forecast-spell-weather">${icon(segment.rain)}<div><h3>${segment.label}</h3><p>${segment.surface} · ${low===high ? low : low+"–"+high}% wet</p><span class="forecast-tyre-tip">${segment.tyreLabel}</span></div></div></li>`;
+  }).join("")}</ol><p class="hint forecast-explanation">Lap ranges are approximate: pace and pit stops change when you reach each phase. Tyre guidance follows surface water — the track can stay wet after rain stops.</p><button class="ghost garage-back" data-close-forecast>BACK TO RACE PREPARATION</button></section>`;
+  const close=openStrategyPicker(backdrop,race,document.activeElement);
+  backdrop.querySelectorAll("[data-close-forecast]").forEach(button=>button.onclick=close);
+  backdrop.onclick=event=>{if(event.target===backdrop)close();};el("race-forecast-title").focus();
 }
 function showRacePreparation() {
   if(career.weekend?.phase!=="R")return;
@@ -1131,14 +1165,15 @@ function updateHUD() {
     if (!p.pit)
       el("pit-title").textContent = p.tyreSet?.id + " · " + race.stage.name;
 
-    const progress=qualifyingProgress(race.weekend), cutoffCar=order.find(c=>c.id===progress.cutoffId);
+    const progress=qualifyingProgress(race.weekend,21,race.stage.name), cutoffCar=order.find(c=>c.id===progress.cutoffId);
     const margin=progress.margin;
     let status=progress.final ? (progress.playerTime===null ? "Q3 · bank a valid lap" : progress.margin===null ? "Q3 · fight for pole" : progress.rank===1 ? "PROVISIONAL POLE" : `${progress.margin.toFixed(3)}s behind pole`) : progress.playerTime===null ? "No time set · bank a valid lap" :
       progress.through ? (margin===null ? "Currently through · rivals still setting times" : `${Math.abs(margin).toFixed(3)}s ahead of elimination`) :
       margin===null ? "Outside cutoff · bank a valid lap" : `${Math.max(.001,margin).toFixed(3)}s needed to get through`;
+    if(race.weekend.sessions.some(session=>session.name===race.stage.name))status=progress.final&&progress.rank===1 ? "POLE POSITION" : "FINAL CLASSIFICATION";
     el("qualifying-cutoff").innerHTML=`<b>${progress.final ? "FINAL QUALIFYING" : "P"+progress.keep+" KNOCKOUT CUTOFF"}</b><span>${progress.cutoffTime===null ? "Cutoff time not set" : escapeHTML(cutoffCar?.name || "")+" · "+time(progress.cutoffTime)}</span><strong class="${progress.through ? "safe" : "danger"}">P${progress.rank} · ${status}</strong>`;
     el("timing").innerHTML=order.map((c,i)=>{
-      const lap=race.weekend.results.find(t=>t.id===c.id);
+      const lap=qualifyingClassification(race.weekend,race.stage.name).results.find(t=>t.id===c.id);
       const cutoff=!progress.final && i===progress.keep-1;
       return `<div class="timing-row quali-row ${c.player ? "me" : ""} ${cutoff ? "cutoff-row" : ""}" style="--team:${c.team.color}"><span class="rank">${i+1}</span><i class="stripe"></i><span class="name" title="${escapeHTML(c.name)}">${escapeHTML(c.name)}</span><span class="q-status">${qualifyingStatus(c)}</span><span class="gap">${lap ? time(lap.time) : "—"}</span></div>${cutoff ? '<div class="cutoff-divider">↑ THROUGH · ELIMINATED ↓</div>' : ''}`;
     }).join("");
@@ -1251,8 +1286,9 @@ function showResults() {
     save();
     const run=race,w=run.weekend,stage=run.stage.name,best=w.results.find(r=>r.id===21)?.time ?? run.player.bestLap;
     const expired=w.elapsed>=run.stage.duration;
+    if(expired && stage==="Q3"){completeQualifying(run);return;}
     const b=document.createElement("div");b.className="modal-backdrop";b.id="qualifying-results";
-    b.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-labelledby="qualifying-results-title"><div class="eyebrow">${stage} / ${expired ? "SESSION" : "RUN"} COMPLETE</div><h2 id="qualifying-results-title">${Number.isFinite(best) ? "Lap time banked" : "No valid lap"}</h2><p class="muted">Best: ${time(best)} · ${run.player.tyreSet.id} · ${Math.round(Math.max(0,1-run.player.wear)*100)}% tyre life remaining.</p>${!expired ? '<button class="primary" id="q-return">RETURN TO PIT BOX →</button>' : ''}<button class="${expired ? "primary" : "ghost end-session"}" id="q-advance" ${!run.canEndSession() ? "disabled" : ""}>${run.sessionAction()}</button></section>`;
+    b.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-labelledby="qualifying-results-title"><div class="eyebrow">${stage} / ${expired ? "SESSION" : "OUTING"} COMPLETE</div><h2 id="qualifying-results-title">${Number.isFinite(best) ? "Lap time banked" : "No valid lap"}</h2><p class="hint">${expired ? "Confirm the completed classification to continue." : "Session still open · positions are provisional until all qualifying runs finish."}</p><p class="muted">Best: ${time(best)} · ${run.player.tyreSet.id} · ${Math.round(Math.max(0,1-run.player.wear)*100)}% tyre life remaining.</p>${!expired ? '<button class="primary" id="q-return">RETURN TO PIT BOX →</button>' : ''}<button class="${expired ? "primary" : "ghost end-session"}" id="q-advance" ${!run.canEndSession() ? "disabled" : ""}>${run.sessionAction()}</button></section>`;
     app.appendChild(b);
     el("q-return")?.addEventListener("click",()=>{
       const next=resumeQualifyingSession(run,career.upgrades,career.profile);

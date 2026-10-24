@@ -1786,3 +1786,24 @@ body:not(.mobile-racing) .race-actions { max-width:max(100px,calc((100vw - 560px
 .mobile-game .aero-picker-grid .aero-choice { padding:12px; }
 .mobile-game .aero-picker-grid .aero-choice b { font-size:16px; }
 @media(max-width:500px) { .aero-picker-grid { grid-template-columns:1fr; } }
+
+.race-forecast-trigger { width:100%; display:flex; align-items:center; justify-content:space-between; margin-top:14px; }
+.race-forecast-modal .forecast-intro { color:var(--muted); margin:0 0 20px; }
+.race-forecast-list { list-style:none; padding:0; margin:0; display:grid; gap:12px; }
+.forecast-spell { display:grid; grid-template-columns:150px 1fr; gap:18px; padding:18px; border:1px solid var(--line); border-radius:10px; background:#102029; }
+.forecast-spell-time { display:flex; flex-direction:column; gap:6px; }
+.forecast-spell-time b { color:var(--lime); font-size:11px; letter-spacing:1.2px; }
+.forecast-spell-time span { font-size:16px; font-variant-numeric:tabular-nums; }
+.forecast-spell-time small, .forecast-spell-weather p { color:var(--muted); font-size:13px; }
+.forecast-spell-weather { display:flex; align-items:flex-start; gap:14px; }
+.forecast-spell-weather svg { flex:0 0 34px; width:34px; height:34px; color:#76baff; }
+.forecast-dry .forecast-spell-weather svg { color:#ffd56a; }
+.forecast-spell-weather h3 { font-family:inherit; font-size:19px; font-weight:600; line-height:1.2; margin:0 0 6px; }
+.forecast-spell-weather p { margin:0 0 8px; }
+.forecast-tyre-tip { display:inline-block; color:var(--lime); border:1px solid var(--line); border-radius:5px; padding:4px 8px; font-size:12px; }
+.forecast-explanation { line-height:1.6; }
+@media(max-width:520px) {
+  .forecast-spell { grid-template-columns:108px 1fr; padding:12px; gap:12px; }
+  .forecast-spell-weather { gap:8px; }
+  .forecast-spell-weather svg { flex-basis:26px; width:26px; height:26px; }
+}

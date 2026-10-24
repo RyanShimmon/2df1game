@@ -1,6 +1,6 @@
 # V10 — Grand Prix
 
-Version **1.5.2**.
+Version **1.5.3**.
 
 A local browser game with top-down V10 racing, 22 cars, five tyre types, dynamic weather, qualifying and a saved career. Requires Node.js 18 or newer; no dependency installation is needed.
 
@@ -231,3 +231,8 @@ Choose aero offers High downforce and Low drag; 6/7 provide desktop shortcuts be
 Tyre and aero dialogs pause the session, including AI and weather. Clicking a card stages a choice; Confirm applies it and resumes the previous pause state. Closing without confirmation discards the staged choice. Mobile exposes the two dialogs alongside Request pit; desktop keeps the quick shortcuts.
 
 Qualifying completion, expired-session results, knockout classification and race preparation remain over the circuit. Returning after a stranded outing reopens the same session in the pit box; advancement uses the completed run and opens the next garage without a menu detour.
+
+
+Final qualifying uses the archived stage classification for the results screen, garage grid and race placement. Completing Q3 shows the confirmed starting position only after opponent runs are resolved. Live and early-completion qualifying use the same 60 Hz physics step; unfinished outings are labelled provisional. Saved grids are reconciled with their Q1/Q2/Q3 classifications, preserving genuine lap times and eliminations. Regression checks cover all twelve circuits and both improving and worsening Q3 positions.
+
+Grand Prix preparation includes a Weather forecast popup covering the expected race duration. Chronological cards show rainfall, surface-water ranges, approximate minutes/laps and tyre guidance. It projects the saved race plan with the same water model as driving, without advancing time or rerolling conditions. Lap ranges are estimates because driving pace and pit stops affect the timing.

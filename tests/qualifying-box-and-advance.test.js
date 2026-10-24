@@ -37,5 +37,5 @@ test('session labels and final grids respect knockout stages and final qualifyin
  assert.equal(q.sessionAction(),'End qualifying in P22');q.endSession();assert.equal(q.weekend.phase,'Q2');assert.equal(q.weekend.sessions.length,1);finishRemainingQualifying(q.weekend,upgrades,profile);assert.equal(q.weekend.phase,'R');assert.equal(q.weekend.grid.indexOf(21)+1,22);
  const other=create();recordLap(other.weekend,21,1,0);finishQualifyingStage(other.weekend,upgrades,profile);
  const q2=new QualifyingRun(other.weekend,'S1',upgrades,profile);for(const id of q2.weekend.active)recordLap(q2.weekend,id,id===21?1:30,0);assert.equal(q2.sessionAction(),'Move to Q3');
- finishQualifyingStage(q2.weekend,upgrades,profile);const q3=new QualifyingRun(q2.weekend,'S1',upgrades,profile);for(const id of q3.weekend.active)recordLap(q3.weekend,id,id===21?1:30,0);assert.equal(q3.sessionAction(),'End qualifying in P1');
+ finishQualifyingStage(q2.weekend,upgrades,profile);const q3=new QualifyingRun(q2.weekend,'S1',upgrades,profile);for(const id of q3.weekend.active)recordLap(q3.weekend,id,id===21?1:30,0);assert.equal(q3.sessionAction(),'Finish Q3 · provisional P1');
 });

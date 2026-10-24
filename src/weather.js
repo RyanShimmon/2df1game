@@ -170,3 +170,30 @@ export function weatherTimeline(state,horizon=360,interval=15) {
   }
   return points;
 }
+
+// A whole-race briefing, projected from the already-saved plan. Reading it
+// neither advances the live clock nor generates a different weather seed.
+export function raceForecast(state,{duration=state.duration,laps=16}={}) {
+  const horizon=Math.max(1,Number.isFinite(duration)?duration:900),projected=projectWeather(state,0);
+  const segments=[];
+  const describe=()=>{
+    const tyre=recommendedTyre(projected.wetness);
+    const rain=projected.rain>.6 ? 'heavy' : projected.rain>.05 ? 'light' : 'dry';
+    return {key:rain+tyre,rain,tyre,label:rain==='heavy' ? 'Heavy rain' : rain==='light' ? 'Light rain' : projected.wetness>.17 ? 'Rain stopped' : 'Dry'};
+  };
+  for(let start=0;start<horizon;){
+    const info=describe(),end=Math.min(horizon,start+15),water=projected.wetness;
+    let segment=segments.at(-1);
+    if(!segment || segment.key!==info.key){segment={...info,start,end,minWater:water,maxWater:water};segments.push(segment);}
+    advanceWeather(projected,end-start);
+    segment.end=end;segment.minWater=Math.min(segment.minWater,water,projected.wetness);segment.maxWater=Math.max(segment.maxWater,water,projected.wetness);
+    start=end;
+  }
+  for(const segment of segments){
+    segment.firstLap=Math.min(laps,Math.floor(segment.start/horizon*laps)+1);
+    segment.lastLap=Math.min(laps,Math.max(segment.firstLap,Math.ceil(segment.end/horizon*laps)));
+    segment.surface=segment.tyre==='W' ? 'Very wet track' : segment.tyre==='I' ? 'Damp track' : 'Dry / drying track';
+    segment.tyreLabel=segment.tyre==='W' ? 'Wet tyres' : segment.tyre==='I' ? 'Intermediates' : 'Slick tyres';
+  }
+  return {duration:horizon,laps,segments};
+}
