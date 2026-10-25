@@ -77,7 +77,7 @@ test('AI rejoins from the outside pit exit without snapping onto the track centr
 });
 
 test('trimming preserves the original pit route positions rather than shifting the lane',()=>{
- const originalEntry=TRACK.length-450,originalSpan=1250;
+ const originalEntry=TRACK.length+TRACK.mainStraight.from+90,originalSpan=TRACK.mainStraight.length-180;
  const ease=v=>{const t=Math.max(0,Math.min(1,v));return t*t*t*(t*(t*6-15)+10);};
  for(const point of PIT_LANE.pts) {
   const progress=point.progress+TRACK.pitEntry-originalEntry;

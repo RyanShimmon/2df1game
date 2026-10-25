@@ -22,7 +22,7 @@ export function developmentBench(upgrades={},aeroSpec="balanced"){
   if(lapStart===null&&c.s>=TRACK.length)lapStart=clock;
  }
  c.speed=220;
- const data={accelerate,highSpeed,rollStart,rollEnd,braking,lap:lapStart===null?Infinity:clock-lapStart,corner:Math.sqrt(225*grip(c)/.006),medium:estimatedTyreLife("M",{upgrades}),soft:estimatedTyreLife("S",{upgrades}),fuel:24*1.1*fuelMultiplier(upgrades),crewMax:Math.max(2.3,5.5-level(upgrades,"crew")*.5),traction:level(upgrades,"suspension")*2.5,recovery:level(upgrades,"suspension")*6,sponsor:sponsorPayout(upgrades,6500),package:aeroPackage(upgrades,aeroSpec).name};
+ const data={accelerate,highSpeed,rollStart,rollEnd,braking,lap:lapStart===null?Infinity:clock-lapStart,corner:Math.sqrt(225*grip(c)/.006),medium:estimatedTyreLife("M",{upgrades}),soft:estimatedTyreLife("S",{upgrades}),fuel:32*1.1*fuelMultiplier(upgrades),crewMax:Math.max(2.3,5.5-level(upgrades,"crew")*.5),traction:level(upgrades,"suspension")*2.5,recovery:level(upgrades,"suspension")*6,sponsor:sponsorPayout(upgrades,6500),package:aeroPackage(upgrades,aeroSpec).name};
  cache.set(key,data);return data;
 }
 export function upgradePreview(career,key,{tyreTemperatureEnabled=true}={}){
@@ -30,7 +30,7 @@ export function upgradePreview(career,key,{tyreTemperatureEnabled=true}={}){
  const metric=(label,a,b,unit="",digits=1)=>({label,before:typeof a==="number"?a.toFixed(digits)+unit:a,after:typeof b==="number"?b.toFixed(digits)+unit:b});
  const rows={
  engine:[metric("0–250 km/h",before.accelerate,after.accelerate,"s",2),metric(`${before.rollStart}–${before.rollEnd} km/h`,before.highSpeed,after.highSpeed,"s",2)],
- efficiency:[metric("Fuel for 24 balanced laps",before.fuel,after.fuel," fuel laps")],
+ efficiency:[metric("Fuel for 32 balanced laps",before.fuel,after.fuel," fuel laps")],
  aero:[metric("Reference corner speed",before.corner,after.corner," km/h")],
  suspension:[metric("Traction support",before.traction,after.traction,"%"),metric("Countersteer support",before.recovery,after.recovery,"%")],
  brakes:[metric("250–0 km/h",before.braking,after.braking,"s",2)],

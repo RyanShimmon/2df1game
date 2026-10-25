@@ -62,7 +62,7 @@ test("slicks, intermediates and wets each have a useful grip window", () => {
   assert.ok(g("W", 0.9) > g("I", 0.9) && g("W", 0.9) > g("S", 0.9));
 });
 test("wet tyre use waives the dry compound requirement", () => {
-  const r = make();
+  const r = make();r.player.raceFormat="grandPrix";
   assert.equal(tyreRuleMet(r.player), false);
   r.player.used.add("I");
   assert.equal(tyreRuleMet(r.player), true);
@@ -196,9 +196,9 @@ test("top speed takes sustained acceleration and steering costs exit pace", () =
     for (let i = 0; i < 1200; i++) {
       const p = r.player;
       p.fuel = 1;
-      p.x = 1050;
-      p.y = 1350;
-      p.s = 350;
+      p.x = sample(0).x;
+      p.y = sample(0).y;
+      p.s = 0;
       p.angle = 0;
       r.stepPlayer(p, 1 / 60, { throttle: true, steer });
       if (p.speed > 300 && first300 === null) first300 = i / 60;
@@ -218,7 +218,7 @@ test("career distance is set by the weekend and old saves gain wet tyres without
   c.round = 3;
   const w = createWeekend(c, { laps: 8, fuel: 9.5, tyre: "M" });
   assert.equal(w.setup.laps, weekendSchedule(3).laps);
-  assert.equal(w.setup.laps, 20);
+  assert.equal(w.setup.laps, 32);
   w.inventories.forEach((inv) => inv.splice(13));
   w.inventories[21][3].wear = 0.42;
   delete w.weather;
@@ -229,7 +229,7 @@ test("career distance is set by the weekend and old saves gain wet tyres without
   finishRemainingQualifying(w, upgrades, profile);
   const r = make();
   prepareRace(r, w, "M1");
-  assert.equal(r.laps, 20);
+  assert.equal(r.laps, 32);
   assert.equal(r.weather, w.weather);
 });
 test("a soft set survives two complete dry qualifying outings with useful grip", () => {
@@ -288,7 +288,7 @@ test("qualifying pit requests use the marked physical box, change sets and refue
   }
   assert.equal(p.stops, 1);
   assert.equal(p.tyreSet.id, "S2");
-  assert.ok(p.fuel > 3.4 && p.fuel < 3.7);
+  assert.ok(p.fuel > 3.6 && p.fuel < 4.0);
   assert.equal(w.phase, "Q1");
   assert.equal(p.qStart, null);
 });

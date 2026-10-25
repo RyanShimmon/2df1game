@@ -1,3 +1,4 @@
+import {fuelPerLap,stintLaps,tyreWearFactor} from "./performance.js";
 import {thermalWear} from "./tyre-temperature.js";
 import {fuelMultiplier,level} from "./development.js";
 import {forecastWater} from "./racecraft.js";
@@ -7,13 +8,11 @@ export function engineerReport(race,{track,pitLane,tyres,progress}){
  const p=race.player,lvl=level(p.upgrades,"engineer"),items=[];
  if(!lvl)return {level:0,items};
  const remaining=race.qualifying ? p.qState==="out" ? 3 : p.qState==="timed" ? 2 : 1 : Math.max(0,race.laps-progress(p)/track.length);
- const mode=p.drive==="push" ? 1.18 : p.drive==="save" ? .72 : 1;
- const burn=(.85+.25*mode)*fuelMultiplier(p.upgrades),fuelMargin=p.fuel-remaining*burn;
+ const burn=fuelPerLap(p.drive,p.upgrades),fuelMargin=p.fuel-remaining*burn;
  const water=p.trackWetness ?? race.weather.wetness;
- const weatherWear=["I","W"].includes(p.tyre) ? 1+Math.max(0,(p.tyre==="W"?.55:.28)-water)*5 : 1-water*.25;
- const tyreLaps=tyres[p.tyre].life*Math.max(0,.82-p.wear)/(mode*weatherWear*thermalWear(p)*(1+(p.sliding || 0)*.5)*(1-level(p.upgrades,"tyres")*.07));
+ const tyreLaps=stintLaps(p.tyre,tyres,{wear:p.wear,mode:p.drive,upgrades:p.upgrades,wetness:water,thermal:thermalWear(p),stress:1+(p.sliding || 0)*.5});
  items.push(`Fuel margin: ${fuelMargin>=0?"+":""}${fuelMargin.toFixed(1)} fuel laps at ${p.drive || "balanced"} pace${fuelMargin<0 ? "; use Save or lift earlier" : "; on target"}.`);
- items.push(`${tyres[p.tyre].name}: about ${tyreLaps.toFixed(1)} laps before the grip cliff.`);
+ items.push(`${tyres[p.tyre].name}: about ${tyreLaps.toFixed(1)} laps of competitive grip at ${p.drive || "balanced"} pace.`);
  let crossover=null;
  if(lvl>=2){
   const sets=p.tyreInventory ? selectableSets(p.tyreInventory,p.tyrePhase || "R") : Object.keys(tyres).map(compound=>({compound,wear:0}));
@@ -22,7 +21,7 @@ export function engineerReport(race,{track,pitLane,tyres,progress}){
   for(let seconds=0;seconds<=180;seconds+=10){
    const w=forecastWater(race.weather,seconds),current=tyres[p.tyre].grip*tyreWeatherGrip(p.tyre,w);
    peak=Math.max(peak,w);driest=Math.min(driest,w);
-   const best=sets.map(set=>({set,grip:tyres[set.compound].grip*tyreWeatherGrip(set.compound,w)*Math.max(.4,1-.3*set.wear**1.7)})).sort((a,b)=>b.grip-a.grip)[0];
+   const best=sets.map(set=>({set,grip:tyres[set.compound].grip*tyreWeatherGrip(set.compound,w)*tyreWearFactor(set.compound,set.wear,level(p.upgrades,"tyres"))})).sort((a,b)=>b.grip-a.grip)[0];
    if(best && family(best.set.compound)!==family(p.tyre) && best.grip>current*1.16){crossover={seconds,compound:best.set.compound};break;}
   }
   const noWet=family(p.tyre)==="dry" && peak>.25 && !sets.some(s=>["I","W"].includes(s.compound));

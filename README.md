@@ -1,6 +1,6 @@
 # V10 — Grand Prix
 
-Version **1.5.3**.
+Version **1.6.0**.
 
 A local browser game with top-down V10 racing, 22 cars, five tyre types, dynamic weather, qualifying and a saved career. Requires Node.js 18 or newer; no dependency installation is needed.
 
@@ -21,7 +21,8 @@ Open http://127.0.0.1:5173. Use `PORT=5174 npm run dev` for a separate preview/s
 | P                     | In manual limiter mode, toggle the 80 km/h limiter                               |
 | R                     | Reverse in the pit lane if you overshoot the box         |
 | 1 / 2 / 3 / 4 / 5     | Next compound: soft / medium / hard / intermediate / wet |
-| F                     | Cycle save / balanced / push                             |
+| F                     | Pace left: Push → Balanced → Save (stops at Save)         |
+| G                     | Pace right: Save → Balanced → Push (stops at Push)        |
 | M                     | Toggle circuit overview                                  |
 | T                     | Cycle next pit compound (S/M/H/I/W)                       |
 | Escape                | Pause / resume                                           |
@@ -177,7 +178,7 @@ Optional race practice requires a grid launch, fuel-mode change, B pit request, 
 Automated play-tests drive both qualifying outings, verify the required change, checkpoint resume and wear retention, mark deleted laps without blocking training progress, and complete race-start/pit practice.
 
 
-Race School now uses brief bullet prompts, an F fuel-mode reminder on out laps, and animated cues for the required physical Medium-set selection in Outing 2. A completed training outing advances the lesson even if its lap was deleted; deleted laps remain excluded from qualifying results. The popup must be used for the required change. After service, W / Up or Leave pit box starts the next outing.
+Race School now uses brief bullet prompts, an F/G pace-mode reminder on out laps, and animated cues for the required physical Medium-set selection in Outing 2. A completed training outing advances the lesson even if its lap was deleted; deleted laps remain excluded from qualifying results. The popup must be used for the required change. After service, W / Up or Leave pit box starts the next outing.
 
 ### Vercel deployment
 
@@ -222,6 +223,14 @@ The AI reference path minimizes an estimated whole-lap time using curvature limi
 
 Easy, Normal, Hard and Expert use separate corner commitment, braking margins and throttle application. They share the same car, tyre and speed limits. `tests/racing-line-pace.test.js` measures increasing pace and stable path tracking at every difficulty on all twelve circuits; `tests/qualifying-conditions.test.js` replays the 32.80-second Velocity Q1 case through live and saved-garage completion. `tests/season-calendar.test.js` checks the twelve-round season and migration of older team accounting without duplicate income or purchases.
 
+### Steering, wet pace and compound checks
+
+The racing arc is interpolated in world coordinates with a continuous tangent. Its actual curvature is used for braking; interpolating offsets against a curved centreline previously introduced steering reversals at sample boundaries. Body heading follows travel plus held slip, rather than displaying countersteering corrections as a left/right flick. Wet drivers use more of the shared grip budget and can hold a small slide, with the normal heat, wear and momentum costs. Difficulty and individual wet skill still affect execution.
+
+Run `node scripts/benchmark-tyres.mjs` (or append a circuit ID) for reproducible fresh-lap and full-stint comparisons. The output records its controls: equal equipment, balanced Normal AI, fixed fuel, ideal temperature, dry surface and no traffic. Fresh dry grip is Soft 1.06, Medium 1.00 and Hard 0.98. Nominal wear life is 12/17/23 laps respectively; competitive stint estimates end earlier (about 9.8/14.6/20.7 balanced laps before upgrades). These are not guarantees of human lap times or an optimal race strategy; qualifying wear, traffic, heat, fuel and actual pit delays matter.
+
+Flyover projection retains the current route even during a recoverable wide slide. The existing distance and lap guards still reject jumps between road levels. Elevated tarmac uses the same vertices and colour as the road, with inset shadows to avoid transverse seams. A labelled local cutaway reveals the lower road and cars while driving beneath a bridge; upper-deck approaches do not activate it.
+
 ### Pit setup and qualifying continuity
 
 Advancing Q1 to Q2 or Q2 to Q3 keeps the driver on track, stationary in the pit garage. The next session retains the physical tyre set and its wear where eligible, the completed aero setup, fuel mode and time multiplier; timing resets for the new stage. Incomplete aero service is not granted by advancing.
@@ -236,3 +245,30 @@ Qualifying completion, expired-session results, knockout classification and race
 Final qualifying uses the archived stage classification for the results screen, garage grid and race placement. Completing Q3 shows the confirmed starting position only after opponent runs are resolved. Live and early-completion qualifying use the same 60 Hz physics step; unfinished outings are labelled provisional. Saved grids are reconciled with their Q1/Q2/Q3 classifications, preserving genuine lap times and eliminations. Regression checks cover all twelve circuits and both improving and worsening Q3 positions.
 
 Grand Prix preparation includes a Weather forecast popup covering the expected race duration. Chronological cards show rainfall, surface-water ranges, approximate minutes/laps and tyre guidance. It projects the saved race plan with the same water model as driving, without advancing time or rerolling conditions. Lap ranges are estimates because driving pace and pit stops affect the timing.
+
+
+### Pace and race strategy
+
+Career Grands Prix are fixed at 32 laps; Harbour Sprint runs 12 laps with dynamically varied weather. Quick Race offers 12 (Sprint), 16, 24, 32 and 40 laps. Sprints award 8–1 points to the first eight and do not require a compound change. Grand Prix points and dry-compound rules remain in force elsewhere. Saved weekends migrate to the fixed distance while preserving qualifying classification and physical tyre wear.
+
+`performance.js` defines the shared power maps, fuel estimates and compound-specific wear curves. Save/Balanced/Push have power multipliers 0.88/1/1.08, speed ceilings 0.94/1/1.02, fuel multipliers 0.90/1/1.12 and base wear multipliers 0.82/1/1.20. Pace ceilings apply after the engine ceiling, before aero and drafting; upgrades cannot erase their differences. Smooth throttle ramps differ by mode, lifting is immediate, and heat comes from delivered power and driving loads. Temperature-off still preserves power, fuel and wear effects.
+
+The AI uses a bounded whole-race strategy search over actual available sets, used condition, mode, fuel, progressive stint pace, pit loss, nearby rejoin traffic and forecast water. It can extend a stint in Save or spend tyres/fuel attacking; it does not receive an extra mode-specific corner-speed bonus. Strategy reviews are staggered and only one car starts a review per simulation step. Quick-race opening estimates are cached; career set-specific plans never share mutable stock.
+
+Run `node scripts/benchmark-tyres.mjs [circuit] [save|balanced|push]` for controlled tyre stints. Run `node scripts/benchmark-race-balance.mjs` for seeded grids at the calendar race distance using limited weekend sets, qualifying wear, temperature simulation and pit service. Both print JSON without touching saved games.
+
+
+## Fair starts and career economy
+
+Every track has a long, straight pit/grid corridor. Grid rows are 60 world units apart, staggered by 24, with 56 between columns; the rear row clears the approach corner. The start line, car poses and painted slots share one layout. Inner circuit topology and flyovers remain intact, with approach bends adjusted and checked for road/kerb clearance.
+
+Position prizes range from £4,650 (P22) to £7,800 (P1), before the existing difficulty bonus. Sponsors pay £600–£3,000 before commercial upgrades. The player-only season cash bonus has been removed. Teams use the same per-car prize and sponsor rules, averaged across their drivers, and spend only earned cash at shared prices. Upgrade base costs are £4,000–£9,000; each installed level adds 85% of base price to the next. Team development shows last race income, sponsor income, spending and remaining cash. Existing saves are not erased; restart a career for progression from equal opening budgets.
+
+The pre-qualifying weather popup uses the same seed and saved timeline as the session. Tyre wetness bands are calculated from fresh grip with a 5% overlap at weather crossovers (Soft 0–5%, Medium 0–12%, Hard 0–20%, Intermediate 14–65%, Wet 60–100%). They are guidance, not a hard traction switch. Soft grip fades from dry conditions; Medium keeps near-dry grip through 5% water and Hard through 12%, then both fade progressively. Grip continues declining smoothly beyond each suggested range. These bands appear in the garage and tyre selector, with a live water marker in the selector; the driving HUD shows weather without crossover bands. Individual tyre-temperature wheels are visual indicators, not buttons.
+
+AI traffic planning searches for open corridors around side-by-side cars when the usual passing lanes are blocked. Choices still use actual compound grip, wear, weather, pace mode and car performance. A stalled attempt drops back in its existing lane before merging for another opportunity; adjacent cars retain physical clearance without being moved aside for a faster compound.
+
+
+Directional pace controls use F to step toward Save and G to step toward Push, stopping at either end. The HUD, pause menu, briefing and Race School share this guidance; mobile lessons retain direct pace-button instructions.
+
+AI passing uses the same compound, surface-water, axle wear and temperature limits as driving. Exit forecasts now use rear-axle grip, physical following clearance accounts for shortened inside-corner distances, and clearing one car keeps the attack active while another is still alongside. Regression battles cover Soft/Medium, Medium/Hard, Intermediate/Wet in damp conditions and Wet/Intermediate in heavy water; no compound receives a scripted overtaking bonus.

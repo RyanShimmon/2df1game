@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {Race,sample} from '../src/core.js';
+import {Race,sample,gridSlot} from '../src/core.js';
 const setup={track:'northline',laps:8,fuel:10,tyre:'M',weather:'dry'};
 test('all 22 Quick Race starting positions place the player in a unique grid slot',()=>{
  for(let position=1;position<=22;position++){
   const r=new Race({...setup,startingPosition:position}),p=r.player;
   assert.equal(r.order().indexOf(p)+1,position);
   assert.equal(new Set(r.cars.map(c=>`${c.s}:${c.offset}`)).size,22);
-  assert.equal(p.s,-(Math.floor((position-1)/2)*38+25));
+  assert.equal(p.s,gridSlot(position-1).s);
   const loc=sample(p.s);
   assert.equal(p.x,loc.x-Math.sin(loc.angle)*p.offset);
   assert.equal(p.y,loc.y+Math.cos(loc.angle)*p.offset);

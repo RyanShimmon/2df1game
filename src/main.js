@@ -1,9 +1,12 @@
+import {choiceTrigger,bindChoicePicker} from "./choice-picker.js";
+import {PACE_MODES,paceMode,stepPaceMode,fuelPerLap,stintLaps} from "./performance.js";
+import {QUICK_DISTANCES,quickRaceFormat,raceRuleText,racePoints} from "./race-rules.js";
 import {SEASON_LENGTH} from "./calendar.js";
 import {sponsorOffers} from "./sponsors.js";
 import {AERO_PACKAGES,aeroPackageSummary,upgradeDetails,level,fuelMultiplier,sponsorPayout,setAeroPackage,developTeams,developmentSnapshot} from "./development.js";
 import {developmentBench,upgradePreview} from "./development-preview.js";
 import {TouchControls,LandscapeGate,stickSteering,mobileLessonText} from "./mobile.js";
-import {WHEELS,THERMAL,temperatureStatus,temperatureColour} from "./tyre-temperature.js";
+import {WHEELS,THERMAL,thermalWear,temperatureStatus,temperatureColour} from "./tyre-temperature.js";
 import {RaceSchool,SCHOOL_INTRO,loadSchool} from "./school.js";
 import {circuitThumbnail} from "./track-picker.js";
 import {engineSoundFrame} from "./sound.js";
@@ -55,7 +58,7 @@ import {
   migrateWeekend,
   startRaceWeather,
 } from "./weekend.js";
-import { WEATHER_OPTIONS, createWeather, raceWeatherDuration, forecast, recommendedTyre, rainAt, weatherTimeline, raceForecast } from "./weather.js";
+import { WEATHER_OPTIONS, createWeather, raceWeatherDuration, forecast, recommendedTyre, rainAt, weatherTimeline, raceForecast, tyreWetnessRange } from "./weather.js";
 import { Renderer } from "./render.js";
 const app = document.querySelector("#app"),
   renderer = new Renderer(document.querySelector("#world"));
@@ -105,6 +108,19 @@ const escapeHTML = (value) =>
         c
       ],
   );
+const pickerOptions={
+  laps:QUICK_DISTANCES.map(laps=>({value:laps,label:`${laps} laps`,detail:laps===12 ? "Sprint" : laps===40 ? "Endurance Grand Prix" : "Grand Prix",description: laps===12 ? "Short race · one compound allowed." : laps===32 ? "Career Grand Prix distance · two dry compounds." : "Plan your stops · two dry compounds in dry conditions."})),
+  "starting-position":Array.from({length:22},(_,i)=>({value:i+1,label:`P${i+1}`,description:i===0 ? "Pole position" : i===21 ? "Back of grid" : ""})),
+  "weather-choice":WEATHER_OPTIONS.map(option=>({value:option.id,label:option.name,description:option.description})),
+  "ai-difficulty":Object.entries(DIFFICULTIES).map(([id,d])=>({value:id,label:d.name,detail:d.prizeBonus ? `+${Math.round(d.prizeBonus*100)}% career race prize` : "",description:{easy:"More forgiving pace and earlier braking.",normal:"Balanced pace and a competitive field.",hard:"Faster pace and later braking.",expert:"Fastest pace; closer to the car’s limits."}[id]})),
+  "mobile-steering":[{value:"stick",label:"Thumbstick",description:"Drag to steer. Release to centre."},{value:"arrows",label:"Left / right arrows",description:"Hold an arrow to steer in that direction."}],
+};
+const selector=(id,label,value,describedBy="")=>choiceTrigger({id,label,value,options:pickerOptions[id],describedBy});
+function refreshSetup(){
+  const top=app.querySelector(".scroll")?.scrollTop || 0;
+  menu();
+  const scroller=app.querySelector(".scroll");if(scroller)scroller.scrollTop=top;
+}
 let draftTeam = 10;
 let selectedWeekendSet = null,
   weekendSaveClock = 0;
@@ -128,13 +144,19 @@ function compounds(selected, prefix) {
     )
     .join("");
 }
+const wetnessBands=Object.fromEntries(Object.keys(TYRES).map(k=>[k,tyreWetnessRange(k,TYRES)]));
+function wetnessBand(compound,water=null,name=true){
+ const band=wetnessBands[compound],percent=water===null?null:Math.round(water*100);
+ return `<div class="wetness-band" style="--tyre:${TYRES[compound].color}" aria-label="${TYRES[compound].name}: suggested ${band.min} to ${band.max}% track wetness${percent===null?"":", currently "+percent+"%"}"><span>${name ? TYRES[compound].name : "Suggested range"} <b>${band.min}–${band.max}% wet</b></span><div class="wetness-scale"><i style="left:${band.min}%;width:${band.max-band.min}%"></i>${percent===null?"":`<em style="left:${Math.min(99,percent)}%"></em>`}</div></div>`;
+}
+function wetnessGuide(water=null){return `<div class="wetness-guide"><div class="tyre-life-heading"><b>TRACK WETNESS RANGE</b><span>${water===null?"Dry 0% → standing water 100%":"Now "+Math.round(water*100)+"% wet"}</span></div>${Object.keys(TYRES).map(k=>wetnessBand(k,water)).join("")}<p class="hint">Suggested grip windows, not hard limits. Wear, temperature and a drying racing line can move the crossover.</p></div>`;}
 function tyreLifeIndicator(selected={compound:setup.tyre,wear:0}) {
   const upgrades=screen==="career" ? career.upgrades : {};
   const remaining=estimatedTyreLife(selected.compound,{wear:selected.wear,upgrades});
-  return `<section class="tyre-life" aria-label="Average tyre life"><div class="tyre-life-heading"><b>AVERAGE TYRE LIFE</b><span>Balanced pace · suitable conditions</span></div><div class="tyre-life-grid">${["S","M","H","I","W"].map(compound=>`<div style="--tyre:${TYRES[compound].color}"><i class="tyre-dot"></i><span>${TYRES[compound].name}</span><b>≈ ${estimatedTyreLife(compound,{upgrades}).toFixed(1).replace(/\.0$/,"")} laps</b></div>`).join("")}</div><p class="tyre-life-remaining">${selected.id ? selected.id+" · " : ""}${TYRES[selected.compound].name} selected <strong>≈ ${remaining.toFixed(1)} laps remaining</strong></p><p class="hint">Estimate for this car. Push, heat and sliding shorten tyre life.</p></section>`;
+  return `<section class="tyre-life" aria-label="Estimated stint life"><div class="tyre-life-heading"><b>ESTIMATED STINT LIFE</b><span>Balanced pace · suitable conditions</span></div><div class="tyre-life-grid">${["S","M","H","I","W"].map(compound=>`<div style="--tyre:${TYRES[compound].color}"><i class="tyre-dot"></i><span>${TYRES[compound].name}</span><b>≈ ${estimatedTyreLife(compound,{upgrades}).toFixed(1).replace(/\.0$/,"")} laps</b></div>`).join("")}</div><p class="tyre-life-remaining">${selected.id ? selected.id+" · " : ""}${TYRES[selected.compound].name} selected <strong>≈ ${remaining.toFixed(1)} laps remaining</strong></p><p class="hint">Competitive stint estimate for this car. Save extends it; Push, heat and sliding shorten it.</p>${wetnessGuide(career.weekend && screen==="career" ? career.weekend.weather.wetness : null)}</section>`;
 }
 function header() {
-  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.5.3</div></header>`;
+  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.6.0</div></header>`;
 }
 function tabs() {
   return `<div class="tabs"><button class="tab ${screen === "quick" ? "active" : ""}" data-screen="quick">Quick race</button><button class="tab ${screen === "career" ? "active" : ""}" data-screen="career">Career garage</button><button class="tab" data-action="school">Race School</button><button class="tab" data-action="help">How to drive ↗</button><button class="tab" data-action="settings">Settings</button></div>`;
@@ -152,14 +174,16 @@ function setupCard() {
     if (setup.roundKey !== key) {
       setup.fuel = +(scheduled.laps * 1.15).toFixed(1);
       setup.roundKey = key;
+      setup.weatherSeed=Math.floor(Math.random()*4294967296);
     }
     setup.track=scheduled.track;
     setup.laps = scheduled.laps;
+    setup.raceFormat=scheduled.raceFormat || "grandPrix";
     setup.weather = scheduled.weather;
     if (setup.fuel < setup.laps * 0.85 || setup.fuel > setup.laps * 1.35)
       setup.fuel = +(setup.laps * 1.15).toFixed(1);
   }
-  return `<section class="race-card"><div class="track-header"><h3>${TRACK.name}</h3><span class="badge">${scheduled ? scheduled.name : "DYNAMIC WEATHER"}</span></div><div class="specs"><span>GRID<b>22 cars</b></span><span>CHARACTER<b>${TRACK.character}</b></span><span>LAP LENGTH<b>${(TRACK.length/1000).toFixed(2)} km</b></span></div>${!scheduled ? `<div class="field weather-choice"><span class="field-label">Circuit</span><button class="circuit-picker-trigger" id="track-choice" aria-label="Choose circuit: ${TRACK.name}" aria-haspopup="dialog"><span><b>${TRACK.name}</b><small>Choose from 12 circuits</small></span><span aria-hidden="true">▦</span></button></div>` : ""}<div class="form-row"><div class="field">${scheduled ? `<span class="field-label">Race distance</span><div class="fixed-race-distance"><strong>${scheduled.laps} laps</strong><span>Weekend distance · ${DIFFICULTIES[settings.difficulty].name} AI</span></div>` : `<label for="laps">Race distance</label><select id="laps"><option value="8" ${setup.laps === 8 ? "selected" : ""}>8 laps · short race</option><option value="16" ${setup.laps === 16 ? "selected" : ""}>16 laps · strategy race</option><option value="24" ${setup.laps === 24 ? "selected" : ""}>24 laps · long race</option></select><label for="starting-position" class="starting-position-label">Starting position</label><select id="starting-position">${Array.from({length:22},(_,i)=>`<option value="${i+1}" ${(setup.startingPosition ?? 22)===i+1 ? "selected" : ""}>P${i+1}${i===0 ? " · pole position" : i===21 ? " · back of grid" : ""}</option>`).join("")}</select>`}</div><div class="field"><label>Starting compound</label><div class="compound-row">${compounds(setup.tyre, "start-tyre")}</div></div></div>${!scheduled ? `<div class="field weather-choice"><label for="weather-choice">Weather</label><select id="weather-choice" aria-describedby="weather-description">${WEATHER_OPTIONS.map(option=>`<option value="${option.id}" ${setup.weather===option.id ? "selected" : ""}>${option.name}</option>`).join("")}</select><p class="hint" id="weather-description">${quickWeatherDescription()}</p></div>` : ""}${scheduled ? `<div class="fuel-row"><span>Qualifying fuel</span><b>${getQualifyingFuel(career.upgrades).toFixed(2)} laps · fixed</b></div><p class="hint">Fuel is set for one out lap, one push lap and one in lap. Race fuel is chosen after qualifying.</p>` : `<div class="fuel-row"><span>Starting fuel <b id="fuel-value">${setup.fuel.toFixed(1)} laps</b></span><span id="fuel-risk"></span></div><input id="fuel" type="range" min="${setup.laps * 0.85}" max="${setup.laps * 1.35}" step="0.1" value="${setup.fuel}" aria-label="Starting fuel in laps"><p class="hint">Less fuel means less weight. Balanced driving uses ~1.10 fuel laps per lap; conserve to stretch it. No refuelling.</p>`}${tyreLifeIndicator()}<button class="primary" data-action="start"><span>${screen === "career" ? `START QUALIFYING · ROUND ${career.round}` : "TAKE TO THE GRID"}</span><span>→</span></button><div class="setup-summary">${TYRES[setup.tyre].name} start · use at least two compounds to finish legally.<br>Intermediates for damp tracks; wets for standing water.</div></section>`;
+  return `<section class="race-card"><div class="track-header"><h3>${TRACK.name}</h3><span class="badge">${scheduled ? scheduled.name : "DYNAMIC WEATHER"}</span></div><div class="specs"><span>GRID<b>22 cars</b></span><span>CHARACTER<b>${TRACK.character}</b></span><span>LAP LENGTH<b>${(TRACK.length/1000).toFixed(2)} km</b></span></div>${!scheduled ? `<div class="field weather-choice"><span class="field-label">Circuit</span><button class="circuit-picker-trigger" id="track-choice" aria-label="Choose circuit: ${TRACK.name}" aria-haspopup="dialog"><span><b>${TRACK.name}</b><small>Choose from 12 circuits</small></span><span aria-hidden="true">▦</span></button></div>` : ""}<div class="form-row"><div class="field">${scheduled ? `<span class="field-label">Race distance</span><div class="fixed-race-distance"><strong>${scheduled.laps} laps</strong><span>Weekend distance · ${DIFFICULTIES[settings.difficulty].name} AI</span></div>` : `<label for="laps">Race distance</label>${selector("laps","Race distance",setup.laps)}<label for="starting-position" class="starting-position-label">Starting position</label>${selector("starting-position","Starting position",setup.startingPosition ?? 22)}`}</div><div class="field"><label>Starting compound</label><div class="compound-row">${compounds(setup.tyre, "start-tyre")}</div></div></div>${!scheduled ? `<div class="field weather-choice"><label for="weather-choice">Weather</label>${selector("weather-choice","Weather",setup.weather,"weather-description")}<p class="hint" id="weather-description">${quickWeatherDescription()}</p></div>` : ""}${scheduled ? `<div class="fuel-row"><span>Qualifying fuel</span><b>${getQualifyingFuel(career.upgrades).toFixed(2)} laps · fixed</b></div><p class="hint">Fuel is set for one out lap, one push lap and one in lap. Race fuel is chosen after qualifying.</p>` : `<div class="fuel-row"><span>Starting fuel <b id="fuel-value">${setup.fuel.toFixed(1)} laps</b></span><span id="fuel-risk"></span></div><input id="fuel" type="range" min="${setup.laps * 0.85}" max="${setup.laps * 1.35}" step="0.1" value="${setup.fuel}" aria-label="Starting fuel in laps"><p class="hint">Less fuel means less weight. Balanced driving uses ~1.10 fuel laps per lap; conserve to stretch it. No refuelling.</p>`}${tyreLifeIndicator()}${scheduled ? '<button class="ghost race-forecast-trigger" data-action="qualifying-forecast" aria-haspopup="dialog">Qualifying weather forecast ↗</button>' : ""}<button class="primary" data-action="start"><span>${screen === "career" ? `START QUALIFYING · ROUND ${career.round}` : "TAKE TO THE GRID"}</span><span>→</span></button><div class="setup-summary">${TYRES[setup.tyre].name} start · ${raceRuleText(scheduled?.raceFormat || quickRaceFormat(setup.laps))}.<br>Intermediates for damp tracks; wets for standing water.</div></section>`;
 }
 function showTrackPicker() {
   if(el("track-picker-modal")) return;
@@ -190,7 +214,7 @@ function showTrackPicker() {
 }
 function footer() {
   if(mobileInput)return `<footer class="menu-footer"><span>GAS / BRAKE · ${settings.mobileSteering==="arrows" ? "Arrow steering" : "Thumbstick steering"} · Tap Pit or Choose tyre set</span><span class="muted">Race in landscape. Change controls in Settings.</span></footer>`;
-  return `<footer class="menu-footer"><div class="keycaps"><span><kbd>WASD</kbd> / <kbd>↑↓←→</kbd> Drive</span><span><kbd>B</kbd> Box</span><span><kbd>P</kbd> Limiter</span><span><kbd>T</kbd> / <kbd>1–5</kbd> Next tyre</span><span><kbd>F</kbd> Fuel mode</span><span><kbd>R</kbd> Reverse in pit</span><span><kbd>Esc</kbd> Pause</span></div><span class="muted">V10 power. Every decision counts.</span></footer>`;
+  return `<footer class="menu-footer"><div class="keycaps"><span><kbd>WASD</kbd> / <kbd>↑↓←→</kbd> Drive</span><span><kbd>B</kbd> Box</span><span><kbd>P</kbd> Limiter</span><span><kbd>T</kbd> / <kbd>1–5</kbd> Next tyre</span><span><kbd>F</kbd> Pace ←</span><span><kbd>G</kbd> Pace →</span><span><kbd>R</kbd> Reverse in pit</span><span><kbd>Esc</kbd> Pause</span></div><span class="muted">V10 power. Every decision counts.</span></footer>`;
 }
 function menu() {
   el("garage-section-modal")?.dispatchEvent(new Event("garage-dispose"));
@@ -218,12 +242,12 @@ function showSettings() {
   const previousPaused=paused;
   if(race) {paused=true;resetDrivingInput();}
   const modal=document.createElement("div");modal.className="modal-backdrop";modal.id="settings-modal";
-  modal.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div class="eyebrow">RACE SETTINGS</div><h2 id="settings-title">Settings</h2><div class="field"><label for="ai-difficulty">AI difficulty</label><select id="ai-difficulty">${Object.entries(DIFFICULTIES).map(([id,d])=>`<option value="${id}" ${settings.difficulty===id ? "selected" : ""}>${d.name}${d.prizeBonus ? ` · +${Math.round(d.prizeBonus*100)}% career race prize` : ""}</option>`).join("")}</select></div><p class="hint" style="margin:10px 0 20px">Applies to your next quick race or career weekend. An existing weekend keeps its difficulty. Bonuses apply to legal finishes; commercial development increases earned sponsor payouts.</p><label class="setting-choice"><input type="checkbox" id="auto-pit-limiter" ${settings.autoPitLimiter ? "checked" : ""}> Automatic pit stops</label><p class="hint">Enabled by default: holds 80 km/h, brakes into your box, completes service and drives to pit exit without throttle. Disable this for manual pedals and P limiter control.</p><label class="setting-choice"><input type="checkbox" id="tyre-temperature-setting" ${settings.tyreTemperature ? "checked" : ""}> Tyre temperature simulation</label><p class="hint">Turn off to hold all tyres at ideal temperature and hide the indicator. Wear and weather grip still apply. Applies to all drivers immediately.</p><div class="mobile-settings"><div class="field"><label for="mobile-steering">Mobile steering</label><select id="mobile-steering"><option value="stick" ${settings.mobileSteering==="stick" ? "selected" : ""}>Thumbstick</option><option value="arrows" ${settings.mobileSteering==="arrows" ? "selected" : ""}>Left / right arrows</option></select></div><div class="field sensitivity-field"><label for="steering-sensitivity">Thumbstick sensitivity</label><input id="steering-sensitivity" type="range" min=".6" max="1.5" step=".1" value="${settings.steeringSensitivity}"></div><button class="ghost home-screen-help" id="home-screen-help">Play from Home Screen</button></div><button class="primary" id="close-settings">BACK TO GAME</button></section>`;
+  modal.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div class="eyebrow">RACE SETTINGS</div><h2 id="settings-title">Settings</h2><div class="field"><label for="ai-difficulty">AI difficulty</label>${selector("ai-difficulty","AI difficulty",settings.difficulty)}</div><p class="hint" style="margin:10px 0 20px">Applies to your next quick race or career weekend. An existing weekend keeps its difficulty. Bonuses apply to legal finishes; commercial development increases earned sponsor payouts.</p><label class="setting-choice"><input type="checkbox" id="auto-pit-limiter" ${settings.autoPitLimiter ? "checked" : ""}> Automatic pit stops</label><p class="hint">Enabled by default: holds 80 km/h, brakes into your box, completes service and drives to pit exit without throttle. Disable this for manual pedals and P limiter control.</p><label class="setting-choice"><input type="checkbox" id="tyre-temperature-setting" ${settings.tyreTemperature ? "checked" : ""}> Tyre temperature simulation</label><p class="hint">Turn off to hold all tyres at ideal temperature and hide the indicator. Wear and weather grip still apply. Applies to all drivers immediately.</p><div class="mobile-settings"><div class="field"><label for="mobile-steering">Mobile steering</label>${selector("mobile-steering","Mobile steering",settings.mobileSteering)}</div><div class="field sensitivity-field"><label for="steering-sensitivity">Thumbstick sensitivity</label><input id="steering-sensitivity" type="range" min=".6" max="1.5" step=".1" value="${settings.steeringSensitivity}"></div><button class="ghost home-screen-help" id="home-screen-help">Play from Home Screen</button></div><button class="primary" id="close-settings">BACK TO GAME</button></section>`;
   app.appendChild(modal);
-  el("ai-difficulty").onchange=e=>{
-    settings.difficulty=normalizeDifficulty(e.target.value);
+  bindChoicePicker(el("ai-difficulty"),{title:"AI difficulty",eyebrow:"RACE SETTINGS",options:pickerOptions["ai-difficulty"],onChange:value=>{
+    settings.difficulty=normalizeDifficulty(value);
     try {localStorage.setItem("v10.settings",JSON.stringify(settings));} catch {}
-  };
+  }});
   if(school)el("auto-pit-limiter").disabled=true;
   el("auto-pit-limiter").onchange=e=>{
     settings.autoPitLimiter=e.target.checked;
@@ -237,7 +261,7 @@ function showSettings() {
     if(race){race.setTyreTemperature(settings.tyreTemperature);updateHUD();}
   };
   el("steering-sensitivity").disabled=settings.mobileSteering==="arrows";
-  el("mobile-steering").onchange=e=>{settings.mobileSteering=e.target.value;el("steering-sensitivity").disabled=settings.mobileSteering==="arrows";saveMobileSettings();if(race)mountMobileControls();};
+  bindChoicePicker(el("mobile-steering"),{title:"Mobile steering",eyebrow:"TOUCH CONTROLS",options:pickerOptions["mobile-steering"],onChange:value=>{settings.mobileSteering=value;el("steering-sensitivity").disabled=settings.mobileSteering==="arrows";saveMobileSettings();if(race)mountMobileControls();}});
   el("steering-sensitivity").oninput=e=>{settings.steeringSensitivity=+e.target.value;saveMobileSettings();resetDrivingInput();};
   el("home-screen-help").onclick=showFullscreenHelp;
   el("close-settings").onclick=()=>{modal.remove();paused=previousPaused;};
@@ -340,7 +364,7 @@ function refreshGarageSection(section,focusSelector){
 }
 function developmentCard(){
  const bench=developmentBench(career.upgrades,career.aeroSpec),locked=!!career.weekend;
- return `<div class="development-panel"><div class="panel-heading"><span class="eyebrow">${locked ? "LOCKED FOR WEEKEND" : "BUILD YOUR ADVANTAGE"}</span></div><div class="development-stats"><div><span>0–250 KM/H</span><b>${bench.accelerate.toFixed(2)}s</b></div><div><span>MEDIUM LIFE</span><b>≈ ${bench.medium.toFixed(1)} laps</b></div><div><span>FUEL · 24 LAPS</span><b>≈ ${bench.fuel.toFixed(1)}</b></div></div>${["Powertrain","Chassis","Race operations","Team business"].map(group=>`<div class="development-group"><h4>${group}</h4>${Object.entries(UPGRADES).filter(([,u])=>u.group===group).map(([key,u])=>{
+ return `<div class="development-panel"><div class="panel-heading"><span class="eyebrow">${locked ? "LOCKED FOR WEEKEND" : "BUILD YOUR ADVANTAGE"}</span></div><div class="development-stats"><div><span>0–250 KM/H</span><b>${bench.accelerate.toFixed(2)}s</b></div><div><span>MEDIUM LIFE</span><b>≈ ${bench.medium.toFixed(1)} laps</b></div><div><span>FUEL · 32 LAPS</span><b>≈ ${bench.fuel.toFixed(1)}</b></div></div>${["Powertrain","Chassis","Race operations","Team business"].map(group=>`<div class="development-group"><h4>${group}</h4>${Object.entries(UPGRADES).filter(([,u])=>u.group===group).map(([key,u])=>{
   const n=level(career.upgrades,key),max=n>=u.max;
   return `<div class="upgrade"><div class="upgrade-info"><h3>${u.name}</h3><p>${u.desc}</p><div class="levels" aria-label="Level ${n} of ${u.max}">${Array.from({length:u.max},(_,i)=>`<i class="${i<n?"on":""}"></i>`).join("")}<span>${n} / ${u.max}</span></div></div><button class="ghost upgrade-review" data-upgrade="${key}" ${locked || max ? "disabled" : ""} aria-label="${max ? u.name+" fully developed" : "Review "+u.name+", "+money(upgradeCost(career,key))}">${max ? "MAX" : `<span>REVIEW</span><b>${money(upgradeCost(career,key))}</b>`}</button></div>`;
  }).join("")}</div>`).join("")}<p class="hint">Review an upgrade to see its measured effects before buying. Development locks when qualifying starts. Aero changes remain available in the pit box for 10 seconds of extra service.</p></div>`;
@@ -353,10 +377,10 @@ function aeroCard(){
 }
 function rivalDevelopmentCard(){
  const snapshot=career.weekend?.setup.teamDevelopment || developmentSnapshot(career,weekendSchedule(career.round).track);
- return `<div class="rivals-panel"><p class="hint">Teams fund parts from race and sponsor income. They pay the same prices and use the same upgrade effects. Budgets are per car, averaged across each team's drivers.</p>${career.teams.map(t=>{
+ return `<div class="rivals-panel"><p class="hint">Teams fund parts from race and sponsor income. They pay the same prices and use the same upgrade effects. Budgets are per car, averaged across each team's drivers. No free parts or hidden catch-up money. Race results fund development; sponsors add a smaller bonus.</p>${career.teams.map(t=>{
   const yours=t.teamIndex===career.profile.teamIndex,upgrades=yours?career.upgrades:t.upgrades,budget=yours?career.cash:t.budget,count=Object.values(upgrades).reduce((a,b)=>a+b,0),pack=snapshot.find(x=>x.teamIndex===t.teamIndex)?.aeroSpec || "balanced";
   const bought=t.history[0]?.purchases || [];
-  return `<details class="team-development-row"><summary><b style="--team:${TEAMS[t.teamIndex].color}">${TEAMS[t.teamIndex].name}${yours ? " · YOU" : ""}</b><span>${count} ${count===1?"level":"levels"}</span><small>${money(budget)}</small></summary><div class="team-parts">${Object.entries(UPGRADES).filter(([key])=>level(upgrades,key)>0).map(([key,u])=>`<button type="button" class="team-upgrade-info" data-upgrade-info="${key}" data-upgrade-level="${level(upgrades,key)}" aria-expanded="false">${u.name} ${level(upgrades,key)}<span aria-hidden="true">ⓘ</span></button>`).join("") || "Factory specification"}</div><p class="hint">${AERO_PACKAGES[pack]?.name || "Balanced"} package${!yours && bought.length ? " · Latest: "+bought.map(b=>UPGRADES[b.key].name+" "+b.level+" ("+money(b.cost)+")").join(", ") : ""}</p></details>`;
+  return `<details class="team-development-row"><summary><b style="--team:${TEAMS[t.teamIndex].color}">${TEAMS[t.teamIndex].name}${yours ? " · YOU" : ""}</b><span>${count} ${count===1?"level":"levels"}</span><small>Available ${money(budget)}</small></summary>${!yours ? `<div class="team-finances"><span>Last race <b>${money(t.lastIncome?.prize || 0)}</b></span><span>Sponsor <b>${money(t.lastIncome?.sponsor || 0)}</b></span><span>Parts bought <b>${money(t.history[0]?.spent || 0)}</b></span><span>Cash remaining <b>${money(budget)}</b></span></div><p class="hint">${t.lastIncome ? escapeHTML(t.lastIncome.contract)+" · earnings averaged per car" : "Opening budget: £7,000 per car"}</p>` : ""}<div class="team-parts">${Object.entries(UPGRADES).filter(([key])=>level(upgrades,key)>0).map(([key,u])=>`<button type="button" class="team-upgrade-info" data-upgrade-info="${key}" data-upgrade-level="${level(upgrades,key)}" aria-expanded="false">${u.name} ${level(upgrades,key)}<span aria-hidden="true">ⓘ</span></button>`).join("") || "Factory specification"}</div><p class="hint">${AERO_PACKAGES[pack]?.name || "Balanced"} package${!yours && bought.length ? " · Latest: "+bought.map(b=>UPGRADES[b.key].name+" "+b.level+" ("+money(b.cost)+")").join(", ") : ""}</p></details>`;
  }).join("")}</div>`;
 }
 function showUpgradePreview(key){
@@ -364,7 +388,7 @@ function showUpgradePreview(key){
  const preview=upgradePreview(career,key,{tyreTemperatureEnabled:settings.tyreTemperature}),cost=upgradeCost(career,key),top=app.querySelector(".menu-shell").scrollTop;
  const explanation={
   tyres:"Life estimates assume Balanced pace and suitable conditions. Heat, sliding and driving style change the actual stint.",
-  efficiency:"Fuel estimate assumes 24 Balanced laps. Push mode and sliding use more fuel.",
+  efficiency:"Fuel estimate assumes 32 Balanced laps. Push mode uses more fuel.",
   crew:"Tyre changes vary within the shown range. Penalties and a busy teammate add time. Preparation helps when tyre temperatures are enabled.",
   engineer:"Advice uses your current fuel, tyre stock, conditions and traffic. Weather windows and rejoin positions are estimates.",
   commercial:"Every successful sponsor payout includes the uplift. Contract conditions still apply.",
@@ -434,7 +458,7 @@ function weekendCard() {
       return `<div class="history-row"><b>P${i + 1}</b><span>${escapeHTML(modelName)}</span><span>${classified ? classified.name+" · " : ""}${t ? time(t.time) : "NO TIME"}</span></div>`;
     })
     .join("");
-  return `<section class="race-card weekend-card"><div class="track-header"><h3>${phase === "R" ? "Race preparation" : phase + " qualifying"}</h3><span class="badge">${w.weather.rain > 0.6 ? "HEAVY RAIN" : w.weather.rain > 0.05 ? "RAIN" : w.weather.wetness > 0.1 ? "DRYING" : "DRY"} / ${Math.round(w.weather.wetness * 100)}% WET</span></div><p class="hint">${phase === "R" ? `Starting P${w.grid.indexOf(21) + 1} · ${w.setup.laps} laps · ${w.eventName || weekendSchedule(w.round).name} · ${DIFFICULTIES[normalizeDifficulty(w.setup.difficulty)].name} AI · choose any remaining set.` : eliminated ? "You have been knocked out. The remaining sessions will set the front of the grid." : `${w.active.length} cars · ${stage.keep} advance · ${Math.ceil((stage.duration - w.elapsed) / 60)} min remaining. Choose when to leave the garage. Each run has an out lap, one timed lap and an in lap.`}</p>${phase==="R"&&w.qualifyingOutcome?.eliminated ? `<p class="hint">${w.qualifyingOutcome.stage} knockout · final P${w.qualifyingOutcome.position}. The top ${w.qualifyingOutcome.keep} advanced.</p>` : ""}<div class="fuel-row"><span>${phase === "R" ? "Race starting set" : "Selected tyre set"}</span><b>${sets.find(t=>t.id===selectedWeekendSet) ? tyreSetLabel(sets.find(t=>t.id===selectedWeekendSet)) : "No available sets"}</b></div><button class="ghost browse-tyres" data-action="browse-weekend-tyres" aria-haspopup="dialog" ${!sets.length ? "disabled" : ""}>Choose tyre set · fresh & used</button>${phase === "R" ? `<div class="fuel-row"><span>Race fuel</span><b id="weekend-fuel-label">${w.setup.fuel.toFixed(1)} laps</b></div><input id="weekend-fuel" aria-label="Race fuel in laps" type="range" min="${w.setup.laps * 0.85}" max="${w.setup.laps * 1.35}" step=".1" value="${w.setup.fuel}">` : ""}${tyreLifeIndicator(sets.find(t=>t.id===selectedWeekendSet) || {compound:setup.tyre,wear:0})}<p class="hint">${forecast(w.weather)} · surface water carries over from qualifying.</p>${phase === "R" ? '<button class="ghost race-forecast-trigger" data-action="race-forecast" aria-haspopup="dialog">Weather forecast <span aria-hidden="true">↗</span></button><button class="primary" data-action="weekend-race">START GRAND PRIX →</button>' : eliminated ? '<button class="primary" data-action="finish-qualifying">COMPLETE QUALIFYING →</button>' : `<button class="primary" data-action="qualifying-run" ${!sets.length || w.elapsed >= stage.duration ? "disabled" : ""}>${w.runCount ? "ANOTHER RUN" : "DRIVE " + phase} →</button><button class="ghost end-session" data-action="end-qualifying" ${!qualifyingReady(w) ? "disabled" : ""}>${pendingFirstRuns(w).length ? `Waiting for ${pendingFirstRuns(w).length} opponents to complete a first run` : !qualifyingReady(w) ? "Complete your first timed lap before ending the session" : `END ${phase} & ADVANCE`}</button>`}${phase!=="R"&&!eliminated ? `<p class="hint">Ending early completes the AI runs in the current weather and track conditions. Positions can still change.</p>` : ""}<details class="weekend-results"><summary>${phase === "R" ? "Starting grid" : "Session timing"}</summary>${rows}</details><p class="save-note">Weekend allocation and qualifying progress save automatically.</p></section>`;
+  return `<section class="race-card weekend-card"><div class="track-header"><h3>${phase === "R" ? "Race preparation" : phase + " qualifying"}</h3><span class="badge">${w.weather.rain > 0.6 ? "HEAVY RAIN" : w.weather.rain > 0.05 ? "RAIN" : w.weather.wetness > 0.1 ? "DRYING" : "DRY"} / ${Math.round(w.weather.wetness * 100)}% WET</span></div><p class="hint">${phase === "R" ? `Starting P${w.grid.indexOf(21) + 1} · ${w.setup.laps} laps · ${w.eventName || weekendSchedule(w.round).name} · ${DIFFICULTIES[normalizeDifficulty(w.setup.difficulty)].name} AI · choose any remaining set.` : eliminated ? "You have been knocked out. The remaining sessions will set the front of the grid." : `${w.active.length} cars · ${stage.keep} advance · ${Math.ceil((stage.duration - w.elapsed) / 60)} min remaining. Choose when to leave the garage. Each run has an out lap, one timed lap and an in lap.`}</p>${phase==="R" ? `<p class="hint">${raceRuleText(w.setup.raceFormat)}</p>` : ""}${phase==="R"&&w.qualifyingOutcome?.eliminated ? `<p class="hint">${w.qualifyingOutcome.stage} knockout · final P${w.qualifyingOutcome.position}. The top ${w.qualifyingOutcome.keep} advanced.</p>` : ""}<div class="fuel-row"><span>${phase === "R" ? "Race starting set" : "Selected tyre set"}</span><b>${sets.find(t=>t.id===selectedWeekendSet) ? tyreSetLabel(sets.find(t=>t.id===selectedWeekendSet)) : "No available sets"}</b></div><button class="ghost browse-tyres" data-action="browse-weekend-tyres" aria-haspopup="dialog" ${!sets.length ? "disabled" : ""}>Choose tyre set · fresh & used</button>${phase === "R" ? `<div class="fuel-row"><span>Race fuel</span><b id="weekend-fuel-label">${w.setup.fuel.toFixed(1)} laps</b></div><input id="weekend-fuel" aria-label="Race fuel in laps" type="range" min="${w.setup.laps * 0.85}" max="${w.setup.laps * 1.35}" step=".1" value="${w.setup.fuel}">` : ""}${tyreLifeIndicator(sets.find(t=>t.id===selectedWeekendSet) || {compound:setup.tyre,wear:0})}<p class="hint">${forecast(w.weather)} · surface water carries over from qualifying.</p>${phase !== "R" ? '<button class="ghost race-forecast-trigger" data-action="race-forecast" aria-haspopup="dialog">Qualifying weather forecast ↗</button>' : ""}${phase === "R" ? '<button class="ghost race-forecast-trigger" data-action="race-forecast" aria-haspopup="dialog">Weather forecast <span aria-hidden="true">↗</span></button><button class="primary" data-action="weekend-race">START RACE →</button>' : eliminated ? '<button class="primary" data-action="finish-qualifying">COMPLETE QUALIFYING →</button>' : `<button class="primary" data-action="qualifying-run" ${!sets.length || w.elapsed >= stage.duration ? "disabled" : ""}>${w.runCount ? "ANOTHER RUN" : "DRIVE " + phase} →</button><button class="ghost end-session" data-action="end-qualifying" ${!qualifyingReady(w) ? "disabled" : ""}>${pendingFirstRuns(w).length ? `Waiting for ${pendingFirstRuns(w).length} opponents to complete a first run` : !qualifyingReady(w) ? "Complete your first timed lap before ending the session" : `END ${phase} & ADVANCE`}</button>`}${phase!=="R"&&!eliminated ? `<p class="hint">Ending early completes the AI runs in the current weather and track conditions. Positions can still change.</p>` : ""}<details class="weekend-results"><summary>${phase === "R" ? "Starting grid" : "Session timing"}</summary>${rows}</details><p class="save-note">Weekend allocation and qualifying progress save automatically.</p></section>`;
 }
 function bindWeekend() {
   const w = career.weekend;
@@ -574,25 +598,22 @@ function bindMenu() {
     el("driver-name").oninput = (e) => e.target.setCustomValidity("");
     return;
   }
+  app.querySelector("[data-action=qualifying-forecast]")?.addEventListener("click",showRaceForecast);
   if (screen === "career" && career.weekend) {
     bindWeekend();
     return;
   }
   if(el("track-choice")) el("track-choice").onclick=showTrackPicker;
-  if (el("weather-choice"))
-    el("weather-choice").onchange = (e) => {
-      setup.weather = e.target.value;
-      el("weather-description").textContent=quickWeatherDescription();
-      menu();
-    };
-  if(el("laps")) el("laps").onchange = (e) => {
-    setup.laps = +e.target.value;
-    setup.fuel = +(setup.laps * 1.15).toFixed(1);
-    menu();
-  };
-  if(el("starting-position")) el("starting-position").onchange = (e) => {
-    setup.startingPosition = +e.target.value;
-  };
+  bindChoicePicker(el("weather-choice"),{title:"Choose your weather",options:pickerOptions["weather-choice"],onChange:value=>{
+    setup.weather=value;refreshSetup();
+  }});
+  bindChoicePicker(el("laps"),{title:"Race distance",options:pickerOptions.laps,onChange:value=>{
+    setup.laps=+value;setup.raceFormat=quickRaceFormat(setup.laps);
+    setup.fuel=+(setup.laps*1.15).toFixed(1);refreshSetup();
+  }});
+  bindChoicePicker(el("starting-position"),{title:"Starting position",options:pickerOptions["starting-position"],layout:"positions",onChange:value=>{
+    setup.startingPosition=+value;
+  }});
   if(el("fuel")) el("fuel").oninput = (e) => {
     setup.fuel = +e.target.value;
     fuelLabel();
@@ -610,6 +631,7 @@ function fuelLabel() {
   el("fuel-risk").style.color = safe ? "#9eada8" : "#ffd17e";
 }
 function startRace(fromWeekend = false) {
+  if(screen!=="career")setup.raceFormat=quickRaceFormat(setup.laps);
   if (screen === "career" && !fromWeekend) {
     ensureWeekend(career, {...setup,difficulty:settings.difficulty,tyreTemperatureEnabled:settings.tyreTemperature});
     selectedWeekendSet = null;
@@ -642,15 +664,14 @@ function raceUI() {
   ensureAudio();
   race.autoPitLimiter=school ? true : settings.autoPitLimiter;
   if(race.autoPitLimiter) race.pitLimiter=!!race.player.pit;
-  app.innerHTML = `<div class="race-top"><div class="brand">V10</div><div class="race-chips"><div class="race-chip"><span>POSITION</span><b id="position">22 / 22</b></div><div class="race-chip"><span>${race.qualifying ? "SESSION" : "LAP"}</span><b id="lap">1 / ${race.laps}</b></div><div class="race-chip"><span>${race.qualifying ? "TIME LEFT" : "RACE TIME"}</span><b id="clock">0:00.00</b></div></div><div class="race-actions"><button class="ghost" data-action="sound" aria-label="Toggle engine sound">${muted ? "Sound off" : "Sound on"}</button><button class="ghost" data-action="view">Map</button><button class="ghost" data-action="settings">Settings</button><button class="ghost" data-action="pause">Ⅱ</button></div></div><section class="tower ${race.qualifying ? "qualifying-tower" : ""}"><div class="tower-head"><span>${race.qualifying ? "QUALIFYING" : "LIVE TIMING"}</span><span>${race.qualifying ? "STATUS / BEST" : "INTERVAL"}</span></div><div id="qualifying-cutoff"></div><div id="timing"></div></section><div class="weather-hud" id="weather-hud"><b id="weather-now"></b><span id="weather-forecast"></span><span id="race-limits"></span></div><div class="engineer" id="engineer"><span>RACE ENGINEER</span><div id="message"></div></div><div class="race-bottom"><div class="dashboard"><div class="speed"><strong id="speed">0</strong><span>KM/H</span></div><div class="telemetry"><div class="telemetry-header"><span id="tyre-name">MEDIUM</span><b id="wear">100%</b></div><div class="bar"><i id="wear-bar"></i></div><p id="tyre-state">Ready to race</p><div class="drive-modes" title="F cycles fuel mode"><button class="tab" data-drive="save">Save</button><button class="tab active" data-drive="balanced">Balanced</button><button class="tab" data-drive="push">Push</button></div></div><div class="telemetry fuel-telemetry"><div class="telemetry-header"><span>FUEL</span><b id="fuel-left"></b></div><div class="bar"><i id="fuel-bar"></i></div><p id="fuel-status">On target</p><p id="last-lap" style="margin-top:12px">Last lap —</p></div></div><section class="pit-panel"><div class="eyebrow" id="pit-title">NEXT PIT STOP · T CYCLES</div><div class="compound-row">${race.qualifying ? `<button class="compound active current-tyre" data-pit-tyre="current" aria-pressed="true" style="--tyre:${TYRES[race.player.tyre].color}"><i class="tyre-dot"></i>Current</button>` : ""}${compounds(race.nextTyre, "pit-tyre")}</div><button class="primary" data-action="pit"><span id="pit-button">REQUEST PIT · B</span><span>↗</span></button><button class="ghost limiter" data-action="limiter" aria-pressed="false">LIMITER OFF · P</button><p id="pit-hint">${race.autoPitLimiter ? "Press B, then steer into the separate pit road. Speed, stopping, service and exit are automatic." : "Stop inside the highlighted box using S / ↓. R reverses. Service holds the car. P toggles the limiter."}</p><p id="race-set-note" class="hint"></p></section></div><div class="weather-timeline" role="img" aria-label="Scrolling six-minute weather forecast"><div class="forecast-legend"><b>WEATHER FORECAST</b><span><i class="rain-key"></i> Rain <i class="water-key"></i> Surface water</span></div><svg id="weather-timebar" viewBox="0 0 720 62" preserveAspectRatio="none"></svg></div><div class="countdown" id="countdown"><div class="lights">${"<i></i>".repeat(5)}</div><p>LIGHTS OUT. MAKE IT COUNT.</p></div><div class="touch-controls"><div><button data-touch="left" aria-label="Steer left">←</button><button data-touch="right" aria-label="Steer right">→</button></div><div><button class="pedal" data-touch="reverse">REV</button><button class="pedal" data-touch="brake">BRAKE</button><button class="pedal" data-touch="throttle">GAS</button></div></div>`;
+  app.innerHTML = `<div class="race-top"><div class="brand">V10</div><div class="race-chips"><div class="race-chip"><span>POSITION</span><b id="position">22 / 22</b></div><div class="race-chip"><span>${race.qualifying ? "SESSION" : "LAP"}</span><b id="lap">1 / ${race.laps}</b></div><div class="race-chip"><span>${race.qualifying ? "TIME LEFT" : "RACE TIME"}</span><b id="clock">0:00.00</b></div></div><div class="race-actions"><button class="ghost" data-action="sound" aria-label="Toggle engine sound">${muted ? "Sound off" : "Sound on"}</button><button class="ghost" data-action="view">Map</button><button class="ghost" data-action="settings">Settings</button><button class="ghost" data-action="pause">Ⅱ</button></div></div><section class="tower ${race.qualifying ? "qualifying-tower" : ""}"><div class="tower-head"><span>${race.qualifying ? "QUALIFYING" : "LIVE TIMING"}</span><span>${race.qualifying ? "STATUS / BEST" : "INTERVAL"}</span></div><div id="qualifying-cutoff"></div><div id="timing"></div></section><div class="weather-hud" id="weather-hud"><b id="weather-now"></b><span id="weather-forecast"></span><span id="race-limits"></span></div><div class="engineer" id="engineer"><span>RACE ENGINEER</span><div id="message"></div></div><div class="race-bottom"><div class="dashboard"><div class="speed"><strong id="speed">0</strong><span>KM/H</span></div><div class="telemetry"><div class="telemetry-header"><span id="tyre-name">MEDIUM</span><b id="wear">100%</b></div><div class="bar"><i id="wear-bar"></i></div><p id="tyre-state">Ready to race</p><div class="drive-modes" title="F: pace left toward Save · G: pace right toward Push" aria-label="Pace mode: F moves left, G moves right" aria-keyshortcuts="F G">${Object.entries(PACE_MODES).map(([id,m])=>`<button class="tab ${id===race.player.drive?"active":""}" data-drive="${id}" aria-pressed="${id===race.player.drive}" title="${m.description}" aria-label="${m.name}: ${m.description}">${m.name}</button>`).join("")}</div></div><div class="telemetry fuel-telemetry"><div class="telemetry-header"><span>FUEL</span><b id="fuel-left"></b></div><div class="bar"><i id="fuel-bar"></i></div><p id="fuel-status">On target</p><p id="last-lap" style="margin-top:12px">Last lap —</p></div></div><section class="pit-panel"><div class="eyebrow" id="pit-title">NEXT PIT STOP · T CYCLES</div><div class="compound-row">${race.qualifying ? `<button class="compound active current-tyre" data-pit-tyre="current" aria-pressed="true" style="--tyre:${TYRES[race.player.tyre].color}"><i class="tyre-dot"></i>Current</button>` : ""}${compounds(race.nextTyre, "pit-tyre")}</div><button class="primary" data-action="pit"><span id="pit-button">REQUEST PIT · B</span><span>↗</span></button><button class="ghost limiter" data-action="limiter" aria-pressed="false">LIMITER OFF · P</button><p id="pit-hint">${race.autoPitLimiter ? "Press B, then steer into the separate pit road. Speed, stopping, service and exit are automatic." : "Stop inside the highlighted box using S / ↓. R reverses. Service holds the car. P toggles the limiter."}</p><p id="race-set-note" class="hint"></p></section></div><div class="weather-timeline" role="img" aria-label="Scrolling six-minute weather forecast"><div class="forecast-legend"><b>WEATHER FORECAST</b><span><i class="rain-key"></i> Rain <i class="water-key"></i> Surface water</span></div><svg id="weather-timebar" viewBox="0 0 720 62" preserveAspectRatio="none"></svg></div><div class="countdown" id="countdown"><div class="lights">${"<i></i>".repeat(5)}</div><p>LIGHTS OUT. MAKE IT COUNT.</p></div><div class="touch-controls"><div><button data-touch="left" aria-label="Steer left">←</button><button data-touch="right" aria-label="Steer right">→</button></div><div><button class="pedal" data-touch="reverse">REV</button><button class="pedal" data-touch="brake">BRAKE</button><button class="pedal" data-touch="throttle">GAS</button></div></div>`;
   const counters=document.createElement("div");counters.className="standings-counters";
   counters.appendChild(app.querySelector(".race-chips"));
   app.querySelector(".tower").before(counters);
   const dashboard=app.querySelector(".dashboard");dashboard.classList.add("top-dashboard");app.appendChild(dashboard);
   const temperatures=document.createElement("section");temperatures.className="tyre-temperature";temperatures.setAttribute("aria-label","Four tyre temperatures");
-  temperatures.innerHTML=`<span class="temperature-label">TYRE TEMP</span><div class="temperature-wheels">${WHEELS.map(w=>`<button class="temperature-wheel" data-wheel="${w}" aria-label="${w} tyre temperature"><span>${w}</span></button>`).join("")}</div><output id="temperature-detail" aria-live="polite">Hover / tap</output>`;
+  temperatures.innerHTML=`<span class="temperature-label">TYRE TEMP</span><div class="temperature-wheels">${WHEELS.map(w=>`<span class="temperature-wheel" data-wheel="${w}" role="img" aria-label="${w} tyre temperature"><span>${w}</span></span>`).join("")}</div>`;
   dashboard.appendChild(temperatures);
-  temperatures.querySelectorAll("[data-wheel]").forEach(button=>button.onclick=()=>{if(mobileInput){showMobileTemperatureDetails();return;}temperatures.dataset.selected=button.dataset.wheel;updateHUD();});
   app.querySelector("[data-action=settings]").onclick=showSettings;
   app.querySelector("[data-action=pit]").onclick = () => {
     if(race.qualifying && race.player.garage && race.player.pit?.serviced){race.player.qNeedsRelease=false;race.launch(race.player);updateHUD();}
@@ -748,17 +769,22 @@ function showFinalQualifying() {
   box.addEventListener("keydown",event=>garageDialogKeys(event,box,()=>{}));el("qualifying-final-title").focus();
 }
 function showRaceForecast() {
-  const w=career.weekend;
-  if(w?.phase!=="R" || el("race-forecast-modal"))return;
-  startRaceWeather(w);
-  const outlook=raceForecast(w.weather,{duration:w.setup.weatherDuration,laps:w.setup.laps});
+  const w=career.weekend,isRace=w?.phase==="R";
+  if(el("race-forecast-modal"))return;
+  if(isRace)startRaceWeather(w);
+  setup.weatherSeed ??= Math.floor(Math.random()*4294967296);
+  const state=w?.weather || createWeather(weekendSchedule(career.round).weather,{seed:setup.weatherSeed,duration:46*60});
+  const stage=w ? Q_STAGES.find(q=>q.name===w.phase) : Q_STAGES[0];
+  const duration=isRace ? w.setup.weatherDuration : Math.max(1,stage.duration-(w?.elapsed || 0));
+  const outlook=raceForecast(state,{duration,laps:isRace?w.setup.laps:1});
+  const eventName=w?.eventName || weekendSchedule(career.round).name;
   const minute=seconds=>{const total=Math.round(seconds);return `${Math.floor(total/60)}:${String(total%60).padStart(2,"0")}`;};
   const backdrop=document.createElement("div");backdrop.id="race-forecast-modal";backdrop.className="modal-backdrop";
   const icon=rain=>`<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">${rain==="dry" ? '<circle cx="16" cy="16" r="6"/><path d="M16 2v4m0 20v4M2 16h4m20 0h4M6 6l3 3m14 14 3 3M6 26l3-3M23 9l3-3"/>' : '<path d="M8 20h16a6 6 0 0 0 0-12 9 9 0 0 0-17 3 5 5 0 0 0 1 9Z"/><path d="m12 24-2 4m12-4-2 4"/>'+(rain==="heavy" ? '<path d="m17 24-2 6m12-6-2 6"/>' : '')}</svg>`;
-  backdrop.innerHTML=`<section class="modal garage-modal race-forecast-modal" role="dialog" aria-modal="true" aria-labelledby="race-forecast-title"><div class="track-picker-heading"><div><div class="eyebrow">${escapeHTML(w.eventName)} · ${w.setup.laps} LAPS</div><h2 id="race-forecast-title" tabindex="-1">Weather forecast</h2></div><button class="ghost" data-close-forecast aria-label="Close weather forecast">×</button></div><p class="forecast-intro">Start to finish · about ${Math.round(outlook.duration/60)} minutes</p><ol class="race-forecast-list">${outlook.segments.map((segment,i)=>{
+  backdrop.innerHTML=`<section class="modal garage-modal race-forecast-modal" role="dialog" aria-modal="true" aria-labelledby="race-forecast-title"><div class="track-picker-heading"><div><div class="eyebrow">${escapeHTML(eventName)} · ${isRace ? w.setup.laps+" LAPS" : stage.name+" QUALIFYING"}</div><h2 id="race-forecast-title" tabindex="-1">Weather forecast</h2></div><button class="ghost" data-close-forecast aria-label="Close weather forecast">×</button></div><p class="forecast-intro">Start to finish · about ${Math.round(outlook.duration/60)} minutes</p><ol class="race-forecast-list">${outlook.segments.map((segment,i)=>{
     const low=Math.round(segment.minWater*100),high=Math.round(segment.maxWater*100);
-    return `<li class="forecast-spell forecast-${segment.rain}"><div class="forecast-spell-time"><b>${i===0 ? "START" : "THEN"}${i===outlook.segments.length-1 ? " → FINISH" : ""}</b><span>≈ ${minute(segment.start)}–${minute(segment.end)}</span><small>Laps ${segment.firstLap}${segment.lastLap!==segment.firstLap ? "–"+segment.lastLap : ""}</small></div><div class="forecast-spell-weather">${icon(segment.rain)}<div><h3>${segment.label}</h3><p>${segment.surface} · ${low===high ? low : low+"–"+high}% wet</p><span class="forecast-tyre-tip">${segment.tyreLabel}</span></div></div></li>`;
-  }).join("")}</ol><p class="hint forecast-explanation">Lap ranges are approximate: pace and pit stops change when you reach each phase. Tyre guidance follows surface water — the track can stay wet after rain stops.</p><button class="ghost garage-back" data-close-forecast>BACK TO RACE PREPARATION</button></section>`;
+    return `<li class="forecast-spell forecast-${segment.rain}"><div class="forecast-spell-time"><b>${i===0 ? "START" : "THEN"}${i===outlook.segments.length-1 ? " → FINISH" : ""}</b><span>≈ ${minute(segment.start)}–${minute(segment.end)}</span>${isRace ? `<small>Laps ${segment.firstLap}${segment.lastLap!==segment.firstLap ? "–"+segment.lastLap : ""}</small>` : ""}</div><div class="forecast-spell-weather">${icon(segment.rain)}<div><h3>${segment.label}</h3><p>${segment.surface} · ${low===high ? low : low+"–"+high}% wet</p><span class="forecast-tyre-tip">${segment.tyreLabel}</span></div></div></li>`;
+  }).join("")}</ol><p class="hint forecast-explanation">${isRace ? "Lap ranges are approximate: pace and pit stops change when you reach each phase." : "Times run from the current session clock. This is the same saved forecast you will drive in."} Tyre guidance follows surface water — the track can stay wet after rain stops.</p><button class="ghost garage-back" data-close-forecast>BACK TO ${isRace ? "RACE PREPARATION" : "QUALIFYING"}</button></section>`;
   const close=openStrategyPicker(backdrop,race,document.activeElement);
   backdrop.querySelectorAll("[data-close-forecast]").forEach(button=>button.onclick=close);
   backdrop.onclick=event=>{if(event.target===backdrop)close();};el("race-forecast-title").focus();
@@ -798,12 +824,6 @@ function mountMobileSetupPicker(){
   if(!mobileInput || screen!=="quick")return;
   const row=app.querySelector("[data-start-tyre]")?.closest(".compound-row");if(!row)return;
   row.classList.add("mobile-compound-shortcuts");const button=document.createElement("button");button.className="ghost browse-tyres";button.textContent=TYRES[setup.tyre].name+" · Choose tyre set";button.onclick=()=>showTyreSetPicker(true);row.after(button);
-}
-function showMobileTemperatureDetails(){
-  if(!race || el("temperature-details"))return;
-  const previous=paused;paused=true;resetDrivingInput();const box=document.createElement("div");box.className="modal-backdrop";box.id="temperature-details";
-  box.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-label="Tyre temperatures"><h2>Tyre temperatures</h2><div class="temperature-detail-grid">${WHEELS.map((wheel,i)=>{const p=race.player,t=p.tyreTemperatures[i];return `<div style="border-color:${temperatureColour(p.tyre,t)}"><b>${wheel} · ${Math.round(t)}°C</b><p>${temperatureStatus(p.tyre,t)} · ${Math.round(Math.max(0,1-p.wheelWear[i])*100)}% condition</p></div>`;}).join("")}</div><button class="primary" id="close-temperature-details">BACK TO RACE</button></section>`;
-  app.appendChild(box);el("close-temperature-details").onclick=()=>{box.remove();paused=previous;resetDrivingInput();};
 }
 function saveMobileSettings(){try{localStorage.setItem("v10.settings",JSON.stringify(settings));}catch{}}
 function resetDrivingInput(){mobileControls.reset();keys.clear();touch={steer:0,throttle:false,brake:false};const knob=app.querySelector(".stick-knob");if(knob)knob.style.transform="translate(-50%,-50%)";}
@@ -900,6 +920,7 @@ function updateMobileSession(){
 function setDrive(mode) {
   if (!race) return;
   race.player.drive = mode;
+  race.say(`${paceMode(mode).name}: ${paceMode(mode).description}`);
   app.querySelectorAll("[data-drive]").forEach((b) => {
     b.classList.toggle("active", b.dataset.drive === mode);
     b.setAttribute("aria-pressed", b.dataset.drive === mode);
@@ -948,7 +969,7 @@ function showTyreSetPicker(quickStart=false) {
   const available=selectableSets(inventory,phase,running && !running.qualifying ? currentId : null),selected=running ? running.nextSetId || "quick-"+running.nextTyre : quickStart ? "start-"+setup.tyre : selectedWeekendSet;
   let draftSet=available.find(t=>t.id===selected && (!mediumLesson || t.compound==="M"))?.id;
   const backdrop=document.createElement("div");backdrop.className="modal-backdrop";backdrop.id="tyre-set-picker";
-  backdrop.innerHTML=`<section class="modal tyre-picker-modal" role="dialog" aria-modal="true" aria-labelledby="tyre-picker-title"><div class="track-picker-heading"><div><div class="eyebrow">${quickStart ? "STARTING TYRES" : running && !running.player.tyreInventory ? "RACE TYRE OPTIONS" : "WEEKEND TYRE ALLOCATION"}</div><h2 id="tyre-picker-title">Choose your tyre set</h2></div><button class="ghost" data-close-tyres aria-label="Close tyre selector">×</button></div><p class="hint">Fresh or used — each physical set keeps its condition across outings and qualifying sessions. ${!mobileInput && running ? "The compound buttons remain available for quick choices." : ""}</p>${["S","M","H","I","W"].map(compound=>`<div class="tyre-set-group"><h3 style="color:${TYRES[compound].color}">${TYRES[compound].name}</h3><div class="tyre-set-grid">${inventory.filter(t=>t.compound===compound&&!t.returned).sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true})).map(t=>{
+  backdrop.innerHTML=`<section class="modal tyre-picker-modal" role="dialog" aria-modal="true" aria-labelledby="tyre-picker-title"><div class="track-picker-heading"><div><div class="eyebrow">${quickStart ? "STARTING TYRES" : running && !running.player.tyreInventory ? "RACE TYRE OPTIONS" : "WEEKEND TYRE ALLOCATION"}</div><h2 id="tyre-picker-title">Choose your tyre set</h2></div><button class="ghost" data-close-tyres aria-label="Close tyre selector">×</button></div><p class="hint">Fresh or used — each physical set keeps its condition across outings and qualifying sessions. ${!mobileInput && running ? "The compound buttons remain available for quick choices." : ""}</p><p class="hint">${running || w ? `Now ${Math.round((running?.weather.wetness ?? w.weather.wetness)*100)}% wet · white marker = current water. ` : ""}Bands show suggested grip ranges on a 0–100% wetness scale.</p>${["S","M","H","I","W"].map(compound=>`<div class="tyre-set-group"><h3 style="color:${TYRES[compound].color}">${TYRES[compound].name}</h3>${wetnessBand(compound,running?.weather.wetness ?? w?.weather.wetness ?? null,false)}<div class="tyre-set-grid">${inventory.filter(t=>t.compound===compound&&!t.returned).sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true})).map(t=>{
     const enabled=available.some(a=>a.id===t.id) && (!mediumLesson || t.compound==="M"),condition=Math.round(Math.max(0,1-t.wear)*100),fitted=!!running && currentId===t.id;
     return `<button class="tyre-set-card ${t.id===selected ? "selected" : ""}" data-choose-set="${t.id}" ${enabled ? "" : "disabled"} aria-pressed="${t.id===selected}" style="--tyre:${TYRES[compound].color}"><b><i class="tyre-dot"></i>${t.label || t.id}<span>${condition}%</span></b><div class="bar"><i style="width:${condition}%;background:var(--tyre)"></i></div><small>${fitted ? "Currently fitted" : !enabled ? mediumLesson && t.compound!=="M" ? "Use Mediums for outing 2" : t.reserved ? "Reserved for Q3" : "Worn out" : t.used ? "Used · reusable" : "Fresh"}</small></button>`;
   }).join("")}</div></div>`).join("")}<div class="picker-confirm"><p class="hint">${running ? "Session paused. Confirm your choice to resume." : "Select a set, then confirm."}</p><button class="primary" id="confirm-tyre-set" ${draftSet ? "" : "disabled"}>CONFIRM TYRE SET →</button></div></section>`;
@@ -1062,7 +1083,10 @@ function updateHUD() {
         ? "Grip fading · box soon"
         : !tyreRuleMet(p)
           ? "Second compound required"
-          : "Compound requirement met";
+          : p.raceFormat==="sprint" ? "Sprint · no required stop" : "Compound requirement met";
+  const tyreEstimate=stintLaps(p.tyre,TYRES,{wear:p.wear,mode:p.drive,upgrades:p.upgrades,wetness:p.trackWetness || 0,thermal:thermalWear(p),stress:1+(p.sliding || 0)*.5});
+  el("tyre-state").textContent+=` · ≈${tyreEstimate.toFixed(1)} laps`;
+  el("wear").title=`About ${tyreEstimate.toFixed(1)} competitive laps at ${paceMode(p).name} pace`;
   const temperaturePanel=app.querySelector(".tyre-temperature");
   if(temperaturePanel){
     temperaturePanel.hidden=!race.tyreTemperatureEnabled;
@@ -1073,16 +1097,15 @@ function updateHUD() {
       const status=temperatureStatus(p.tyre,t),condition=Math.round(Math.max(0,1-(p.wheelWear?.[i] ?? p.wear))*100);
       button.style.setProperty("--temperature",temperatureColour(p.tyre,t));
       const label=`${WHEELS[i]} · ${Math.round(t)}°C · ${status} · ${condition}% condition`;
-      button.title=label;button.setAttribute("aria-label",label);
-      button.setAttribute("aria-pressed",String(temperaturePanel.dataset.selected===WHEELS[i]));
-      if(temperaturePanel.dataset.selected===WHEELS[i])el("temperature-detail").textContent=`${WHEELS[i]} ${Math.round(t)}° · ${status}`;
+      button.setAttribute("aria-label",label);
     });
   }
   el("fuel-left").textContent = p.fuel.toFixed(1) + " laps";
+  el("fuel-left").title=`Estimated range: ${(p.fuel/fuelPerLap(p.drive,p.upgrades)).toFixed(1)} laps at ${paceMode(p).name} pace`;
   el("fuel-bar").style.width = (p.fuel / race.setup.fuel) * 100 + "%";
   el("fuel-status").textContent =
-    p.fuel < remaining * 1.08*fuelMultiplier(p.upgrades) ? "Low margin · conserve" : "On target";
-  el("fuel-status").style.color = p.fuel < remaining * 1.08*fuelMultiplier(p.upgrades) ? "#ffd17e" : "";
+    `${(p.fuel/fuelPerLap(p.drive,p.upgrades)-remaining)>=0?"+":""}${(p.fuel/fuelPerLap(p.drive,p.upgrades)-remaining).toFixed(1)} laps to finish · ${paceMode(p).name}`;
+  el("fuel-status").style.color = p.fuel < remaining*fuelPerLap(p.drive,p.upgrades) ? "#ffd17e" : "";
   el("last-lap").textContent = "Last lap " + time(p.lastLap || Infinity);
   el("weather-now").textContent =
     `${race.weather.rain > 0.6 ? "HEAVY RAIN" : race.weather.rain > 0.05 ? "RAIN" : race.weather.wetness > 0.1 ? "DRYING" : "DRY"} · ${Math.round(race.weather.wetness * 100)}% track wetness`;
@@ -1243,8 +1266,8 @@ function pauseRace() {
     const b = document.createElement("div");
     b.className = "modal-backdrop";
     b.id = "pause-modal";
-    b.innerHTML = `<section class="modal"><div class="eyebrow">TAKE A BREATHER</div><h2>Race paused</h2><div class="pause-controls"><p><b>Driving</b><span>W / ↑ Accelerate · S / ↓ Brake, then reverse<br>A / D or ← / → Steer</span></p><p><b>Pit stops</b><span>B Request a stop, then steer into the pit road<br>${race.autoPitLimiter ? "Automatic speed, stop, service and exit" : "P Toggle limiter · R Reverse in the pit lane"}</span></p><p><b>Strategy</b><span>F Cycle Save / Balanced / Push<br>T Cycle next tyres · 1–5 Select S / M / H / I / W<br>6 High downforce · 7 Low drag · +10s pit service</span></p><p><b>View & pause</b><span>M Change map view · Esc Resume</span></p></div>${engineerBriefHTML(race)}<button class="primary" id="resume">BACK TO THE RACE →</button><button class="ghost" id="retire" style="width:100%;margin-top:12px">Retire race</button><p class="hint">Career retirement records a DNF. No sponsor bonus.</p></section>`;
-    if(mobileInput)b.querySelector(".pause-controls").innerHTML=`<p><b>Drive</b><span>Hold GAS · BRAKE slows then reverses.<br>${settings.mobileSteering==="arrows" ? "Use left/right arrows." : "Drag the steering pad; release to centre."}</span></p><p><b>Strategy</b><span>Tap a fuel mode or Choose tyre set.<br>Tap Pit, then steer into the separate pit entrance.</span></p><p><b>Display</b><span>Timing opens the full board. Map shows the circuit.<br>Settings changes steering and tyre temperature.</span></p>`;
+    b.innerHTML = `<section class="modal"><div class="eyebrow">TAKE A BREATHER</div><h2>Race paused</h2><div class="pause-controls"><p><b>Driving</b><span>W / ↑ Accelerate · S / ↓ Brake, then reverse<br>A / D or ← / → Steer</span></p><p><b>Pit stops</b><span>B Request a stop, then steer into the pit road<br>${race.autoPitLimiter ? "Automatic speed, stop, service and exit" : "P Toggle limiter · R Reverse in the pit lane"}</span></p><p><b>Strategy</b><span>F Pace ← · G Pace → (Save / Balanced / Push)<br>T Cycle next tyres · 1–5 Select S / M / H / I / W<br>6 High downforce · 7 Low drag · +10s pit service</span></p><p><b>View & pause</b><span>M Change map view · Esc Resume</span></p></div>${engineerBriefHTML(race)}<button class="primary" id="resume">BACK TO THE RACE →</button><button class="ghost" id="retire" style="width:100%;margin-top:12px">Retire race</button><p class="hint">Career retirement records a DNF. No sponsor bonus.</p></section>`;
+    if(mobileInput)b.querySelector(".pause-controls").innerHTML=`<p><b>Drive</b><span>Hold GAS · BRAKE slows then reverses.<br>${settings.mobileSteering==="arrows" ? "Use left/right arrows." : "Drag the steering pad; release to centre."}</span></p><p><b>Strategy</b><span>Tap a pace mode or Choose tyre set.<br>Tap Pit, then steer into the separate pit entrance.</span></p><p><b>Display</b><span>Timing opens the full board. Map shows the circuit.<br>Settings changes steering and tyre temperature.</span></p>`;
     app.appendChild(b);
     el("resume").onclick = pauseRace;
     if(school) {el("retire").textContent="LEAVE RACE SCHOOL";el("retire").nextElementSibling.textContent="School checkpoints are saved. Career is unaffected.";}
@@ -1269,6 +1292,7 @@ function pauseRace() {
         penalties: race.player.penalties,
         bestLap: race.player.bestLap,
         fuel: race.player.fuel,
+        raceFormat:race.setup.raceFormat,
       };
       paused = false;
       showResults();
@@ -1313,7 +1337,7 @@ function showResults() {
   const b = document.createElement("div");
   b.className = "modal-backdrop";
   b.id = "results";
-  b.innerHTML = `<section class="modal"><div class="eyebrow">${race.mode === "career" ? escapeHTML(race.player.name) + " / " + race.player.team.name : escapeHTML(TRACK.name) + " / RACE COMPLETE"}</div><h2>${r.dnf ? "A race to learn from" : !r.legal ? "Tyre rule infringement" : r.position === 1 ? "Race winner" : "Race complete"}</h2><div class="result-hero"><div><div class="display">${r.dnf ? "DNF" : !r.legal ? "DQ" : "P" + r.position}</div><small>${!r.legal && !r.dnf ? "Two different dry compounds were required." : "22-car grid · " + r.stops + " pit stops"}</small></div><div class="stat"><span>Race time</span><strong style="font-size:30px">${time(r.time)}</strong></div></div><div class="result-line"><span>Best lap</span><b>${time(r.bestLap)}</b></div><div class="result-line"><span>Track limits / penalty seconds</span><b>${race.player.trackLimits} / ${race.player.penaltySecondsTotal || 0}s</b></div><div class="result-line"><span>Fuel remaining</span><b>${r.fuel.toFixed(1)} laps</b></div>${settlement ? `<div class="result-line"><span>Championship points</span><b>+${settlement.points}</b></div><div class="result-line"><span>Race earnings</span><b>${money(settlement.prize)}</b></div>${settlement.difficultyBonus ? `<div class="result-line"><span>${DIFFICULTIES[settlement.difficulty].name} difficulty bonus · included</span><b>+${money(settlement.difficultyBonus)}</b></div>` : ""}<div class="result-line"><span>${settlement.sponsor || "Sponsor"} · ${settlement.met ? "condition met" : "no payout"}</span><b>${money(settlement.bonus)}</b></div>${settlement.commercialBonus ? `<div class="result-line"><span>Commercial uplift · included in sponsor payout</span><b>+${money(settlement.commercialBonus)}</b></div>` : ""}${settlement.seasonEnded ? `<div class="result-line"><span>Season completed · points bonus</span><b>${money(settlement.seasonBonus)}</b></div>` : ""}<div class="result-line"><span>Available budget</span><b>${money(career.cash)}</b></div>` : '<p class="muted">Try a different starting compound or fuel load to explore another strategy.</p>'}<button class="primary" id="continue">${race.mode === "career" ? "RETURN TO GARAGE" : "BACK TO PADDOCK"} →</button>${saveWarning ? `<p class="storage-warning">${saveWarning}</p>` : ""}</section>`;
+  b.innerHTML = `<section class="modal"><div class="eyebrow">${race.mode === "career" ? escapeHTML(race.player.name) + " / " + race.player.team.name : escapeHTML(TRACK.name) + " / RACE COMPLETE"}</div><h2>${r.dnf ? "A race to learn from" : !r.legal ? "Tyre rule infringement" : r.position === 1 ? "Race winner" : "Race complete"}</h2><div class="result-hero"><div><div class="display">${r.dnf ? "DNF" : !r.legal ? "DQ" : "P" + r.position}</div><small>${!r.legal && !r.dnf ? "Two different dry compounds were required." : "22-car grid · " + r.stops + " pit stops"}</small></div><div class="stat"><span>Race time</span><strong style="font-size:30px">${time(r.time)}</strong></div></div><div class="result-line"><span>Best lap</span><b>${time(r.bestLap)}</b></div><div class="result-line"><span>Track limits / penalty seconds</span><b>${race.player.trackLimits} / ${race.player.penaltySecondsTotal || 0}s</b></div><div class="result-line"><span>Fuel remaining</span><b>${r.fuel.toFixed(1)} laps</b></div>${settlement ? `<div class="result-line"><span>Championship points</span><b>+${settlement.points}</b></div><div class="result-line"><span>Race earnings</span><b>${money(settlement.prize)}</b></div>${settlement.difficultyBonus ? `<div class="result-line"><span>${DIFFICULTIES[settlement.difficulty].name} difficulty bonus · included</span><b>+${money(settlement.difficultyBonus)}</b></div>` : ""}<div class="result-line"><span>${settlement.sponsor || "Sponsor"} · ${settlement.met ? "condition met" : "no payout"}</span><b>${money(settlement.bonus)}</b></div>${settlement.commercialBonus ? `<div class="result-line"><span>Commercial uplift · included in sponsor payout</span><b>+${money(settlement.commercialBonus)}</b></div>` : ""}${settlement.seasonEnded ? `<div class="result-line"><span>Season completed · points bonus</span><b>${money(settlement.seasonBonus)}</b></div>` : ""}<div class="result-line"><span>Available budget</span><b>${money(career.cash)}</b></div>` : `<div class="result-line"><span>${r.raceFormat==="sprint"?"Sprint":"Grand Prix"} points</span><b>+${!r.dnf&&r.legal?racePoints(r.position,r.raceFormat):0}</b></div><p class="muted">Try a different starting compound or fuel load to explore another strategy.</p>`}<button class="primary" id="continue">${race.mode === "career" ? "RETURN TO GARAGE" : "BACK TO PADDOCK"} →</button>${saveWarning ? `<p class="storage-warning">${saveWarning}</p>` : ""}</section>`;
   app.appendChild(b);
   el("continue").onclick = () => {
     notice = settlement
@@ -1358,7 +1382,7 @@ function startSchoolLesson(practice=false){
   race=practice ? school.createPractice() : school.createQualifying();school.save(localStorage);
   keys.clear();touch={steer:0,throttle:false,brake:false};mobileControls.reset();paused=false;accumulator=0;overview=false;
   raceUI();mountSchoolGuide();
-  showSchoolDialog(practice ? "Your first race start" : school.state.outings ? "Second outing: use Mediums" : "First outing: use Softs",practice ? "Lights out → accelerate with W / ↑.\nPress F to try a fuel mode.\nPress B to request a stop.\nSteer into the separate pit entrance.\nService and race pit exit are automatic." : "Dry practice: Softs first, Mediums second.\nW / ↑ leaves the box · S / ↓ brakes · A/D steers.\nF cycles Save / Balanced / Push.\nEach outing: out lap → timed lap → in lap.\nEnter the pits on your in lap — no B needed.\nWait for service; leave when ready.",[
+  showSchoolDialog(practice ? "Your first race start" : school.state.outings ? "Second outing: use Mediums" : "First outing: use Softs",practice ? "Lights out → accelerate with W / ↑.\nF moves left toward Save; G moves right toward Push.\nPress B to request a stop.\nSteer into the separate pit entrance.\nService and race pit exit are automatic." : "Dry practice: Softs first, Mediums second.\nW / ↑ leaves the box · S / ↓ brakes · A/D steers.\nF moves left toward Save; G moves right toward Push.\nEach outing: out lap → timed lap → in lap.\nEnter the pits on your in lap — no B needed.\nWait for service; leave when ready.",[
     {label:practice ? "START PRACTICE →" : "READY TO DRIVE →",action:()=>{paused=false;keys.clear();if(!practice && !school.state.outings)showSchoolWeather();}},
     {label:"LEAVE SCHOOL",action:leaveSchool}
   ]);
@@ -1405,7 +1429,7 @@ function schoolMilestone(event){
     {label:"INSPECT USED TYRES",action:()=>{schoolMilestone('qualifyingComplete');showTyreSetPicker();}},
     {label:"FINISH SCHOOL",action:()=>{school.complete();school.save(localStorage);leaveSchool();}}
   ]);
-  if(event==="practiceComplete")showSchoolDialog("Ready for your Grand Prix", "Grid launch, fuel mode and B request practised.\nPit entry, service and exit completed.\nDry races need two different dry compounds.\nKeep enough fuel and watch penalties.\nCareer adds sponsors, prize money and upgrades.",[{label:"BACK TO MAIN MENU →",action:leaveSchool},{label:"REPLAY RACE PRACTICE",action:()=>startSchoolLesson(true)}]);
+  if(event==="practiceComplete")showSchoolDialog("Ready for your Grand Prix", "Grid launch, pace mode and B request practised.\nPit entry, service and exit completed.\nDry races need two different dry compounds.\nKeep enough fuel and watch penalties.\nCareer adds sponsors, prize money and upgrades.",[{label:"BACK TO MAIN MENU →",action:leaveSchool},{label:"REPLAY RACE PRACTICE",action:()=>startSchoolLesson(true)}]);
 }
 function showHelp() {
   if (help) return;
@@ -1413,7 +1437,7 @@ function showHelp() {
   const b = document.createElement("div");
   b.className = "modal-backdrop";
   b.id = "help";
-  b.innerHTML = `<section class="modal"><div class="eyebrow">DRIVER BRIEFING</div><h2>Find your rhythm.</h2><div class="help-grid"><div><h3>Drive</h3><p>W / ↑ accelerates, S / ↓ brakes then reverses once stopped. A/D or ←/→ steer. Brake before the turn, ease off through it, accelerate on exit. Touch controls appear on mobile.</p></div><div><h3>Strategy</h3><p>Softs give more grip but wear quickly. Mediums balance pace and life. Hards run longer. Use TWO different compounds before finishing. 16 laps is ideal for comparing one and two stops.</p><h3>Slipstream</h3><p>Tuck in behind a car on a straight to reduce drag. A strong tow allows a little extra top speed, which fades over a few seconds after pulling out. Your speed readout turns lime while receiving a tow.</p></div><div><h3>Pit stops</h3><p>Press B to request a stop, then steer off the track into the separate pit road before the start straight. Automatic pit stops handle lane speed, the box stop, service and exit without pedals. Disable this in Settings to use manual pedals and P limiter control. Manual speeding adds 5 seconds. The wide lane has smooth merges and assisted steering; gas/brake still control speed. Release the limiter with P after exit. 1/2/3/4/5 selects S/M/H/I/W. Stop in the marked box with S; R reverses if you overshoot. Service holds the car. Three track-limit warnings precede a 5-second penalty.</p></div><div><h3>Fuel & pace</h3><p>Save reduces pace, wear and fuel use. Push trades resources for speed. F cycles modes. No refuelling, no battery. Fuel runs out? Coast to a stop and retire.</p></div><div><h3>Career</h3><p>Name your driver and choose any team. Complete Q1, Q2 and Q3 knockouts before each race. The weekend tyre pool is shared: choose individual sets and save fresh tyres for the race. Start in a slower development car. Reset your career from the garage to start again. Sign one sponsor per race, earn position money and upgrade power, grip, tyre life or pit service. All 12 circuits form a season.</p></div><div><h3>Your controls</h3><p>Esc pauses. M toggles map view. Engine sound starts automatically; toggle it with Sound on / off. Your browser saves career progress automatically; quick races do not affect it.</p></div></div><button class="primary" id="close-help">READY TO RACE →</button></section>`;
+  b.innerHTML = `<section class="modal"><div class="eyebrow">DRIVER BRIEFING</div><h2>Find your rhythm.</h2><div class="help-grid"><div><h3>Drive</h3><p>W / ↑ accelerates, S / ↓ brakes then reverses once stopped. A/D or ←/→ steer. Brake before the turn, ease off through it, accelerate on exit. Touch controls appear on mobile.</p></div><div><h3>Strategy</h3><p>Softs give more grip but wear quickly. Mediums balance pace and life. Hards run longer. Grand Prix races require two different dry compounds unless you use Intermediates or Wets. Sprints have no compulsory tyre change and award 8–1 points to the first eight. Career Grands Prix are 32 laps and Sprints 12 laps; Quick Race offers 12–40 laps.</p><h3>Slipstream</h3><p>Tuck in behind a car on a straight to reduce drag. A strong tow allows a little extra top speed, which fades over a few seconds after pulling out. Your speed readout turns lime while receiving a tow.</p></div><div><h3>Pit stops</h3><p>Press B to request a stop, then steer off the track into the separate pit road alongside the main straight. Automatic pit stops handle lane speed, the box stop, service and exit without pedals. Disable this in Settings to use manual pedals and P limiter control. Manual speeding adds 5 seconds. The wide lane has smooth merges and assisted steering; gas/brake still control speed. Release the limiter with P after exit. 1/2/3/4/5 selects S/M/H/I/W. Stop in the marked box with S; R reverses if you overshoot. Service holds the car. Three track-limit warnings precede a 5-second penalty.</p></div><div><h3>Pace & strategy</h3><p>Save gives gentler power to extend stints and recover hot tyres. Balanced is sustainable race pace. Push adds acceleration and top speed, using more fuel and tyre life. F moves left toward Save; G moves right toward Push. No refuelling, no battery. Fuel runs out? Coast to a stop and retire.</p></div><div><h3>Career</h3><p>Name your driver and choose any team. Complete Q1, Q2 and Q3 knockouts before each race. The weekend tyre pool is shared: choose individual sets and save fresh tyres for the race. Start in a slower development car. Reset your career from the garage to start again. Sign one sponsor per race, earn position money and upgrade power, grip, tyre life or pit service. All 12 circuits form a season.</p></div><div><h3>Your controls</h3><p>Esc pauses. M toggles map view. Engine sound starts automatically; toggle it with Sound on / off. Your browser saves career progress automatically; quick races do not affect it.</p></div></div><button class="primary" id="close-help">READY TO RACE →</button></section>`;
   if(mobileInput)b.querySelectorAll("p").forEach(p=>p.textContent=mobileLessonText(p.textContent,settings.mobileSteering));
   app.appendChild(b);
   el("close-help").onclick = () => {
@@ -1455,7 +1479,6 @@ window.addEventListener("keydown", (e) => {
     if(el("school-dialog")){e.preventDefault();return;}
     if(el("aero-picker")){el("aero-picker").querySelector("[data-close-aero]").click();return;}
     if(el("tyre-set-picker")) {el("tyre-set-picker").querySelector("[data-close-tyres]").click();return;}
-    if(el("temperature-details")){el("close-temperature-details").click();return;}
     if(el("settings-modal")) {el("close-settings").click();return;}
     if (el("reset-career-modal")) {
       el("cancel-reset").click();
@@ -1480,12 +1503,10 @@ window.addEventListener("keydown", (e) => {
     setPitTyre(choices[(choices.indexOf(race.keepCurrentTyres ? "current" : race.nextTyre)+1)%choices.length]);
   }
   if (k === "m") overview = !overview;
-  if (k === "f")
-    setDrive(
-      ["save", "balanced", "push"][
-        (["save", "balanced", "push"].indexOf(race.player.drive) + 1) % 3
-      ],
-    );
+  if (k === "f" || k === "g") {
+    const mode=stepPaceMode(race.player.drive,k==="f" ? -1 : 1);
+    if(mode!==race.player.drive)setDrive(mode);
+  }
 });
 window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
 window.addEventListener("blur", () => {

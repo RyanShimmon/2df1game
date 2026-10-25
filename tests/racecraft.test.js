@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {Race,TRACK,AI_LINE,CIRCUITS,selectTrack,sample,MAX_SPEED,maximumSpeed,tyreRuleMet} from '../src/core.js';
+import {Race,TRACK,AI_LINE,CIRCUITS,selectTrack,sample,MAX_SPEED,cleanAirTopSpeed,maximumSpeed,tyreRuleMet} from '../src/core.js';
 import {updateSlipstream,brakingTarget,racingPoint} from '../src/racecraft.js';
 import {createWeekend,QualifyingRun,prepareRace,finishRemainingQualifying} from '../src/weekend.js';
 import {newCareer} from '../src/core.js';
@@ -13,7 +13,7 @@ test('a tow requires a nearby aligned moving car ahead and builds smoothly for b
   const car={...mock(0,0,0),player},leader=mock(1,95,95);
   updateSlipstream(car,[leader],1/60,context);assert.ok(car.slipstream.strength>0&&car.slipstream.strength<.1);
   for(let i=0;i<120;i++)updateSlipstream(car,[leader],1/60,context);
-  assert.ok(car.slipstream.strength>.6);assert.ok(maximumSpeed(car)>MAX_SPEED+10&&maximumSpeed(car)<MAX_SPEED+18);
+  assert.ok(car.slipstream.strength>.6);assert.ok(maximumSpeed(car)>cleanAirTopSpeed(car)+10&&maximumSpeed(car)<cleanAirTopSpeed(car)+18);
  }
  for(const leader of [mock(1,-80,-80),mock(1,600,600),mock(1,80,80,80),{...mock(1,80,80),angle:Math.PI}, {...mock(1,80,80),pit:{}}, {...mock(1,80,80),garage:true},{...mock(1,80,80),speed:50}]){
   const car=mock(0,0,0);updateSlipstream(car,[leader],1,context);assert.equal(car.slipstream.strength,0);
@@ -25,24 +25,24 @@ test('drag reduction clears on pulling out but the extra speed fades over severa
  for(let i=0;i<120;i++)updateSlipstream(car,[leader],1/60,context);
  const peak=maximumSpeed(car);
  for(let i=0;i<60;i++)updateSlipstream(car,[],1/60,context);
- assert.ok(car.slipstream.strength<.001);assert.ok(maximumSpeed(car)>MAX_SPEED+4&&maximumSpeed(car)<peak);
+ assert.ok(car.slipstream.strength<.001);assert.ok(maximumSpeed(car)>cleanAirTopSpeed(car)+4&&maximumSpeed(car)<peak);
  for(let i=0;i<240;i++)updateSlipstream(car,[],1/60,context);
- assert.ok(maximumSpeed(car)<MAX_SPEED+1);
- car.pit={};updateSlipstream(car,[leader],1/60,context);assert.equal(maximumSpeed(car),MAX_SPEED);
+ assert.ok(maximumSpeed(car)<cleanAirTopSpeed(car)+1);
+ car.pit={};updateSlipstream(car,[leader],1/60,context);assert.equal(maximumSpeed(car),cleanAirTopSpeed(car));
 });
 test('real player acceleration exceeds 330 in a tow and has no instant speed cut when pulling out',()=>{
  const r=new Race(setup),p=r.player;
- const leader={...mock(1,440,1140,1350),speed:345};r.cars=[p];p.speed=280;
+ const leader={...mock(1,90,sample(90).x,sample(90).y),speed:345};r.cars=[p];p.speed=280;
  for(let i=0;i<600;i++){
-  Object.assign(p,{fuel:1,s:350,x:1050,y:1350,angle:0,motionAngle:0,offset:0});
+  Object.assign(p,{fuel:1,s:0,x:sample(0).x,y:sample(0).y,angle:0,motionAngle:0,offset:0});
   updateSlipstream(p,[leader],1/60,context);r.stepPlayer(p,1/60,{throttle:true});
  }
  const peak=p.speed;assert.ok(peak>335&&peak<348,`tow speed ${peak}`);
- Object.assign(p,{fuel:1,s:350,x:1050,y:1350,angle:0,motionAngle:0});
+ Object.assign(p,{fuel:1,s:0,x:sample(0).x,y:sample(0).y,angle:0,motionAngle:0});
  updateSlipstream(p,[],1/60,context);r.stepPlayer(p,1/60,{throttle:true});
  assert.ok(p.speed>330&&peak-p.speed<1,`exit ${peak} → ${p.speed}`);
  for(let i=0;i<240;i++){
-  Object.assign(p,{fuel:1,s:350,x:1050,y:1350,angle:0,motionAngle:0});
+  Object.assign(p,{fuel:1,s:0,x:sample(0).x,y:sample(0).y,angle:0,motionAngle:0});
   updateSlipstream(p,[],1/60,context);r.stepPlayer(p,1/60,{throttle:true});
  }
  assert.ok(p.speed<331.5);

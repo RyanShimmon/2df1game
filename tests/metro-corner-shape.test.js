@@ -22,7 +22,7 @@ test('the opened Metro bends can be driven for a complete lap',()=>{
 
 test('separate same-level Metro sections have enough room to prevent merged asphalt',()=>{
  selectTrack('metro');const points=TRACK.pts;
- for(let i=0;i<1400;i+=4)for(let j=i+4;j<1400;j+=4) {
+ for(let i=0;i<points.length-1;i+=4)for(let j=i+4;j<points.length-1;j+=4) {
   const gap=Math.min(points[j].s-points[i].s,TRACK.length-(points[j].s-points[i].s));
   if(gap<350 || trackLayer(points[i].s)!==trackLayer(points[j].s))continue;
   assert.ok(Math.hypot(points[i].x-points[j].x,points[i].y-points[j].y)>TRACK.width+50,'separate road sections merge');

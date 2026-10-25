@@ -1,4 +1,4 @@
-import {
+import {gridSlot,
   TRACK,
   trackLayer,
   nearest,
@@ -19,6 +19,25 @@ export function asphaltColour(wetness=0){
  const water=Math.max(0,Math.min(1,Number(wetness)||0))*.4;
  return "rgb("+[52,61,66].map((dry,i)=>Math.round(dry+([110,150,177][i]-dry)*water)).join(",")+")";
 }
+// Reveal the road below only around the driver, with an explicit underpass
+// outline. Both roads and their cars retain their real collision layers.
+export function underpassView(car){
+ if(!car || car.pit || car.garage || trackLayer(car.s))return null;
+ let distance=Infinity;
+ for(const [a,b] of TRACK.bridges){
+  const routeGap=Math.abs(wrap(car.s-(a+b)/2+TRACK.length/2,TRACK.length)-TRACK.length/2);
+  if(routeGap<(b-a)/2+300)continue; // Approaching the upper deck is not an underpass.
+  const points=[sample(a),...TRACK.pts.filter(p=>p.s>a&&p.s<b),sample(b)];
+  for(let i=1;i<points.length;i++){
+   const p=points[i-1],q=points[i],dx=q.x-p.x,dy=q.y-p.y;
+   const t=Math.max(0,Math.min(1,((car.x-p.x)*dx+(car.y-p.y)*dy)/(dx*dx+dy*dy || 1)));
+   distance=Math.min(distance,Math.hypot(car.x-p.x-dx*t,car.y-p.y-dy*t));
+  }
+ }
+ const blend=Math.max(0,Math.min(1,(TRACK.width/2+150-distance)/110));
+ const radius=135*blend*blend*(3-2*blend);
+ return blend>0 && radius+TRACK.width/2>distance ? {x:car.x,y:car.y,radius,alpha:blend} : null;
+}
 export function countdownPulse(countdown) {
   if(countdown<=0 || countdown>4) return 0;
   const phase=(4-countdown)%1;
@@ -36,7 +55,7 @@ export function pitBoundaryMark(name) {
   if(Math.cos(angle)<0) angle+=Math.PI;
   return {points,label:{x:p.x-Math.sin(p.angle)*offset,y:p.y+Math.cos(p.angle)*offset,angle}};
 }
-export const NORTHLINE_BUILDING={x:1490,y:1610,width:340,height:140};
+export const NORTHLINE_BUILDING={x:1490,y:2070,width:340,height:140};
 export class Renderer {
   constructor(canvas) {
     this.canvas = canvas;
@@ -197,7 +216,8 @@ export class Renderer {
       ctx.restore();
     }
     ctx.restore();
-    this.text(ctx, "PIT LANE  /  80", 840, 1580, 12, "#d8ddd3");
+    const pitLabel=samplePit(PIT_LANE.boxDistance);
+    this.text(ctx, "PIT LANE  /  80", pitLabel.x+90, pitLabel.y+6, 12, "#d8ddd3");
     const start = sample(0);
     ctx.save();
     ctx.translate(start.x, start.y);
@@ -209,13 +229,13 @@ export class Renderer {
       }
     ctx.restore();
     for (let i = 0; i < 22; i++) {
-      const s = sample(-(Math.floor(i / 2) * 38 + 25));
+      const slot=gridSlot(i),s=sample(slot.s);
       ctx.save();
       ctx.translate(s.x, s.y);
       ctx.rotate(s.angle);
       ctx.strokeStyle = "#899093";
       ctx.lineWidth = 1;
-      ctx.strokeRect(-16, i % 2 ? -35 : 10, 28, 25);
+      ctx.strokeRect(-18,slot.offset-14,36,28);
       ctx.restore();
     }
     // Wider, alternating red and white kerbs along the inside of each corner.
@@ -281,7 +301,7 @@ export class Renderer {
       }
       ctx.globalAlpha = 1;
       for(const c of race.cars) if((!c.garage || c.player) && !trackLayer(c.s)) this.car(ctx,interpolatedCar(c,alpha),c.player ? countdownPulse(race.countdown) : 0);
-      this.flyovers(ctx,race);
+      this.flyovers(ctx,race,alpha);
       for(const c of race.cars) if((!c.garage || c.player) && trackLayer(c.s)) this.car(ctx,interpolatedCar(c,alpha),c.player ? countdownPulse(race.countdown) : 0);
     } else {
       this.flyovers(ctx,null);
@@ -317,16 +337,47 @@ export class Renderer {
     }
     if (race && !menu && !race.mobile) this.minimap(race);
   }
-  flyovers(ctx,race) {
+  flyovers(ctx,race,alpha=1) {
+    const view=underpassView(race?.player);
+    const path=(a,b)=>{
+      // Use the very same vertices as the main tarmac, avoiding mismatched
+      // chords where the elevated overlay rejoins the base road.
+      const road=new Path2D(),start=sample(a),end=sample(b);road.moveTo(start.x,start.y);
+      for(const p of TRACK.pts)if(p.s>a&&p.s<b)road.lineTo(p.x,p.y);
+      road.lineTo(end.x,end.y);return road;
+    };
+    ctx.save();
+    if(view){const mask=new Path2D();mask.rect(-10000,-10000,20000,20000);mask.moveTo(view.x+view.radius,view.y);mask.arc(view.x,view.y,view.radius,0,Math.PI*2);ctx.clip(mask,"evenodd");}
     for(const [a,b] of TRACK.bridges) {
-      const road=new Path2D();for(let d=a;d<=b;d+=4){const p=sample(d);d===a ? road.moveTo(p.x,p.y) : road.lineTo(p.x,p.y);}
+      const road=path(a,b);
       ctx.save();ctx.lineCap="butt";ctx.lineJoin="round";
+      // Inset the shadow so it cannot cast a transverse dark seam onto the
+      // continuing road at either end. The full road paint covers its ends.
       ctx.shadowColor="#0009";ctx.shadowBlur=20;ctx.shadowOffsetY=18;
-      ctx.strokeStyle="#c9c9b5";ctx.lineWidth=142;ctx.stroke(road);
-      ctx.shadowBlur=0;ctx.shadowOffsetY=0;
-      ctx.strokeStyle="#df655e";ctx.lineWidth=136;ctx.setLineDash([20,20]);ctx.stroke(road);ctx.setLineDash([]);
+      ctx.strokeStyle="#c9c9b5";ctx.lineWidth=142;ctx.stroke(path(a+55,b-55));
+      ctx.shadowBlur=0;ctx.shadowOffsetY=0;ctx.stroke(road);
+      ctx.strokeStyle="#df655e";ctx.lineWidth=136;ctx.setLineDash([20,20]);ctx.lineDashOffset=-a;ctx.stroke(road);ctx.setLineDash([]);ctx.lineDashOffset=0;
       ctx.strokeStyle=asphaltColour(race?.weather?.wetness);ctx.lineWidth=TRACK.width;ctx.stroke(road);
       ctx.restore();
+    }
+    ctx.restore();
+    if(view){
+      // The base drawing contains both roads. Repaint the lower route inside
+      // the window, otherwise it looks like a flat four-way intersection.
+      ctx.save();ctx.beginPath();ctx.arc(view.x,view.y,view.radius,0,Math.PI*2);ctx.clip();
+      ctx.fillStyle=TRACK.theme==="city" ? "#364247" : "#2a443c";
+      ctx.fillRect(view.x-view.radius,view.y-view.radius,view.radius*2,view.radius*2);
+      const s=wrap(race.player.s,TRACK.length),a=Math.max(0,s-240),b=Math.min(TRACK.length,s+240),road=path(a,b);
+      ctx.lineCap="butt";ctx.lineJoin="round";ctx.strokeStyle="#153029";ctx.lineWidth=174;ctx.stroke(road);
+      ctx.strokeStyle="#c9c9b5";ctx.lineWidth=142;ctx.stroke(road);
+      ctx.strokeStyle="#df655e";ctx.lineWidth=136;ctx.setLineDash([20,20]);ctx.lineDashOffset=-a;ctx.stroke(road);ctx.setLineDash([]);ctx.lineDashOffset=0;
+      ctx.strokeStyle=asphaltColour(race.weather?.wetness);ctx.lineWidth=TRACK.width;ctx.stroke(road);
+      for(const c of race.cars)if(!c.garage&&!trackLayer(c.s))this.car(ctx,interpolatedCar(c,alpha));
+      ctx.restore();
+      ctx.save();ctx.globalAlpha=.65*view.alpha;ctx.strokeStyle="#d6fca1";ctx.lineWidth=2;ctx.setLineDash([7,7]);
+      ctx.beginPath();ctx.arc(view.x,view.y,view.radius,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+      ctx.globalAlpha=view.alpha;ctx.fillStyle="#102027e8";ctx.fillRect(view.x-52,view.y-view.radius-24,104,22);
+      ctx.textAlign="center";this.text(ctx,"UNDERPASS",view.x,view.y-view.radius-8,12,"#d6fca1");ctx.restore();
     }
   }
   buildings(ctx) {

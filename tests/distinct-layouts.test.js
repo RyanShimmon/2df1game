@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import {CIRCUITS,makeTrack,selectTrack,TRACK,trackLayer,Race,sample,angleDiff,grip} from '../src/core.js';
 test.afterEach(()=>selectTrack('northline'));
 function signature(circuit) {
- const t=makeTrack(circuit),xs=t.pts.map(p=>p.x),ys=t.pts.map(p=>p.y),x=Math.min(...xs),y=Math.min(...ys),w=Math.max(...xs)-x,h=Math.max(...ys)-y;
+ const t=makeTrack(circuit),from=t.mainStraight.to+750,to=t.length+t.mainStraight.from-750,technical=t.pts.filter(p=>p.s>=from&&p.s<=to),xs=technical.map(p=>p.x),ys=technical.map(p=>p.y),x=Math.min(...xs),y=Math.min(...ys),w=Math.max(...xs)-x,h=Math.max(...ys)-y;
  return Array.from({length:64},(_,i)=>{
-  const s=i/64*t.length,j=t.pts.findIndex(p=>p.s>=s),a=t.pts[Math.max(0,j-1)],b=t.pts[j],f=(s-a.s)/(b.s-a.s||1);
+  // Compare the technical sections separately from the intentionally shared pit-straight layout.
+  const s=from+i/64*(to-from),j=t.pts.findIndex(p=>p.s>=s),a=t.pts[Math.max(0,j-1)],b=t.pts[j],f=(s-a.s)/(b.s-a.s||1);
   return [(a.x+(b.x-a.x)*f-x)/w,(a.y+(b.y-a.y)*f-y)/h];
  });
 }

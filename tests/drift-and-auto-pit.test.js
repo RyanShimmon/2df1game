@@ -42,7 +42,7 @@ test('automatic qualifying stop refuels and holds retained tyres until a new thr
 });
 test('soft wear rises modestly while retaining its qualifying reuse advantage',()=>{
  const r=race(),p=r.player;resources(p,0,TRACK.length);
- assert.equal(TYRES.S.life,9);assert.ok(p.wear>1.1/10 && p.wear<1.3/10);
+ assert.equal(TYRES.S.life,12);assert.ok(Math.abs(p.wear-1/TYRES.S.life)<1e-9);
 });
 test('every tyre compound drifts when worn and grip has fallen',()=>{
  for(const tyre of ['S','M','H','I','W']) {

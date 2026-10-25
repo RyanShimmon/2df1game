@@ -15,10 +15,12 @@ test('countersteer reduces a slide, with throttle providing more recovery author
  const coast=recovery(false),powered=recovery(true),wrong=recovery(true,.5);
  assert.ok(coast<.35);assert.ok(powered<coast*.9,`${powered} vs ${coast}`);assert.ok(wrong>powered);
 });
-test('wet slick grip is hard > medium > soft, with a clear intermediate advantage',()=>{
+test('wet slick grip is hard > medium > soft, with intermediates taking over beyond the Hard window',()=>{
  for(const water of [.2,.4,.7,1]) {
   const value=tyre=>grip({tyre,wear:0,tyreAge:1000,trackWetness:water,offset:0,upgrades});
-  assert.ok(value('H')>value('M'));assert.ok(value('M')>value('S'));assert.ok(value('I')>value('H')*1.15);
+  assert.ok(value('H')>value('M'));assert.ok(value('M')>value('S'));
+  if(water===.2){assert.ok(value('I')>value('H'));assert.ok(value('H')>=value('I')*.95,'Hard remains viable at its crossover');}
+  else assert.ok(value('I')>value('H')*1.15);
  }
  const dry=tyre=>grip({tyre,wear:0,tyreAge:1000,trackWetness:0,offset:0,upgrades});
  assert.ok(dry('S')>dry('M'));assert.ok(dry('M')>dry('H'));

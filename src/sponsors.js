@@ -1,24 +1,24 @@
 // Contract goals and settlement are shared by the player and AI teams.
 export const SPONSORS=[
- {id:"finish",name:"NORTHLINE",desc:"Finish the race with legal tyre usage.",amount:3500,tier:"reliable"},
- {id:"top15",name:"APEX WORKS",desc:"Finish in the top 15 with legal tyre usage.",amount:6500,tier:"challenge"},
- {id:"clean",name:"CLEAR SIGNAL",desc:"Finish legally with no penalties and at most 2 contacts.",amount:4500,tier:"reliable"},
- {id:"points",name:"VELOCITY",desc:"Score points: finish legally in the top 10.",amount:10000,tier:"ambitious"},
- {id:"top5",name:"REDLINE ENERGY",desc:"Bring it home in the top 5 with legal tyre usage.",amount:13500,tier:"ambitious"},
- {id:"podium",name:"SUMMIT WATCHES",desc:"Finish legally on the podium: P1, P2 or P3.",amount:16000,tier:"ambitious"},
- {id:"win",name:"CROWN MOTORSPORT",desc:"Win the race with legal tyre usage.",amount:22000,tier:"ambitious"},
- {id:"gain3",name:"FORWARD DYNAMICS",desc:"Finish legally at least 3 places ahead of your grid position.",amount:8500,tier:"challenge"},
- {id:"gain6",name:"OVERTAKE LABS",desc:"Finish legally at least 6 places ahead of your grid position.",amount:11500,tier:"ambitious"},
- {id:"noContact",name:"PRISTINE AUTO",desc:"Finish legally with zero contacts.",amount:7000,tier:"reliable"},
- {id:"noPenalty",name:"TRUE LINE",desc:"Finish legally without receiving any penalties.",amount:5500,tier:"reliable"},
- {id:"oneStop",name:"ENDURANCE FUELS",desc:"Finish legally with exactly one pit stop.",amount:9000,tier:"challenge"},
+ {id:"finish",name:"NORTHLINE",desc:"Finish the race with legal tyre usage.",amount:600,tier:"reliable"},
+ {id:"top15",name:"APEX WORKS",desc:"Finish in the top 15 with legal tyre usage.",amount:1000,tier:"challenge"},
+ {id:"clean",name:"CLEAR SIGNAL",desc:"Finish legally with no penalties and at most 2 contacts.",amount:900,tier:"reliable"},
+ {id:"points",name:"VELOCITY",desc:"Score points: top 10 in a Grand Prix, top 8 in a Sprint.",amount:1400,tier:"ambitious"},
+ {id:"top5",name:"REDLINE ENERGY",desc:"Bring it home in the top 5 with legal tyre usage.",amount:1900,tier:"ambitious"},
+ {id:"podium",name:"SUMMIT WATCHES",desc:"Finish legally on the podium: P1, P2 or P3.",amount:2400,tier:"ambitious"},
+ {id:"win",name:"CROWN MOTORSPORT",desc:"Win the race with legal tyre usage.",amount:3000,tier:"ambitious"},
+ {id:"gain3",name:"FORWARD DYNAMICS",desc:"Finish legally at least 3 places ahead of your grid position.",amount:1200,tier:"challenge"},
+ {id:"gain6",name:"OVERTAKE LABS",desc:"Finish legally at least 6 places ahead of your grid position.",amount:1600,tier:"ambitious"},
+ {id:"noContact",name:"PRISTINE AUTO",desc:"Finish legally with zero contacts.",amount:1100,tier:"reliable"},
+ {id:"noPenalty",name:"TRUE LINE",desc:"Finish legally without receiving any penalties.",amount:800,tier:"reliable"},
+ {id:"oneStop",name:"ENDURANCE FUELS",desc:"Finish legally with exactly one pit stop.",amount:1000,tier:"challenge"},
 ];
 export function sponsorMet(id,row){
  if(row.dnf || row.legal===false || !(row.position>=1 && row.position<=22))return false;
  switch(id){
   case 'finish':return true;
   case 'top15':return row.position<=15;
-  case 'points':return row.position<=10;
+  case 'points':return row.position<=(row.raceFormat==='sprint'?8:10);
   case 'top5':return row.position<=5;
   case 'podium':return row.position<=3;
   case 'win':return row.position===1;

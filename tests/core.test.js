@@ -68,7 +68,7 @@ test("softs are faster but wear much faster; saving reduces fuel and wear", () =
   resources(s, 1, TRACK.length);
   resources(m, 1, TRACK.length);
   resources(h, 1, TRACK.length);
-  resources(save, 1, TRACK.length, 0.72);
+  save.drive="save";resources(save, 1, TRACK.length, 0.82);
   assert.ok(s.wear > m.wear && m.wear > h.wear);
   assert.ok(save.wear < m.wear && save.fuel > m.fuel);
   m.wear = 0.95;
@@ -115,7 +115,7 @@ test("pit crew upgrade reduces service time", () => {
 });
 test("AI completes race, consumes fuel and satisfies compound rule", () => {
   const r = new Race(
-    { ...setup, laps: 8, fuel: 10 },
+    { ...setup, laps: 8, fuel: 10, raceFormat:"grandPrix" },
     { engine: 0, aero: 0, tyres: 0, crew: 0 },
   );
   r.player.player = false;
@@ -131,10 +131,10 @@ test("player can accelerate, steer, brake and run out of fuel", () => {
   const r = new Race(setup, { engine: 0, aero: 0, tyres: 0, crew: 0 });
   r.countdown = 0;
   r.cars = [r.player];
-  r.player.x = 1050;
-  r.player.y = 1350;
+  r.player.x = sample(-500).x;
+  r.player.y = sample(-500).y;
   r.player.angle = 0;
-  r.player.s = 350;
+  r.player.s = -500;
   for (let i = 0; i < 120; i++) r.step(1 / 60, { throttle: true });
   assert.ok(r.player.speed > 100);
   const before = r.player.speed;
@@ -147,6 +147,7 @@ test("player can accelerate, steer, brake and run out of fuel", () => {
 });
 test("career upgrades charge once, reject overspending and persist correctly", () => {
   const c = newCareer();
+  c.cash=10000;
   assert.ok(buyUpgrade(c, "engine"));
   assert.equal(c.cash, 1000);
   assert.equal(c.upgrades.engine, 1);
@@ -166,7 +167,7 @@ test("sponsor only pays when condition is met; DNF and illegal result cannot sco
     penalties: 0,
   };
   const r = settleCareer(c, result);
-  assert.equal(r.bonus, 6500);
+  assert.equal(r.bonus, 1000);
   assert.equal(c.round, 2);
   assert.equal(c.sponsor, null);
   c.sponsor = "points";
@@ -199,16 +200,16 @@ test("clean sponsor checks collisions and pit penalties, season rolls over", () 
     penalties: 0,
   });
   assert.equal(r.points, 25);
-  assert.equal(r.bonus, 10000);
-  assert.equal(r.seasonBonus, 3750);
+  assert.equal(r.bonus, 1400);
+  assert.equal(r.seasonBonus, 0);
   assert.equal(c.round, 1);
   assert.equal(c.season, 2);
 });
-test("one-stop and two-stop strategies are competitive over a long 24-lap race", () => {
+test("one-stop and two-stop strategies are competitive over a 32-lap career distance", () => {
   // Controlled driver, no traffic: isolate resource/pace tradeoffs from overtaking.
   function run(compounds, stints) {
     const r = new Race(
-      { laps: 24, tyre: compounds[0], fuel: 27.6 },
+      { laps: 32, tyre: compounds[0], fuel: 37 },
       { engine: 0, aero: 0, tyres: 0, crew: 0 },
     );
     r.countdown = 0;
@@ -243,19 +244,22 @@ test("one-stop and two-stop strategies are competitive over a long 24-lap race",
     return r.time;
   }
   const times = [
-    run(["M", "H"], [10]),
-    run(["H", "M"], [14]),
-    run(["S", "M", "S"], [7, 17]),
-    run(["S", "H", "S"], [7, 17]),
+    run(["M", "H"], [14]),
+    run(["H", "M"], [18]),
+    run(["S", "S", "H"], [7, 14]),
+    run(["S", "H", "S"], [8, 24]),
   ];
   assert.ok(
-    Math.max(...times) - Math.min(...times) < 8,
+    // Fixed strategies should remain within 1.5% over the longer race.
+    Math.max(...times) - Math.min(...times) < Math.min(...times)*.015,
     `Strategy spread: ${times}`,
   );
 });
 test("player steering physics can complete a legal race with a requested pit stop", () => {
+  // This driver only uses slicks; random rain must not turn a dry driving/pit
+  // regression into an unrepeatable wet-weather strategy test.
   const r = new Race(
-    { laps: 8, tyre: "M", fuel: 9.5 },
+    { laps: 8, tyre: "M", fuel: 9.5, weather: "dry", aiSeed: 42 },
     { engine: 0, aero: 0, tyres: 0, crew: 0 },
   );
   r.countdown = 0;
@@ -353,8 +357,9 @@ test("player reaches 330 km/h with enough straight-line acceleration", () => {
   // Keep car on a long straight while exercising the real acceleration path.
   for (let i = 0; i < 1100; i++) {
     p.fuel = 1;
-    p.x = 1050;
-    p.y = 1350;
+    p.x = sample(0).x;
+    p.y = sample(0).y;
+    p.s=0;
     p.angle = 0;
     r.stepPlayer(p, 1 / 60, { throttle: true });
   }

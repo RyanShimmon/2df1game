@@ -1,17 +1,17 @@
 import {careerRound,migrateCalendar} from "./calendar.js";
-import {sponsorMet} from "./sponsors.js";
+import {sponsorMet,SPONSORS} from "./sponsors.js";
 export {sponsorMet} from "./sponsors.js";
 // Shared development prices and mechanical effects: player and AI buy the same parts.
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export const UPGRADES={
- engine:{name:"V10 development",desc:"7% more engine power per level, from corner exit all the way to top speed. Your aero package sets the top-speed trade-off.",cost:6000,max:5,group:"Powertrain"},
- efficiency:{name:"Fuel efficiency",desc:"2% less fuel per level. Start lighter or spend longer in Push.",cost:5000,max:5,group:"Powertrain"},
- aero:{name:"Aerodynamics",desc:"More high-speed corner support with every aero package. Setup choices are available from the start.",cost:5000,max:5,group:"Chassis"},
- suspension:{name:"Suspension & differential",desc:"More progressive traction and stronger countersteer recovery. You still control the slide.",cost:5000,max:5,group:"Chassis"},
- brakes:{name:"Brakes & balance",desc:"Stronger, more stable braking. Compound, wear, temperature and rain still limit stopping power.",cost:4500,max:5,group:"Chassis"},
- tyres:{name:"Tyre engineering",desc:"7% less wear per level, a gentler grip cliff and better control of excess heat.",cost:4500,max:5,group:"Race operations"},
- crew:{name:"Pit crew training",desc:"Narrower service-time range and better tyre preparation. Minimum tyre change remains 2.3 seconds.",cost:3500,max:4,group:"Race operations"},
- engineer:{name:"Race engineer",desc:"L1: fuel and tyre estimates. L2: weather crossover windows. L3: pit rejoin and traffic estimates.",cost:3500,max:3,group:"Race operations"},
+ engine:{name:"V10 development",desc:"7% more engine power per level, from corner exit all the way to top speed. Your aero package sets the top-speed trade-off.",cost:9000,max:5,group:"Powertrain"},
+ efficiency:{name:"Fuel efficiency",desc:"2% less fuel per level. Start lighter or spend longer in Push.",cost:7500,max:5,group:"Powertrain"},
+ aero:{name:"Aerodynamics",desc:"More high-speed corner support with every aero package. Setup choices are available from the start.",cost:8500,max:5,group:"Chassis"},
+ suspension:{name:"Suspension & differential",desc:"More progressive traction and stronger countersteer recovery. You still control the slide.",cost:7500,max:5,group:"Chassis"},
+ brakes:{name:"Brakes & balance",desc:"Stronger, more stable braking. Compound, wear, temperature and rain still limit stopping power.",cost:6500,max:5,group:"Chassis"},
+ tyres:{name:"Tyre engineering",desc:"7% less wear per level, a gentler grip cliff and better control of excess heat.",cost:8500,max:5,group:"Race operations"},
+ crew:{name:"Pit crew training",desc:"Narrower service-time range and better tyre preparation. Minimum tyre change remains 2.3 seconds.",cost:5000,max:4,group:"Race operations"},
+ engineer:{name:"Race engineer",desc:"L1: fuel and tyre estimates. L2: weather crossover windows. L3: pit rejoin and traffic estimates.",cost:4000,max:3,group:"Race operations"},
  commercial:{name:"Commercial development",desc:"10% more sponsor income per level. Contract conditions still have to be met.",cost:4500,max:3,group:"Team business"},
 };
 // Corner speed scales with the square root of lateral grip. Derive force and
@@ -32,7 +32,7 @@ export function aeroPackageSummary(spec){
 export const emptyUpgrades=()=>Object.fromEntries(Object.keys(UPGRADES).map(k=>[k,0]));
 export const level=(upgrades,key)=>clamp(Number(upgrades?.[key])||0,0,UPGRADES[key]?.max || 0);
 export function normalizeUpgrades(upgrades={}){return Object.fromEntries(Object.keys(UPGRADES).map(k=>[k,Math.floor(level(upgrades,k))]));}
-export const upgradePrice=(upgrades,key)=>UPGRADES[key] ? Math.round(UPGRADES[key].cost*(1+level(upgrades,key)*.6)) : Infinity;
+export const upgradePrice=(upgrades,key)=>UPGRADES[key] ? Math.round(UPGRADES[key].cost*(1+level(upgrades,key)*.85)) : Infinity;
 export const fuelMultiplier=upgrades=>1-level(upgrades,"efficiency")*.02;
 export const sponsorMultiplier=upgrades=>1+level(upgrades,"commercial")*.10;
 export const sponsorPayout=(upgrades,amount)=>Math.round(amount*sponsorMultiplier(upgrades));
@@ -61,6 +61,10 @@ export function upgradeDetails(key,installedLevel){
  };
  return {title:upgrade.name+" · Level "+n,description:n?descriptions[key]:upgrade.desc};
 }
+export const racePrize=(row,difficultyBonus=0)=>{
+ const base=!row.dnf && row.legal!==false ? 4500+(23-row.position)*150 : 750;
+ return {base,bonus:!row.dnf && row.legal!==false ? Math.round(base*difficultyBonus) : 0};
+};
 export function createTeamDevelopment(){return Array.from({length:11},(_,teamIndex)=>({teamIndex,budget:7000,upgrades:emptyUpgrades(),aeroSpec:"balanced",lastRound:0,fundedRound:0,history:[]}));}
 export function migrateDevelopment(career){
  migrateCalendar(career);
@@ -81,15 +85,16 @@ export function developTeams(career,seed=null){
  for(const team of career.teams){
   if(team.teamIndex===career.profile?.teamIndex || team.lastRound>=round)continue;
   const random=randomFor(career.developmentSeed,team.teamIndex,round),purchases=[];let spent=0;
-  for(let n=0;n<2;n++){
+  for(let n=0;n<12;n++){
    const available=Object.keys(UPGRADES).filter(k=>team.upgrades[k]<UPGRADES[k].max && upgradePrice(team.upgrades,k)<=team.budget);
-   if(!available.length || (n>0 && random()<.5))break;
+   if(!available.length)break;
    const weights=available.map(k=>["engine","aero","tyres","suspension","brakes"].includes(k) ? 2.3+random() : 1+random());
    let pick=random()*weights.reduce((s,v)=>s+v,0),key=available.at(-1);
    for(let i=0;i<available.length;i++){pick-=weights[i];if(pick<=0){key=available[i];break;}}
    const cost=upgradePrice(team.upgrades,key);team.budget-=cost;spent+=cost;team.upgrades[key]++;
    purchases.push({key,level:team.upgrades[key],cost});
   }
+  team.contractId=teamSponsor(team,round,career.developmentSeed).id;
   team.lastRound=round;team.history.unshift({round,spent,purchases,balance:team.budget});team.history=team.history.slice(0,12);changed=true;
  }
  return changed;
@@ -100,16 +105,27 @@ export function developmentSnapshot(career,trackId){
   ? {teamIndex:t.teamIndex,upgrades:normalizeUpgrades(career.upgrades),aeroSpec:career.aeroSpec || "balanced"}
   : {teamIndex:t.teamIndex,upgrades:normalizeUpgrades(t.upgrades),aeroSpec:level(t.upgrades,"aero") ? fast ? "lowDrag" : technical ? "downforce" : "balanced" : "balanced"});
 }
-export function fundTeams(career,result,sponsors,difficultyBonus=0){
+// Pick a plausible target before the race, using previous results rather than
+// knowing the next classification. The same contract conditions bind both sides.
+export function teamSponsor(team,round,seed=1,sponsors=SPONSORS){
+ const place=team.lastIncome?.averagePosition ?? 11;
+ const candidates=sponsors.filter(s=>["finish","clean","noContact","noPenalty",...(place<=15?["top15"]:[]),...(place<=11?["points"]:[]),...(place<=6?["top5"]:[]),...(place<=3?["podium"]:[])].includes(s.id));
+ const random=randomFor(seed,team.teamIndex,round);
+ return candidates[Math.floor(random()*candidates.length)] || sponsors[0];
+}
+export function fundTeams(career,result,sponsors=SPONSORS,difficultyBonus=0){
  migrateDevelopment(career);const round=careerRound(career);
  for(const team of career.teams){
   if(team.teamIndex===career.profile?.teamIndex || team.fundedRound>=round)continue;
   const rows=(result.field || []).filter(r=>r.teamIndex===team.teamIndex);
-  const contract=sponsors[(team.teamIndex+round)%sponsors.length];
-  const earned=rows.length ? Math.round(rows.reduce((sum,row)=>{
-   const base=!row.dnf && row.legal!==false ? 2500+(23-row.position)*300 : 750;
-   return sum+base+(!row.dnf && row.legal!==false ? Math.round(base*difficultyBonus) : 0)+(sponsorMet(contract.id,row)?sponsorPayout(team.upgrades,contract.amount):0);
-  },0)/rows.length) : 750;
-  team.budget+=earned;team.fundedRound=round;team.lastIncome={round,earned,contract:contract.name};
+  const contract=sponsors.find(s=>s.id===team.contractId) || teamSponsor(team,round,career.developmentSeed,sponsors);
+  const incomes=rows.map(row=>{
+   const prize=racePrize(row,difficultyBonus);
+   return {prize:prize.base+prize.bonus,sponsor:contract && sponsorMet(contract.id,{...row,raceFormat:row.raceFormat || result.raceFormat}) ? sponsorPayout(team.upgrades,contract.amount) : 0};
+  });
+  const average=key=>incomes.length ? Math.round(incomes.reduce((sum,row)=>sum+row[key],0)/incomes.length) : key==='prize'?750:0;
+  const prize=average('prize'),sponsor=average('sponsor'),earned=prize+sponsor;
+  team.budget+=earned;team.fundedRound=round;
+  team.lastIncome={round,earned,prize,sponsor,contract:contract?.name || 'No contract',averagePosition:rows.length ? rows.reduce((sum,row)=>sum+row.position,0)/rows.length : 22};
  }
 }

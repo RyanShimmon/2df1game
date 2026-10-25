@@ -74,7 +74,7 @@ test('pit crew improves preparation and keeps service within the existing physic
 test('commercial upgrades increase only earned sponsor income, preserving conditions and normal race prizes',()=>{
  const c=newCareer(profile);c.upgrades.commercial=3;c.sponsor='points';
  const r=settleCareer(c,{position:3,legal:true,dnf:false,contacts:0,penalties:0});
- assert.equal(r.bonus,13000);assert.equal(r.commercialBonus,3000);assert.equal(r.basePrize,8500);
+ assert.equal(r.bonus,1820);assert.equal(r.commercialBonus,420);assert.equal(r.basePrize,7500);
  c.sponsor='clean';assert.equal(settleCareer(c,{position:3,legal:true,dnf:false,contacts:0,penalties:1}).bonus,0);
  c.sponsor='finish';assert.equal(settleCareer(c,{position:3,legal:true,dnf:true}).bonus,0);
 });
@@ -92,7 +92,7 @@ test('AI development is seeded, budgeted, charged at the same prices and purchas
  const a=newCareer(profile),b=newCareer(profile);assert.equal(developTeams(a,42),true);developTeams(b,42);assert.deepEqual(a.teams,b.teams);
  for(const t of a.teams.filter(t=>t.teamIndex!==profile.teamIndex)){
   const row=t.history[0],levels=emptyUpgrades();let spent=0;
-  for(const purchase of row.purchases){assert.equal(purchase.cost,Math.round(UPGRADES[purchase.key].cost*(1+levels[purchase.key]*.6)));levels[purchase.key]++;spent+=purchase.cost;}
+  for(const purchase of row.purchases){assert.equal(purchase.cost,Math.round(UPGRADES[purchase.key].cost*(1+levels[purchase.key]*.85)));levels[purchase.key]++;spent+=purchase.cost;}
   assert.equal(t.budget,7000-spent);assert.ok(t.budget>=0);assert.deepEqual(t.upgrades,levels);
  }
  const before=JSON.stringify(a);assert.equal(developTeams(a,42),false);assert.equal(JSON.stringify(a),before);
@@ -103,8 +103,8 @@ test('opponent income uses their classification and sponsor conditions, then fun
  const field=TEAMS.flatMap((_,teamIndex)=>[0,1].map(n=>({teamIndex,position:teamIndex*2+n+1,legal:true,dnf:false,contacts:0,penalties:0,gridPosition:Math.min(22,teamIndex*2+n+4),stops:1})));
  settleCareer(c,{position:6,legal:true,dnf:false,field});
  for(const t of c.teams.filter(t=>t.teamIndex!==profile.teamIndex)){
-  const contract=SPONSORS[(t.teamIndex+1)%SPONSORS.length],rows=field.filter(r=>r.teamIndex===t.teamIndex);
-  const earned=Math.round(rows.reduce((sum,row)=>sum+2500+(23-row.position)*300+((['finish','clean','noContact','noPenalty','oneStop'].includes(contract.id)||contract.id==='top15'&&row.position<=15||contract.id==='points'&&row.position<=10||contract.id==='top5'&&row.position<=5||contract.id==='podium'&&row.position<=3||contract.id==='win'&&row.position===1||contract.id==='gain3'&&row.gridPosition-row.position>=3||contract.id==='gain6'&&row.gridPosition-row.position>=6)?sponsorPayout(t.upgrades,contract.amount):0),0)/2);
+  const contract=SPONSORS.find(s=>s.id===before[t.teamIndex].contractId),rows=field.filter(r=>r.teamIndex===t.teamIndex);
+  const earned=Math.round(rows.reduce((sum,row)=>sum+4500+(23-row.position)*150+((['finish','clean','noContact','noPenalty','oneStop'].includes(contract.id)||contract.id==='top15'&&row.position<=15||contract.id==='points'&&row.position<=10||contract.id==='top5'&&row.position<=5||contract.id==='podium'&&row.position<=3||contract.id==='win'&&row.position===1||contract.id==='gain3'&&row.gridPosition-row.position>=3||contract.id==='gain6'&&row.gridPosition-row.position>=6)?sponsorPayout(t.upgrades,contract.amount):0),0)/2);
   assert.equal(t.budget,before[t.teamIndex].budget+earned);
  }
  developTeams(c,42);for(const t of c.teams.filter(t=>t.teamIndex!==profile.teamIndex))assert.equal(t.lastRound,2);

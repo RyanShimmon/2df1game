@@ -32,7 +32,7 @@ test('new contracts pay commercial bonuses and keep an already signed sponsor ac
  c.weekend={grid:Array.from({length:22},(_,i)=>i)};
  const loaded=loadCareer({getItem:()=>JSON.stringify(c)});assert.equal(loaded.sponsor,'gain3');
  const result=settleCareer(loaded,{...row,position:18,gridPosition:undefined});
- assert.equal(result.bonus,10200);assert.equal(result.commercialBonus,1700);assert.equal(result.met,true);assert.equal(loaded.sponsor,null);
+ assert.equal(result.bonus,1440);assert.equal(result.commercialBonus,240);assert.equal(result.met,true);assert.equal(loaded.sponsor,null);
  const missed=newCareer();missed.sponsor='oneStop';assert.equal(settleCareer(missed,{...row,stops:2}).bonus,0);
 });
 test('race result fields include the actual starting place and pit count for every sponsor goal',()=>{

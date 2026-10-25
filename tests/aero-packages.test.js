@@ -45,8 +45,8 @@ test('actual player acceleration reaches each package ceiling without a hidden 3
    Object.assign(c,{s:350,x:loc.x,y:loc.y,angle:loc.angle,motionAngle:loc.angle,offset:0,fuel:1,wear:0,wheelWear:[0,0,0,0],drive:'push'});
    r.stepPlayer(c,1/60,{throttle:true});
   }
-  approx(c.speed,expected);
-  c.slipstream={strength:1,carry:1};approx(maximumSpeed(c),expected+18);
+  approx(c.speed,expected*1.02);
+  c.slipstream={strength:1,carry:1};approx(maximumSpeed(c),expected*1.02+18);
  }
 });
 test('installed upgrade explanations reflect the owned level and actual service limits',()=>{

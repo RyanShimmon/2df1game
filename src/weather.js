@@ -123,6 +123,14 @@ export function trackWater(state,s,length,offset=0) {
   const lineDrying=state.rain<.1 ? .08*(1-clamp(Math.abs(offset)/50,0,1)) : 0;
   return clamp(base-lineDrying,0,1);
 }
+// Wetness/grip anchors: Medium retains near-dry grip through 5% water and
+// Hard through 12%; Soft starts fading immediately. Smooth interpolation
+// across every anchor avoids grip steps at the displayed crossover ranges.
+const slickWetnessCurves={
+  S:[[0,1],[.05,.715],[.4,.40],[1,.18]],
+  M:[[0,1],[.05,.985],[.12,.845],[.4,.55],[1,.20]],
+  H:[[0,1],[.12,.97],[.20,.935],[.4,.70],[1,.23]],
+};
 export function tyreWeatherGrip(compound, water) {
   if (compound === "I")
     return clamp(
@@ -131,14 +139,16 @@ export function tyreWeatherGrip(compound, water) {
       1.08,
     );
   if (compound === "W") return 0.48 + 0.59 * clamp(water / 0.75, 0, 1) + .08*(1-clamp(water/.45,0,1));
-  const slickGrip=Math.max(0.18,1-0.88*water**.72);
-  const moisture=Math.sqrt(clamp(water,0,1));
-  // Dry compound advantages fade in damp conditions; all slicks remain much
-  // weaker than intermediates in real rain, with hard > medium > soft.
-  return slickGrip*(compound==='H' ? 1+.20*moisture : compound==='S' ? 1-.30*moisture : 1);
+  const curve=slickWetnessCurves[compound] || slickWetnessCurves.M,w=clamp(water,0,1);
+  const end=curve.findIndex(([at])=>at>=w);
+  if(end<=0)return curve[0][1];
+  const [from,startGrip]=curve[end-1],[to,endGrip]=curve[end];
+  const t=(w-from)/(to-from),blend=t*t*(3-2*t);
+  return startGrip+(endGrip-startGrip)*blend;
 }
 export function recommendedTyre(water) {
-  return water > 0.64 ? "W" : water > 0.17 ? "I" : "M";
+  const inter=tyreWeatherGrip("I",water),wet=tyreWeatherGrip("W",water),slick=tyreWeatherGrip("M",water);
+  return wet>inter && wet>slick ? "W" : inter>slick ? "I" : "M";
 }
 export function forecast(state) {
   if(!state)return "Dry";
@@ -196,4 +206,16 @@ export function raceForecast(state,{duration=state.duration,laps=16}={}) {
     segment.tyreLabel=segment.tyre==='W' ? 'Wet tyres' : segment.tyre==='I' ? 'Intermediates' : 'Slick tyres';
   }
   return {duration:horizon,laps,segments};
+}
+
+// Suggested competitive bands, with a 5% grip overlap around crossovers.
+// Slick compounds are compared with wet-weather tyres, not one another.
+export function tyreWetnessRange(compound,tyres){
+ const rivals=["S","M","H"].includes(compound)?["I","W"]:Object.keys(tyres).filter(k=>k!==compound);
+ const values=[];
+ for(let percent=0;percent<=100;percent++){
+  const water=percent/100,own=tyres[compound].grip*tyreWeatherGrip(compound,water);
+  if(own>=Math.max(...rivals.map(k=>tyres[k].grip*tyreWeatherGrip(k,water)))*.95)values.push(percent);
+ }
+ return {min:values[0]??0,max:values.at(-1)??0};
 }

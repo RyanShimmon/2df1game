@@ -1,3 +1,4 @@
+import {usefulWear} from "../src/performance.js";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Race,TRACK,AI_LINE,CIRCUITS,selectTrack,sample,newCareer,estimatedTyreLife,resources} from '../src/core.js';
@@ -36,8 +37,8 @@ test('average life estimates match balanced wear, carry used condition and refle
   const r=new Race({...setup,tyre:compound,tyreTemperatureEnabled:false}),c=r.player;
   c.trackWetness=water;c.wear=0;c.wheelWear=[0,0,0,0];
   const fresh=estimatedTyreLife(compound);resources(c,0,TRACK.length);
-  assert.ok(Math.abs(fresh-1/c.wear)<1e-8,compound);
-  assert.equal(estimatedTyreLife(compound,{wear:.25}),fresh*.75);
+  assert.ok(Math.abs(fresh-usefulWear(compound)/c.wear)<1e-8,compound);
+  assert.ok(Math.abs(estimatedTyreLife(compound,{wear:.25})-fresh*(usefulWear(compound)-.25)/usefulWear(compound))<1e-9);
   assert.ok(estimatedTyreLife(compound,{upgrades:{tyres:3}})>fresh);
   assert.ok(estimatedTyreLife(compound,{mode:'push'})<fresh);
   assert.ok(estimatedTyreLife(compound,{mode:'save'})>fresh);

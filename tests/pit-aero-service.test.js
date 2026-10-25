@@ -74,7 +74,7 @@ test('both quick race and a zero-upgrade career allow aero setup',()=>{
  const c=newCareer(profile),w=createWeekend(c,setup),q=new QualifyingRun(w,'S1',c.upgrades,profile);assert.equal(q.selectAero('lowDrag'),true);q.cars=[q.player];for(let i=0;i<202;i++)q.step(.05,{});assert.equal(q.player.aeroSpec,'lowDrag');assert.equal(q.player.upgrades.aero,0);assert.equal(quick.selectAero('invalid'),false);
 });
 test('each engine level increases acceleration across all speeds and packages without changing the aero or draft cap',()=>{
- const r=race(),c=r.player;c.drive='push';c.fuel=1;c.pace=1;
+ const r=race(),c=r.player;c.drive='push';c.fuel=0;c.pace=1;
  for(const spec of ['balanced','downforce','lowDrag']){
   c.aeroSpec=spec;c.upgrades.engine=0;const cap=cleanAirTopSpeed(c);
   for(const speed of [50,150,250,cap-20,cap-1]){

@@ -32,7 +32,7 @@ test('a career win on the last fuel earns points, race money and its finish spon
  const r=nearFinish({mode:'career'});r.step(1/60,{});
  const career=newCareer({driverName:'Alex',teamIndex:2});career.sponsor='finish';
  const settlement=settleCareer(career,r.result);
- assert.equal(settlement.points,25);assert.equal(settlement.met,true);assert.equal(settlement.bonus,3500);assert.ok(settlement.prize>750);
+ assert.equal(settlement.points,25);assert.equal(settlement.met,true);assert.equal(settlement.bonus,600);assert.ok(settlement.prize>750);
 });
 test('finishing without the required compounds is a tyre infringement rather than a DNF',()=>{
  const r=nearFinish();r.player.used.delete('H');r.step(1/60,{});

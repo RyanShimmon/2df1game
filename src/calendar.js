@@ -1,17 +1,17 @@
 // Keep the original rounds in order so an existing weekend stays on its circuit.
 export const WEEKENDS = [
-  {name:"Northline Opener", track:"northline", laps:24, weather:"showers"},
-  {name:"Velocity Trophy", track:"velocity", laps:24, weather:"wetToDry"},
-  {name:"Sunset Grand Prix", track:"sunset", laps:20, weather:"dry"},
-  {name:"Harbour Sprint", track:"harbour", laps:14, weather:"lateRain"},
-  {name:"Crossover Challenge", track:"crossover", laps:24, weather:"dynamic"},
-  {name:"Alpine Grand Prix", track:"alpine", laps:24, weather:"sustainedRain"},
-  {name:"Dunes Grand Prix", track:"dunes", laps:24, weather:"dry"},
-  {name:"Forest Run", track:"forest", laps:20, weather:"intermediate"},
-  {name:"Riviera Grand Prix", track:"riviera", laps:20, weather:"dry"},
-  {name:"Metro Grand Prix", track:"metro", laps:24, weather:"showers"},
-  {name:"Canyon Grand Prix", track:"canyon", laps:24, weather:"dynamic"},
-  {name:"Aurora Finale", track:"aurora", laps:24, weather:"dynamic"},
+  {name:"Northline Opener", track:"northline", laps:32, weather:"showers"},
+  {name:"Velocity Trophy", track:"velocity", laps:32, weather:"wetToDry"},
+  {name:"Sunset Grand Prix", track:"sunset", laps:32, weather:"dry"},
+  {name:"Harbour Sprint", raceFormat:"sprint", track:"harbour", laps:12, weather:"dynamic"},
+  {name:"Crossover Challenge", track:"crossover", laps:32, weather:"dynamic"},
+  {name:"Alpine Grand Prix", track:"alpine", laps:32, weather:"sustainedRain"},
+  {name:"Dunes Grand Prix", track:"dunes", laps:32, weather:"dry"},
+  {name:"Forest Run", track:"forest", laps:32, weather:"intermediate"},
+  {name:"Riviera Grand Prix", track:"riviera", laps:32, weather:"dry"},
+  {name:"Metro Grand Prix", track:"metro", laps:32, weather:"showers"},
+  {name:"Canyon Grand Prix", track:"canyon", laps:32, weather:"dynamic"},
+  {name:"Aurora Finale", track:"aurora", laps:32, weather:"dynamic"},
 ];
 export const SEASON_LENGTH=WEEKENDS.length;
 export const weekendSchedule=round=>WEEKENDS[(round-1)%SEASON_LENGTH];

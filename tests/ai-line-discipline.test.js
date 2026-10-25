@@ -74,3 +74,22 @@ test('qualifying courtesy chooses one edge for an approaching timed car rather t
  const initial=qualifyingLane(c,courtesyLine,[fast]);assert.equal(initial.offset,49);
  for(let i=0;i<20;i++){for(const point of courtesyLine.points)point.offset=i%2?20:-20;assert.equal(qualifyingLane(c,courtesyLine,[fast]).offset,initial.offset);}
 });
+
+test('a free corridor outside two cars is considered even when both fixed passing lanes are blocked',()=>{
+ const c=driver(),left=opponent(1,580,-24),right=opponent(2,580,10);
+ const plan=planRacingLane(c,line,[left,right],{time:0,paceAdvantage:()=>8});
+ assert.equal(plan.phase,'passing');assert.equal(plan.side,1);
+ assert.ok(plan.offset>=44 && plan.offset<=45);
+ assert.ok(plan.offset-right.offset>=34);
+});
+test('a stalled outside attempt drops back in its own lane before returning',()=>{
+ const c=driver(),lead=opponent(1,580);
+ const first=planRacingLane(c,line,[lead],{time:0});
+ c.offset=first.offset;lead.s=510;
+ planRacingLane(c,line,[lead],{time:1});
+ const stalled=planRacingLane(c,line,[lead],{time:12});
+ assert.equal(stalled.phase,'passing');assert.equal(stalled.side,first.side);
+ assert.ok(stalled.followingSpeed<lead.speed);
+ lead.s=570;
+ assert.equal(planRacingLane(c,line,[lead],{time:13}).phase,'return');
+});

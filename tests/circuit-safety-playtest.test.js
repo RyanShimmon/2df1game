@@ -6,12 +6,12 @@ for(const circuit of CIRCUITS){
  test(`${circuit.name}: road and kerb boundaries have safe radii and separation`,()=>{
   selectTrack(circuit.id);const points=TRACK.pts;
   for(let i=0;i<points.length-1;i++){
-   const a=points[(i+1399)%1400],b=points[(i+1)%1400];
+   const a=points[(i+points.length-2)%(points.length-1)],b=points[(i+1)%(points.length-1)];
    const distance=(b.s-a.s+TRACK.length)%TRACK.length;
    const radius=distance/Math.abs(angleDiff(b.angle,a.angle));
    assert.ok(radius>TRACK.width/2+40,`folded inside edge at ${points[i].s.toFixed(1)}m: radius ${radius.toFixed(1)}`);
   }
-  for(let i=0;i<1400;i+=4)for(let j=i+4;j<1400;j+=4){
+  for(let i=0;i<points.length-1;i+=4)for(let j=i+4;j<points.length-1;j+=4){
    const a=points[i],b=points[j],gap=Math.min(b.s-a.s,TRACK.length-(b.s-a.s));
    if(gap<350||trackLayer(a.s)!==trackLayer(b.s))continue;
    assert.ok(Math.hypot(a.x-b.x,a.y-b.y)>TRACK.width+50,`separate road / kerb sections overlap at ${a.s.toFixed(1)}, ${b.s.toFixed(1)}m`);

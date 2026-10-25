@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 import {Race,TRACK,AI_LINE,CIRCUITS,selectTrack} from '../src/core.js';
 import {racingPoint} from '../src/racecraft.js';
 test.afterEach(()=>selectTrack('northline'));
-test('isolated turns use outside-apex-outside, while linked same-direction corners share a continuous arc',()=>{
+test('linked same-direction corners share a continuous outside-inside-outside arc',()=>{
  selectTrack('forest');
- assert.ok(racingPoint(AI_LINE,2115-350).offset>15);
- assert.ok(racingPoint(AI_LINE,2115).offset<-35);
- assert.ok(racingPoint(AI_LINE,2115+350).offset>30);
- for(let s=3105;s<=3375;s+=20)assert.ok(racingPoint(AI_LINE,s).offset<-25,'do not weave back to the outside between linked lefts');
+ // New main straight feeds two linked lefts. Hold the inside between them,
+ // then open the exit, rather than resetting outside between the apexes.
+ assert.ok(racingPoint(AI_LINE,190).offset>15);
+ assert.ok(racingPoint(AI_LINE,540).offset<-30);
+ for(let s=700;s<=1100;s+=20)assert.ok(racingPoint(AI_LINE,s).offset<-25,'do not weave outside between linked lefts');
+ assert.ok(racingPoint(AI_LINE,1430).offset>5);
  assert.ok(AI_LINE.estimatedTime<AI_LINE.baselineTime*.95);
 });
 for(const circuit of CIRCUITS)test(`${circuit.name}: distinct measured difficulty pace and stable whole-lap tracking`,()=>{
@@ -26,6 +28,13 @@ for(const circuit of CIRCUITS)test(`${circuit.name}: distinct measured difficult
   assert.ok(c.finished&&!c.dnf);assert.equal(c.trackLimits,0);assert.ok(error<1,`line-tracking error ${error}m`);
   times.push(c.bestLap);
  }
- for(let i=1;i<times.length;i++)assert.ok(times[i]<times[i-1]*.995,`difficulty lap times: ${times.join(', ')}`);
- assert.ok(times[3]<times[0]*.90,'Expert must be measurably faster than Easy on the same car');
+ if(circuit.ovalRadius){
+  // On the new flat-out oval, skilled drivers reach the same mechanical cap.
+  // Extra skill cannot create top speed once the car is already flat out.
+  for(let i=1;i<times.length;i++)assert.ok(times[i]<=times[i-1]+.02);
+  assert.ok(times[3]<times[0]*.95);
+ }else{
+  for(let i=1;i<times.length;i++)assert.ok(times[i]<times[i-1]*.995,`difficulty lap times: ${times.join(', ')}`);
+  assert.ok(times[3]<times[0]*.90,'Expert must be measurably faster than Easy on the same car');
+ }
 });

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {Race,TRACK,selectTrack,sample,newCareer,brakingDeceleration,maximumSpeed} from '../src/core.js';
+import {Race,TRACK,selectTrack,sample,newCareer,brakingDeceleration,maximumSpeed,slidingResistance} from '../src/core.js';
 import {createWeather} from '../src/weather.js';
 import {availableAISets,brakingTarget} from '../src/racecraft.js';
 import {WEEKEND_QUOTA} from '../src/tyre-stock.js';
@@ -77,10 +77,10 @@ test('no AI can invent fresh tyres after exhausting their allocation or gain tim
  const r=new Race(w.setup,{},'career',profile);prepareRace(r,w,'M1');assert.equal(r.cars[0].dnf,true);assert.equal(r.cars[0].tyreSet,null);
 });
 function stop({tyre='M',wear=0,water=0,temp=null,wheels=null,speed=250}={}){
- const r=new Race({...setup,track:'velocity',tyre,tyreTemperatureEnabled:temp===null}),c=r.player,loc=sample(700);
+ const r=new Race({...setup,track:'velocity',tyre,tyreTemperatureEnabled:temp===null}),c=r.player,loc=sample(-1000);
  // A long, flat straight isolates grip-limited stopping from corner/grass drag.
  r.weather=createWeather('dry');r.weather.wetness=water;r.weather.sectors.fill(water);r.weather.rain=water?1:0;
- Object.assign(c,{s:700,x:loc.x,y:loc.y,angle:loc.angle,motionAngle:loc.angle,offset:0,speed,tyre,wear,wheelWear:wheels || Array(4).fill(wear)});
+ Object.assign(c,{s:-1000,x:loc.x,y:loc.y,angle:loc.angle,motionAngle:loc.angle,offset:0,speed,tyre,wear,wheelWear:wheels || Array(4).fill(wear)});
  c.tyreTemperatureEnabled=temp!==null;
  if(temp!==null)c.tyreTemperatures=Array(4).fill(temp);
  let distance=0,time=0;
@@ -88,7 +88,7 @@ function stop({tyre='M',wear=0,water=0,temp=null,wheels=null,speed=250}={}){
  assert.ok(c.speed<=.5,'failed to stop');return {distance,time};
 }
 test('actual player stopping distance increases with wear and follows dry compound grip',()=>{
- const soft=stop({tyre:'S'}),medium=stop({tyre:'M'}),hard=stop({tyre:'H'}),worn=stop({tyre:'M',wear:.9});
+ const soft=stop({tyre:'S'}),medium=stop({tyre:'M'}),hard=stop({tyre:'H'}),worn=stop({tyre:'M',wear:.97});
  assert.ok(soft.distance<medium.distance&&medium.distance<hard.distance);
  assert.ok(worn.distance>medium.distance*1.4);assert.ok(worn.time>medium.time);
 });
@@ -101,7 +101,7 @@ test('wet braking favours wets, then intermediates, while hard slicks brake bett
 test('front temperatures and individual front wear affect real braking, while disabled heat stays ideal',()=>{
  const ideal=stop({temp:100}),cold=stop({temp:30}),hot=stop({temp:165});
  assert.ok(cold.distance>ideal.distance*1.1);assert.ok(hot.distance>ideal.distance*1.05);
- const wornFront=stop({wear:.5,wheels:[.9,.9,.1,.1]}),wornRear=stop({wear:.5,wheels:[.1,.1,.9,.9]});
+ const wornFront=stop({wear:.5,wheels:[.97,.97,.03,.03]}),wornRear=stop({wear:.5,wheels:[.03,.03,.97,.97]});
  assert.ok(wornFront.distance>wornRear.distance*1.4);
 });
 test('AI braking on worn slicks in rain cannot exceed the player grip-limited braking force',()=>{
@@ -109,7 +109,10 @@ test('AI braking on worn slicks in rain cannot exceed the player grip-limited br
  Object.assign(c,{s:1900,x:loc.x,y:loc.y,angle:loc.angle,offset:0,speed:240,tyre:'S',wear:.9,wheelWear:Array(4).fill(.9),trackWetness:1});
  c.ai.nextDecision=Infinity;c.ai.strategy.nextReview=Infinity;
  const braking=brakingDeceleration(c),old=c.speed;r.stepAI(c,.01);
- assert.ok(braking<30);assert.ok(old-c.speed>0);assert.ok(old-c.speed<=braking*.01+1e-5,`${old-c.speed} exceeds ${braking*.01}`);
+ // Total slowing also includes the same passive sliding resistance as the
+ // player. Check the brake contribution separately from that shared drag.
+ const drag=slidingResistance(old,c.sliding,c.ai.slip)*.01;
+ assert.ok(braking<30);assert.ok(old-c.speed>0);assert.ok(old-c.speed-drag<=braking*.01+1e-5,`${old-c.speed-drag} exceeds ${braking*.01}`);
 });
 test('low-grip AI anticipates braking more than 650 units ahead rather than receiving extra grip',()=>{
  const line={length:6000,step:30,points:Array.from({length:200},(_,i)=>({offset:0,angle:0,distanceScale:1,curvature:i>=60&&i<=64?.02:0}))};
@@ -118,11 +121,11 @@ test('low-grip AI anticipates braking more than 650 units ahead rather than rece
 });
 
 test('AI holding top speed still loads and heats its rear tyres rather than receiving free cooling',()=>{
- const r=new Race({...setup,track:'velocity',tyreTemperatureEnabled:true}),c=r.cars[0],loc=sample(700);
- Object.assign(c,{s:700,x:loc.x,y:loc.y,angle:loc.angle,offset:0,tyre:'M',wear:0,wheelWear:[0,0,0,0],tyreTemperatures:[100,100,100,100]});
+ const r=new Race({...setup,track:'velocity',tyreTemperatureEnabled:true}),c=r.cars[0],loc=sample(-1000);
+ Object.assign(c,{s:-1000,x:loc.x,y:loc.y,angle:loc.angle,offset:0,tyre:'M',wear:0,wheelWear:[0,0,0,0],tyreTemperatures:[100,100,100,100]});
  c.driverStyle.line=0;c.ai.mode='attack';c.ai.nextDecision=Infinity;c.ai.strategy.nextReview=Infinity;c.drive='push';c.speed=maximumSpeed(c);
  r.cars=[c];r.traffic=[c];
- for(let i=0;i<240;i++){r.time+=1/60;r.stepAI(c,1/60);}
+ for(let i=0;i<200;i++){r.time+=1/60;r.stepAI(c,1/60);}
  assert.ok(c.tyreTemperatures[2]>c.tyreTemperatures[0]+1,'sustaining speed must require throttle load');
 });
 
@@ -132,4 +135,11 @@ test('stock-exhausted opponents cannot hold the player in qualifying after the s
  assert.equal(q.canEndSession(),false);assert.match(q.sessionAction(),/Waiting/);
  w.elapsed=q.stage.duration;
  assert.equal(q.canEndSession(),true);assert.match(q.sessionAction(),/^End qualifying in P/);
+});
+
+test('real wet-weather braking follows suitability and wear for Intermediate and Wet tyres',()=>{
+ assert.ok(stop({tyre:'I',water:.35}).distance<stop({tyre:'W',water:.35}).distance);
+ assert.ok(stop({tyre:'W',water:.85}).distance<stop({tyre:'I',water:.85}).distance);
+ for(const [tyre,water] of [['I',.35],['W',.85]])
+  assert.ok(stop({tyre,water,wear:.97}).distance>stop({tyre,water}).distance*1.4);
 });

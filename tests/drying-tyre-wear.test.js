@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {Race,TRACK,resources,sample,grip,angleDiff,selectTrack} from '../src/core.js';
+import {TYRES,Race,TRACK,resources,sample,grip,angleDiff,selectTrack} from '../src/core.js';
 import {createWeather,advanceWeather,trackWater} from '../src/weather.js';
 test.afterEach(()=>selectTrack('northline'));
 function driedWeather(pattern){const w=createWeather(pattern,{seed:42});advanceWeather(w,w.points.at(-1)[0]+600);return w;}
@@ -27,7 +27,7 @@ test('soft wear rises continuously as the same surface dries and reaches its ori
   p.trackWetness=trackWater(w,1000,TRACK.length,0);resources(p,0,TRACK.length);
   assert.ok(p.wear>=previous-1e-12);previous=p.wear;
  }
- assert.ok(Math.abs(previous-1/9)<1e-12);
+ assert.ok(Math.abs(previous-1/TYRES.S.life)<1e-12);
 });
 function drivenLap(weather){
  const r=new Race({track:'northline',laps:1,fuel:3,tyre:'S',weather:'dry'}),p=r.player,loc=sample(0);

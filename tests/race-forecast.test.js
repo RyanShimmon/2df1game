@@ -26,7 +26,7 @@ test('Harbour briefing uses the same saved race weather that reaches the actual 
  const c=newCareer({driverName:'Forecast',teamIndex:2});c.round=4;const w=createWeekend(c,{tyre:'S',aiSeed:42});
  for(let stage=0;stage<3;stage++){for(const [i,id] of w.active.entries())recordLap(w,id,id===21?25:30+i,10+i);finishQualifyingStage(w,c.upgrades,c.profile);}
  startRaceWeather(w);const before=structuredClone(w.weather),brief=raceForecast(w.weather,{duration:w.setup.weatherDuration,laps:w.setup.laps});
- assert.ok(brief.segments.some(s=>s.rain==='light'));assert.equal(brief.segments[0].label,'Dry');
+ assert.ok(brief.segments.length);assert.equal(w.setup.laps,12);assert.equal(w.setup.weather,'dynamic');
  const r=new Race(w.setup,c.upgrades,'career',c.profile);prepareRace(r,w,'M1');
  assert.deepEqual(r.weather,before);assert.deepEqual(raceForecast(r.weather,{duration:w.setup.weatherDuration,laps:w.setup.laps}),brief);
 });

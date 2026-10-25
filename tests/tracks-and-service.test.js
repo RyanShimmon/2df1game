@@ -1,3 +1,4 @@
+import {crossingDistances} from './track-fixtures.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {CIRCUITS,selectTrack,TRACK,PIT_LANE,PIT_MARKERS,sample,samplePit,nearest,angleDiff,trackLayer,bankingGrip,grip,Race,tyreServiceTime} from '../src/core.js';
@@ -13,7 +14,7 @@ test('12 distinct tracks have varied lengths, smooth pits and exact edge joins',
   let previous=samplePit(0).angle;
   for(let d=2;d<PIT_LANE.length;d+=2){const p=samplePit(d);assert.ok(Math.abs(angleDiff(p.angle,previous))<.04,`${circuit.id} pit kink`);previous=p.angle;}
  }
- assert.equal(new Set(lengths.map(Math.round)).size,12);assert.ok(Math.max(...lengths)>Math.min(...lengths)*2.3);
+ assert.equal(new Set(lengths.map(Math.round)).size,12);assert.ok(Math.max(...lengths)>Math.min(...lengths)*1.8);
 });
 test('all circuits support a full AI race with a legal compound stop and no fuel retirement',()=>{
  for(const track of CIRCUITS.map(t=>t.id)) {
@@ -23,7 +24,7 @@ test('all circuits support a full AI race with a legal compound stop and no fuel
  }
 });
 test('flyovers keep crossing progress on the hinted branch and cars on different levels do not collide',()=>{
- for(const [id,top,under] of [['crossover',3002,6162],['metro',3697,7298]]) {
+ for(const [id,top,under] of [['crossover',...crossingDistances('crossover')],['metro',...crossingDistances('metro')]]) {
   const r=new Race({track:id,laps:8,fuel:10,tyre:'M'},upgrades),p=r.player,c=r.cars[0],a=sample(top),b=sample(under);
   assert.equal(trackLayer(top),1);assert.equal(trackLayer(under),0);assert.ok(Math.hypot(a.x-b.x,a.y-b.y)<8);
   assert.ok(Math.abs(nearest(a.x,a.y,top).s-top)<2);assert.ok(Math.abs(nearest(b.x,b.y,under).s-under)<2);

@@ -1,3 +1,4 @@
+import {paceMode} from "./performance.js";
 import {level} from "./development.js";
 // FL, FR, RL, RR. Temperatures are degrees Celsius; wear is permanent.
 export const WHEELS = ['FL','FR','RL','RR'];
@@ -79,7 +80,7 @@ export function updateTyreTemperatures(car,dt,load={}){
     const roll=4.4*(speed/200)**.7;
     const cornerHeat=corner*(outside ? 2.2 : 1.1);
     const braking=brake*moving*(front ? 4 : 2);
-    const power=throttle*moving*(front ? .35 : 1.25+2.2*clamp(load.wheelspin || 0,0,1));
+    const power=throttle*paceMode(car).power*moving*(front ? .35 : 1.25+2.2*clamp(load.wheelspin || 0,0,1));
     const sliding=slide*moving*(front ? 1.1 : 2); // Capped: one slide cannot cause runaway heat.
     const heat=parked ? 0 : (roll+cornerHeat+braking+power+sliding+dryWet*6*moving)*spec.heat;
     const excessCooling=parked ? 0 : level(car.upgrades,"tyres")*.006*clamp((temp-spec.high)/20,0,1);

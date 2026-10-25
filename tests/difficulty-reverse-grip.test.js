@@ -38,7 +38,7 @@ test('higher difficulty adds a small career prize bonus without multiplying spon
  for(const [difficulty,multiplier] of [['normal',1],['hard',1.05],['expert',1.1]]) {
   const c=newCareer();c.sponsor='finish';
   const result=settleCareer(c,{position:10,legal:true,dnf:false,contacts:0,penalties:0,difficulty});
-  assert.equal(result.prize,Math.round((2500+13*300)*multiplier));assert.equal(result.bonus,3500);
+  assert.equal(result.prize,Math.round((4500+13*150)*multiplier));assert.equal(result.bonus,600);
  }
  const c=newCareer();const failed=settleCareer(c,{position:22,legal:false,dnf:true,difficulty:'expert'});
  assert.equal(failed.prize,750);assert.equal(failed.difficultyBonus,0);
@@ -46,7 +46,7 @@ test('higher difficulty adds a small career prize bonus without multiplying spon
 test('career payout honours the weekend difficulty rather than a later preference',()=>{
  const c=newCareer();c.weekend=createWeekend(c,{...setup,difficulty:'hard'});
  const result=settleCareer(c,{position:10,legal:true,dnf:false,contacts:0,penalties:0,difficulty:'expert'});
- assert.equal(result.difficulty,'hard');assert.equal(result.difficultyBonus,320);
+ assert.equal(result.difficulty,'hard');assert.equal(result.difficultyBonus,323);
 });
 
 test('reverse contact uses rearward momentum and keeps the player in reverse',()=>{

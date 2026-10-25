@@ -60,8 +60,9 @@ test('same-set qualifying service holds temperature, new quick-race tyres are pr
  c.tyreTemperatures=[95,96,97,98];q.nextSetId='S1';c.garage=false;c.pit=null;q.enterPit(c);c.pit.stage='service';c.pit.timer=0;q.stepPit(c,1/60,{});
  assert.ok(c.tyreTemperatures[0]>94);assert.equal(c.tyreSet.id,'S1');
 });
-test('fuel mode alone does not generate artificial heat and colours progress from blue to red',()=>{
- const a=car(),b=car();a.drive='save';b.drive='push';run(a,5,{throttle:.5});run(b,5,{throttle:.5});assert.deepEqual(a.tyreTemperatures,b.tyreTemperatures);
+test('pace modes heat tyres through delivered power, while coasting creates no mode-specific heat',()=>{
+ const a=car(),b=car();a.drive='save';b.drive='push';run(a,5,{throttle:0});run(b,5,{throttle:0});assert.deepEqual(a.tyreTemperatures,b.tyreTemperatures);
+ run(a,5,{throttle:1});run(b,5,{throttle:1});assert.ok(b.tyreTemperatures[2]>a.tyreTemperatures[2]);
  assert.equal(temperatureColour('M',0),'rgb(126,201,255)');assert.equal(temperatureColour('M',170),'rgb(244,71,80)');
 });
 test('AI eases off with overheated tyres and maintains independent wheel temperatures',()=>{

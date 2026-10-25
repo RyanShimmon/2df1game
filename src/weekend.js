@@ -1,3 +1,4 @@
+import {fuelPerLap} from "./performance.js";
 import {developTeams,developmentSnapshot,fuelMultiplier,normalizeUpgrades} from "./development.js";
 import {seededRandom,driverSeed} from "./racecraft.js";
 import {tyreAllocation,selectableSets,limitWeekendStock,numberSoftSets} from "./tyre-stock.js";
@@ -12,12 +13,21 @@ import {
   tyreWeatherGrip,
   recommendedTyre,
 } from "./weather.js";
-import { makeTrack, circuitById, selectTrack, normalizeDifficulty, Race, TRACK, TYRES, sample, clamp, PIT_LANE, samplePit, wrap, capturePoses, tyreServiceTime } from "./core.js";
+import { makeTrack, circuitById, selectTrack, normalizeDifficulty, Race, TRACK, TYRES, sample, clamp, PIT_LANE, samplePit, wrap, capturePoses, tyreServiceTime, gridSlot } from "./core.js";
 import {weekendSchedule} from "./calendar.js";
 export {WEEKENDS,weekendSchedule} from "./calendar.js";
 export function migrateWeekend(w) {
   if (!w) return;
   if(w.setup && !w.setup.track) w.setup.track="northline";
+  if(w.setup && w.distanceVersion!==2){
+    const ratio=Math.max(.85,Math.min(1.35,(w.setup.fuel || 0)/(w.setup.laps || 32)));
+    const laps=weekendSchedule(w.round).laps;
+    w.setup.laps=laps;w.setup.fuel=+(laps*ratio).toFixed(1);
+    w.setup.weatherDuration=raceWeatherDuration(w.setup.laps,makeTrack(circuitById(w.setup.track)).length);
+    if(w.phase==="R")w.raceWeatherReady=false;
+    w.distanceVersion=2;
+  }
+  if(w.setup)w.setup.raceFormat=weekendSchedule(w.round).raceFormat || "grandPrix";
   if(w.setup) w.setup.difficulty=normalizeDifficulty(w.setup.difficulty);
   if(w.setup && !Number.isInteger(w.setup.aiSeed)) w.setup.aiSeed=Math.floor(Math.random()*2147483646)+1;
   const legacyTyres =
@@ -41,6 +51,7 @@ export function migrateWeekend(w) {
     w.setup = {
       ...w.setup,
       laps: schedule.laps,
+      raceFormat:schedule.raceFormat || "grandPrix",
       fuel: +(schedule.laps * ratio).toFixed(1),
       weather: schedule.weather,
     };
@@ -96,6 +107,7 @@ export function createWeekend(career, setup) {
   const weatherDuration=raceWeatherDuration(schedule.laps,makeTrack(circuitById(schedule.track)).length);
   return {
     version: 1,
+    distanceVersion:2,
     tyreModelVersion: 2,
     allocationVersion: 3,
     softSetNumbering:1,
@@ -107,6 +119,7 @@ export function createWeekend(career, setup) {
       difficulty:normalizeDifficulty(setup.difficulty),
       aiSeed,weatherSeed,weatherDuration,
       laps: schedule.laps,
+      raceFormat:schedule.raceFormat || "grandPrix",
       fuel: +(schedule.laps * 1.15*fuelMultiplier(career.upgrades)).toFixed(1),
       weather: schedule.weather,
       aeroSpec:career.aeroSpec || "balanced",
@@ -135,7 +148,7 @@ export function validWeekend(w, c) {
     w.season === c.season &&
     w.round === c.round &&
     ["Q1", "Q2", "Q3", "R"].includes(w.phase) &&
-    [8, 12, 14, 16, 18, 20, 24].includes(w.setup?.laps) &&
+    [8, 12, 14, 16, 18, 20, 24, 32, 40].includes(w.setup?.laps) &&
     Array.isArray(w.inventories) &&
     w.inventories.length === 22 &&
     w.inventories.every(
@@ -299,9 +312,9 @@ export function prepareRace(r, w, startId) {
   r.weather = w.weather;
   for (const [position, id] of w.grid.entries()) {
     const c = r.cars.find((c) => c.id === id);
+    c.raceFormat=w.setup.raceFormat;
     c.gridPosition = position + 1;
-    c.s = -(Math.floor(position / 2) * 38 + 25);
-    c.offset = position % 2 === 0 ? -22 : 22;
+    Object.assign(c,gridSlot(position));
     const p = sample(c.s);
     c.x = p.x - Math.sin(p.angle) * c.offset;
     c.y = p.y + Math.cos(p.angle) * c.offset;
@@ -327,7 +340,7 @@ export function prepareRace(r, w, startId) {
 // Fuel covers one out lap, one push lap and one in lap, including the pit detour.
 export function getQualifyingFuel(upgrades={}) {
   const laps=3+(PIT_LANE.length-(TRACK.length-TRACK.pitEntry+TRACK.pitExit))/TRACK.length;
-  return +((laps*(.85+.25*1.18)+.06)*fuelMultiplier(upgrades)).toFixed(2);
+  return +(laps*fuelPerLap("push",upgrades)+.12).toFixed(2);
 }
 export const QUALIFYING_FUEL=getQualifyingFuel();
 export function nextQualifyingSession(previous,upgrades,profile) {
