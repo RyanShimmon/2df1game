@@ -15,7 +15,7 @@ export function driverSeed(seed,id){return (Math.imul((seed>>>0)^0x9e3779b9,(id+
 // Cache immutable geometry; repeated races on a circuit need no new optimization.
 const racingLines=new Map();
 export function buildRacingLine(track,sample,apexes){
-  const key=JSON.stringify([track.id,track.width,track.anchors ?? track.pts?.map(p=>[p.x,p.y]) ?? track.length]);
+  const key=JSON.stringify([track.id,track.width,track.layoutScale,track.anchors ?? track.pts?.map(p=>[p.x,p.y]) ?? track.length]);
   if(racingLines.has(key))return racingLines.get(key);
   const optimized=optimizeRacingLine(track,sample);
   const {points,step}=optimized,count=points.length;
@@ -111,7 +111,7 @@ export function planRacingLane(car,line,traffic,{time=0,allowPass=true,yieldOffs
  const edge=line.width/2-18,base=yieldOffset ?? baseOffset ?? racingPoint(line,car.s).offset+(car.driverStyle?.line || 0)*.12;
  const aggression=car.driverStyle?.aggression ?? .5;
  const gapTo=other=>wrap(other.s-car.s+line.length/2,line.length)-line.length/2;
- const nearby=traffic.filter(other=>other.id!==car.id&&!other.pit&&!other.garage&&!other.dnf&&!other.finished&&Math.abs(other.offset)<line.width/2+10)
+ const nearby=traffic.filter(other=>other.id!==car.id&&!other.pit&&!other.garage&&!other.dnf&&!other.finished&&Math.abs(other.offset)<line.width/2+10 && Math.abs(gapTo(other))<360)
   .map(other=>{
    const gap=gapTo(other);
    // Circuit progress measures the centreline. On a tight inside arc, a gap
@@ -200,7 +200,14 @@ export function planRacingLane(car,line,traffic,{time=0,allowPass=true,yieldOffs
  if(yieldOffset!==null){min=Math.min(min,yieldOffset);max=Math.max(max,yieldOffset);}
  desired=min<=max ? clamp(desired,min,max) : clamp(car.offset,-edge,edge);
  let followingSpeed=Infinity;
- if(state.phase==="passing" && state.aborting){const target=nearby.find(o=>o.car.id===state.targetId);if(target)followingSpeed=Math.max(0,target.car.speed-12);}
+ if(state.phase==="passing" && state.aborting){
+  const target=nearby.find(o=>o.car.id===state.targetId);
+  // Two abandoned passes must not make both cars brake for each other until
+  // stationary. The trailing car drops back; the leading car holds its lane
+  // and continues. IDs break a genuinely side-by-side tie deterministically.
+  if(target && (target.gap>1 || Math.abs(target.gap)<=1 && car.id>target.car.id))
+   followingSpeed=Math.max(0,target.car.speed-12);
+ }
  for(const other of ahead)if(other.gap<180&&Math.abs(car.offset-other.car.offset)<27&&
   (Math.abs(desired-other.car.offset)<30||other.spaceGap<38+car.speed*.055)){
   followingSpeed=Math.min(followingSpeed,Math.max(0,other.car.speed+(other.spaceGap-38-car.speed*.055)*.7));
@@ -216,11 +223,46 @@ export function laneGeometry(line,s,shift=0){
  const scale=clamp(1-p.curvature*delta,.65,1.4);
  return {...p,curvature:p.curvature/scale,distanceScale:(p.distanceScale || 1)*scale};
 }
+// Future pace projections need curvature and distance, not a full steering
+// pose. Cache the spline coefficients and evaluate its exact derivatives;
+// sampled curvature would smooth over the joins and alter braking targets.
+const paceRoads=new WeakMap();
+function paceRoad(line){
+ let road=paceRoads.get(line);if(road)return road;
+ const points=line.points,n=points.length;
+ road=points.map((a,i)=>{
+  const before=points[(i+n-1)%n],b=points[(i+1)%n],after=points[(i+2)%n];
+  const polynomial=key=>{
+   const m0=(b[key]-before[key])/2,m1=(after[key]-a[key])/2;
+   return [a[key],m0,-3*a[key]-2*m0+3*b[key]-m1,2*a[key]+m0-2*b[key]+m1];
+  };
+  return {x:polynomial('x'),y:polynomial('y')};
+ });
+ paceRoads.set(line,road);return road;
+}
+export function paceGeometry(line,s,shift=0){
+ if(!line.centers)return laneGeometry(line,s,shift);
+ const pos=wrap(s,line.length),f=pos/line.step,i=Math.floor(f),t=f-i,{x,y}=paceRoad(line)[i];
+ const dx=x[1]+t*(2*x[2]+3*t*x[3]),dy=y[1]+t*(2*y[2]+3*t*y[3]);
+ const ddx=2*x[2]+6*t*x[3],ddy=2*y[2]+6*t*y[3],speed=Math.hypot(dx,dy);
+ const k=(dx*ddy-dy*ddx)/Math.max(1,speed**3);
+ let delta=0;
+ if(shift){
+  const centers=line.centers;let lo=0,hi=centers.length-1;
+  while(lo+1<hi){const mid=(lo+hi)>>1;if(centers[mid].s<=pos)lo=mid;else hi=mid;}
+  const c=centers[lo],d=centers[hi],u=(pos-c.s)/(d.s-c.s),angle=c.angle+angleDiff(d.angle,c.angle)*u;
+  const px=x[0]+t*(x[1]+t*(x[2]+t*x[3])),py=y[0]+t*(y[1]+t*(y[2]+t*y[3]));
+  const offset=(px-c.x-(d.x-c.x)*u)*-Math.sin(angle)+(py-c.y-(d.y-c.y)*u)*Math.cos(angle),edge=line.width/2-18;
+  delta=clamp(offset+shift,-edge,edge)-offset;
+ }
+ const scale=clamp(1-k*delta,.65,1.4);
+ return {curvature:k/scale,distanceScale:speed/line.step*scale};
+}
 export function projectedPaceAdvantage(line,s,speed,own,other,{ownShift=0,otherShift=0}={}){
  if(!own || !other)return 0;
  const distance=clamp(speed*3,600,1000),step=50,count=Math.ceil(distance/step);
  const pace=(profile,shift)=>{
-  const road=Array.from({length:count+1},(_,i)=>laneGeometry(line,s+i*step,shift));
+  const road=Array.from({length:count+1},(_,i)=>paceGeometry(line,s+i*step,shift));
   const limits=road.map(p=>Math.min(profile.top,Math.sqrt(225*Math.max(.001,profile.grip)/Math.max(.0001,Math.abs(p.curvature)))*profile.commitment));
   for(let i=count-1;i>=0;i--)limits[i]=Math.min(limits[i],Math.sqrt(limits[i+1]**2+2*profile.braking*step*road[i].distanceScale));
   let v=Math.min(speed,limits[0]),time=0;
@@ -233,14 +275,18 @@ export function projectedPaceAdvantage(line,s,speed,own,other,{ownShift=0,otherS
  };
  return pace(own,ownShift)-pace(other,otherShift);
 }
-export function brakingTarget(line,s,grip,braking,top,commitment=1,laneShift=0){
+export function brakingTarget(line,s,grip,braking,top,commitment=1,laneShift=0,ceiling=top){
   const horizon=clamp(top*top/(2*Math.max(braking,1))+110,220,Math.min(3000,line.length/2));
-  let target=top,distance=0;
+  let target=Math.min(top,ceiling),distance=0;
   for(let d=0;d<=horizon;d+=30){
-    const p=laneGeometry(line,s+d,laneShift);
+    const p=paceGeometry(line,s+d,laneShift);
     if(d)distance+=30*p.distanceScale;
+    const stopping=2*braking*Math.max(0,distance-18);
+    // Beyond this point even a zero-speed corner could be reached safely
+    // from our current target. Later positive distances cannot lower it.
+    if(stopping>=target*target)break;
     const corner=Math.min(top,Math.sqrt(225*Math.max(.001,grip)/Math.max(Math.abs(p.curvature),.0001))*commitment);
-    target=Math.min(target,Math.sqrt(corner*corner+2*braking*Math.max(0,distance-18)));
+    target=Math.min(target,Math.sqrt(corner*corner+stopping));
   }
   return Math.max(10,target);
 }

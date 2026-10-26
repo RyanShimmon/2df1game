@@ -8,7 +8,7 @@ function run(track,tyre,water,difficulty='normal',attack=false){
  Object.assign(c,{s:0,offset:ref.offset,x:p.x-Math.sin(p.angle)*ref.offset,y:p.y+Math.cos(p.angle)*ref.offset,angle:ref.angle,tyre,pace:1,speed:230,wear:0,upgrades:{}});
  c.driverStyle.line=0;c.ai.nextDecision=Infinity;c.ai.strategy.nextReview=Infinity;c.ai.mode=attack?'attack':'cruise';r.cars=[c];r.traffic=[c];
  let lap=0,start=0,times=[],yaw=0,maxJerk=0,slideFrames=0,maxSlip=0;
- for(let i=0;i<60*260&&times.length<3;i++){
+ for(let i=0;i<60*(30+3*TRACK.length/130)&&times.length<3;i++){
   Object.assign(c,{fuel:6,wear:0,wheelWear:[0,0,0,0],trackWetness:water});const angle=c.angle;r.time+=1/60;r.stepAI(c,1/60);
   const nextYaw=angleDiff(c.angle,angle)*60;if(lap>0)maxJerk=Math.max(maxJerk,Math.abs(nextYaw-yaw)*60);yaw=nextYaw;
   const slip=Math.abs(c.ai.slip);maxSlip=Math.max(maxSlip,slip);if(slip>.025&&slip<.13)slideFrames++;
@@ -17,9 +17,6 @@ function run(track,tyre,water,difficulty='normal',attack=false){
  assert.equal(times.length,3);assert.equal(c.trackLimits,0);
  return {time:times.at(-1),maxJerk,slideFrames,maxSlip,car:c};
 }
-// Baseline is the released v1.5.3 car: constant fuel 6, fresh tyres, optimal
-// temperatures, seed 42, balanced Normal AI, no traffic, 60 Hz flying lap.
-const wetBaseline={northline:22.4667,velocity:33.2,harbour:30.7833,sunset:25.1833,alpine:36.75,crossover:32.3167,dunes:51.85,forest:28.0667,riviera:18.2667,metro:44.2833,canyon:51.6,aurora:32.5833};
 for(const track of CIRCUITS)test(`${track.name}: smooth exits and competitive wet pace`,()=>{
  const dry=run(track.id,'M',0),inter=run(track.id,'I',.45),wet=run(track.id,'W',.9);
  assert.ok(dry.maxJerk<100,`dry heading jerk ${dry.maxJerk}`);

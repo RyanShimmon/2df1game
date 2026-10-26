@@ -32,8 +32,9 @@ export function thermalFactor(compound,temp){
 export function thermalGrip(car,axis='all'){
   if(car.tyreTemperatureEnabled===false)return 1;
   if(!valid(car.tyreTemperatures))return 1;
-  const factors=car.tyreTemperatures.map(t=>thermalFactor(car.tyre,t));
-  return average(axis==='front' ? factors.slice(0,2) : axis==='rear' ? factors.slice(2) : factors);
+  const first=axis==='rear' ? 2 : 0,last=axis==='front' ? 2 : 4;
+  let total=0;for(let i=first;i<last;i++)total+=thermalFactor(car.tyre,car.tyreTemperatures[i]);
+  return total/(last-first);
 }
 const hotWear=(temp,high)=>1+1.2*clamp((temp-high-5)/45,0,1)**1.3;
 export function thermalWear(car){

@@ -88,7 +88,8 @@ export class Renderer {
     );
     this.road.closePath();
     const outsideRoad = new Path2D();
-    outsideRoad.rect(-5000,-5000,10000,10000);
+    const bounds=TRACK.bounds;
+    outsideRoad.rect(bounds.minX-1000,bounds.minY-1000,bounds.maxX-bounds.minX+2000,bounds.maxY-bounds.minY+2000);
     for(const [side,points] of [[1,TRACK.pts],[-1,[...TRACK.pts].reverse()]])
       points.forEach((p,i) => {
         const x=p.x-Math.sin(p.angle)*TRACK.width/2*side;

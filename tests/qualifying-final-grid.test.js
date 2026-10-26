@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {Race,newCareer,loadCareer} from '../src/core.js';
+import {Race,loadCareer} from '../src/core.js';
+import {newCareer} from './career-fixture.js';
 import {WEEKENDS,createWeekend,QualifyingRun,recordLap,stageOrder,qualifyingProgress,qualifyingClassification,finishQualifyingStage,migrateWeekend,prepareRace} from '../src/weekend.js';
 const profile={driverName:'Grid regression',teamIndex:2};
 function makeQ3(round,playerQ2=10){

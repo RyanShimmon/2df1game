@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {Race,TRACK,PIT_LANE,sample,newCareer} from '../src/core.js';
+import {Race,TRACK,PIT_LANE,sample} from '../src/core.js';
+import {newCareer} from './career-fixture.js';
 import {createWeekend,recordLap,qualifyingProgress,qualifyingStatus} from '../src/weekend.js';
 const upgrades={engine:0,aero:0,tyres:0,crew:0};
 function race(){const r=new Race({laps:12,fuel:14,tyre:'M'},upgrades);r.countdown=0;return r;}

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {newCareer,loadCareer} from '../src/core.js';
+import {loadCareer,TRACK} from '../src/core.js';
+import {newCareer} from './career-fixture.js';
 import {createWeather} from '../src/weather.js';
 import {createWeekend,ensureWeekend,QualifyingRun,nextQualifyingSession,resumeQualifyingSession,recordLap,stageOrder,finishQualifyingStage} from '../src/weekend.js';
 import {driveQualifyingOuting} from './qualifying-driver.js';
@@ -19,10 +20,10 @@ function create(){
 
 for(const path of ['live track','saved garage'])test(`a driven, valid provisional P1 lap advances only to Q2 from the ${path}`,()=>{
  let {career,q}=create();
- driveQualifyingOuting(q,180,{pace:.98});
+ driveQualifyingOuting(q,undefined,{pace:.98});
  for(let i=0;i<60*180&&!q.canEndSession()&&!q.done;i++)q.step(1/60,{});
  const banked={...q.weekend.results.find(r=>r.id===21)};
- assert.ok(banked.time>20&&banked.time<40,'use a physically driven lap, not a fabricated one-second result');
+ assert.ok(banked.time>TRACK.length/450&&banked.time<TRACK.length/200,'use a physically driven lap, not a fabricated one-second result');
  assert.equal(q.player.qInvalid,false);assert.equal(q.player.stops,1);
  assert.equal(stageOrder(q.weekend)[0],21);assert.equal(q.sessionAction(),'Move to Q2');
  if(path==='saved garage'){

@@ -1,5 +1,5 @@
 import {fuelPerLap} from "./performance.js";
-import {developTeams,developmentSnapshot,fuelMultiplier,normalizeUpgrades} from "./development.js";
+import {aeroUnlocked,developTeams,developmentSnapshot,fuelMultiplier,normalizeUpgrades} from "./development.js";
 import {seededRandom,driverSeed} from "./racecraft.js";
 import {tyreAllocation,selectableSets,limitWeekendStock,numberSoftSets} from "./tyre-stock.js";
 export {tyreAllocation,selectableSets,WEEKEND_SET_IDS} from "./tyre-stock.js";
@@ -14,20 +14,21 @@ import {
   recommendedTyre,
 } from "./weather.js";
 import { makeTrack, circuitById, selectTrack, normalizeDifficulty, Race, TRACK, TYRES, sample, clamp, PIT_LANE, samplePit, wrap, capturePoses, tyreServiceTime, gridSlot } from "./core.js";
-import {weekendSchedule} from "./calendar.js";
-export {WEEKENDS,weekendSchedule} from "./calendar.js";
+import {weekendSchedule,careerSchedule} from "./calendar.js";
+export {WEEKENDS,weekendSchedule,careerSchedule} from "./calendar.js";
 export function migrateWeekend(w) {
   if (!w) return;
   if(w.setup && !w.setup.track) w.setup.track="northline";
   if(w.setup && w.distanceVersion!==2){
     const ratio=Math.max(.85,Math.min(1.35,(w.setup.fuel || 0)/(w.setup.laps || 32)));
-    const laps=weekendSchedule(w.round).laps;
+    const laps=weekendSchedule(w.round,w.seasonOrder).laps;
     w.setup.laps=laps;w.setup.fuel=+(laps*ratio).toFixed(1);
     w.setup.weatherDuration=raceWeatherDuration(w.setup.laps,makeTrack(circuitById(w.setup.track)).length);
     if(w.phase==="R")w.raceWeatherReady=false;
     w.distanceVersion=2;
   }
-  if(w.setup)w.setup.raceFormat=weekendSchedule(w.round).raceFormat || "grandPrix";
+  if(w.setup)w.setup.raceFormat=weekendSchedule(w.round,w.seasonOrder).raceFormat || "grandPrix";
+  if(w.setup?.playerUpgrades && !aeroUnlocked(w.setup.playerUpgrades))w.setup.aeroSpec="balanced";
   if(w.setup) w.setup.difficulty=normalizeDifficulty(w.setup.difficulty);
   if(w.setup && !Number.isInteger(w.setup.aiSeed)) w.setup.aiSeed=Math.floor(Math.random()*2147483646)+1;
   const legacyTyres =
@@ -42,7 +43,7 @@ export function migrateWeekend(w) {
       }
   w.tyreModelVersion = 2;
   if (!w.eventName) {
-    const schedule = weekendSchedule(w.round);
+    const schedule = weekendSchedule(w.round,w.seasonOrder);
     const ratio = Math.max(
       0.85,
       Math.min(1.35, (w.setup?.fuel || 0) / (w.setup?.laps || schedule.laps)),
@@ -83,7 +84,7 @@ export function migrateWeekend(w) {
   restoreQualifyingGrid(w);
   w.setup.weatherSeed ??= (w.setup.aiSeed^0x9e3779b9)>>>0;
   w.setup.weatherDuration ??= raceWeatherDuration(w.setup.laps,makeTrack(circuitById(w.setup.track)).length);
-  if (!w.weather) w.weather = createWeather(w.setup.weather || weekendSchedule(w.round).weather,{seed:w.setup.weatherSeed,duration:46*60});
+  if (!w.weather) w.weather = createWeather(w.setup.weather || weekendSchedule(w.round,w.seasonOrder).weather,{seed:w.setup.weatherSeed,duration:46*60});
   migrateWeather(w.weather,{seed:w.setup.weatherSeed,duration:46*60});
 }
 export function startRaceWeather(w) {
@@ -100,7 +101,7 @@ export const Q_STAGES = [
   { name: "Q3", duration: 13 * 60, keep: 10 },
 ];
 export function createWeekend(career, setup) {
-  const schedule = weekendSchedule(career.round);
+  const schedule = careerSchedule(career);
   developTeams(career,setup.aiSeed);
   const aiSeed=setup.aiSeed ?? Math.floor(Math.random()*2147483646)+1;
   const weatherSeed=setup.weatherSeed ?? (aiSeed^0x9e3779b9)>>>0;
@@ -113,6 +114,7 @@ export function createWeekend(career, setup) {
     softSetNumbering:1,
     season: career.season,
     round: career.round,
+    seasonOrder:[...career.seasonOrder],
     setup: {
       ...setup,
       track:schedule.track,
@@ -122,7 +124,7 @@ export function createWeekend(career, setup) {
       raceFormat:schedule.raceFormat || "grandPrix",
       fuel: +(schedule.laps * 1.15*fuelMultiplier(career.upgrades)).toFixed(1),
       weather: schedule.weather,
-      aeroSpec:career.aeroSpec || "balanced",
+      aeroSpec:aeroUnlocked(career.upgrades) ? career.aeroSpec || "balanced" : "balanced",
       playerUpgrades:normalizeUpgrades(career.upgrades),
       teamDevelopment:developmentSnapshot(career,schedule.track),
     },
@@ -240,8 +242,8 @@ function* simulateAIQualifyingSteps(w,upgrades,profile,options={}) {
   const q=new QualifyingRun(w,null,upgrades,profile,{...options,aiOnly:true,driverIds:ids});
   // Two complete outings where the remaining clock and real tyre stock allow.
   // This is the same weather, pit, temperature and wear simulation as live play.
-  for(let i=0;i<60*(stage.duration+90) && !q.done;i++){
-    q.step(1/60,{});
+  for(let i=0;i<20*(stage.duration+90) && !q.done;i++){
+    q.step(.05,{});
     for(const c of q.cars)if(c.stops>=2)c.qReleaseAt=Infinity;
     if(q.cars.every(c=>c.stops>=2 || c.qUnavailable))break;
     yield;
@@ -251,7 +253,17 @@ function* simulateAIQualifyingSteps(w,upgrades,profile,options={}) {
 function exhaustSimulation(steps){
  let result=steps.next();while(!result.done)result=steps.next();return result.value;
 }
-async function responsiveSimulation(steps,{yieldControl=()=>new Promise(resolve=>setTimeout(resolve,0)),budgetMs=8,now=()=>performance.now()}={}){
+// Timer nesting imposes a minimum delay on repeated setTimeout(0) yields.
+// A posted task gives rendering/input a turn without adding that delay to
+// every small physics batch. Ports close immediately after each yield.
+export function yieldSimulation(){
+ return new Promise(resolve=>{
+  const channel=new MessageChannel();
+  channel.port1.onmessage=()=>{channel.port1.close();channel.port2.close();resolve();};
+  channel.port2.postMessage(null);
+ });
+}
+async function responsiveSimulation(steps,{yieldControl=yieldSimulation,budgetMs=16,now=()=>performance.now()}={}){
  let deadline=now()+budgetMs,result=steps.next();
  while(!result.done){
   if(now()>=deadline){await yieldControl();deadline=now()+budgetMs;}
@@ -489,9 +501,9 @@ export class QualifyingRun extends Race {
     this.player.qState="garage";this.player.pit=null;
     // Keep the conditions the player chose to finish in. Remaining AI outings
     // still use real tyres and wear, but cannot gain an AI-only drying-track advantage.
-    // Use the same fixed physics step as live play; fast-forwarding changes
-    // how quickly we process frames, not the driving or timing model.
-    for(let i=0;i<60*(this.stage.duration+90) && !this.done;i++){this.step(1/60,{});yield;}
+    // Use the supported 50 ms physics step for unseen runs. Every car still
+    // drives its full route with traffic, tyre wear, fuel and pit service.
+    for(let i=0;i<20*(this.stage.duration+90) && !this.done;i++){this.step(.05,{});yield;}
     this.endRun();
     if(this.weekend.phase!==this.stage.name)return null;
     const session=yield* finishQualifyingStageSteps(this.weekend,this.player.upgrades,this.profile,{freezeWeather:true});

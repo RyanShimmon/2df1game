@@ -1,7 +1,8 @@
 import {usefulWear} from "../src/performance.js";
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {Race,TRACK,AI_LINE,CIRCUITS,selectTrack,sample,newCareer,estimatedTyreLife,resources} from '../src/core.js';
+import {Race,TRACK,AI_LINE,CIRCUITS,selectTrack,sample,estimatedTyreLife,resources} from '../src/core.js';
+import {newCareer} from './career-fixture.js';
 import {qualifyingLane,racingPoint} from '../src/racecraft.js';
 import {createWeekend,migrateWeekend,ensureWeekend,selectableSets,QualifyingRun,recordLap,finishQualifyingStage} from '../src/weekend.js';
 const profile={driverName:'Test',teamIndex:2},setup={track:'northline',laps:24,fuel:28,tyre:'S',weather:'dry',aiSeed:42};
@@ -66,7 +67,7 @@ for(const track of CIRCUITS)test(`${track.name}: qualifying AI yields, prepares 
  w.weather.pattern='dry';w.weather.wetness=0;w.weather.sectors.fill(0);
  const q=new QualifyingRun(w,'S1',{},profile),c=q.cars[0];q.cars=[c];c.qReleaseAt=0;
  let yielded=0,clear=0,prepared=0,timed=0,maxJump=0;
- for(let i=0;i<60*240&&c.stops===0;i++){
+ for(let i=0;i<60*(60+TRACK.length*3/150)&&c.stops===0;i++){
   const x=c.x,y=c.y;q.step(1/60,{});maxJump=Math.max(maxJump,Math.hypot(c.x-x,c.y-y));
   const pos=((c.s%TRACK.length)+TRACK.length)%TRACK.length;
   if(!c.pit&&c.ai.qualifyingLane && pos>TRACK.pitExit+350 && pos<Math.min(AI_LINE.finalCornerStart-50,TRACK.pitEntry-850)){

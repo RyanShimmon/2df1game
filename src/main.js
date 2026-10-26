@@ -3,7 +3,7 @@ import {PACE_MODES,paceMode,stepPaceMode,fuelPerLap,stintLaps} from "./performan
 import {QUICK_DISTANCES,quickRaceFormat,raceRuleText,racePoints} from "./race-rules.js";
 import {SEASON_LENGTH} from "./calendar.js";
 import {sponsorOffers} from "./sponsors.js";
-import {AERO_PACKAGES,aeroPackageSummary,upgradeDetails,level,fuelMultiplier,sponsorPayout,setAeroPackage,developTeams,developmentSnapshot} from "./development.js";
+import {AERO_PACKAGES,aeroUnlocked,aeroPackageSummary,upgradeDetails,level,fuelMultiplier,sponsorPayout,setAeroPackage,developTeams,developmentSnapshot} from "./development.js";
 import {developmentBench,upgradePreview} from "./development-preview.js";
 import {TouchControls,LandscapeGate,stickSteering,mobileLessonText} from "./mobile.js";
 import {WHEELS,THERMAL,thermalWear,temperatureStatus,temperatureColour} from "./tyre-temperature.js";
@@ -54,7 +54,7 @@ import {
   finishRemainingQualifyingAsync,
   prepareRace,
   stageOrder,
-  weekendSchedule,
+  weekendSchedule,careerSchedule,yieldSimulation,
   migrateWeekend,
   startRaceWeather,
 } from "./weekend.js";
@@ -156,7 +156,7 @@ function tyreLifeIndicator(selected={compound:setup.tyre,wear:0}) {
   return `<section class="tyre-life" aria-label="Estimated stint life"><div class="tyre-life-heading"><b>ESTIMATED STINT LIFE</b><span>Balanced pace · suitable conditions</span></div><div class="tyre-life-grid">${["S","M","H","I","W"].map(compound=>`<div style="--tyre:${TYRES[compound].color}"><i class="tyre-dot"></i><span>${TYRES[compound].name}</span><b>≈ ${estimatedTyreLife(compound,{upgrades}).toFixed(1).replace(/\.0$/,"")} laps</b></div>`).join("")}</div><p class="tyre-life-remaining">${selected.id ? selected.id+" · " : ""}${TYRES[selected.compound].name} selected <strong>≈ ${remaining.toFixed(1)} laps remaining</strong></p><p class="hint">Competitive stint estimate for this car. Save extends it; Push, heat and sliding shorten it.</p>${wetnessGuide(career.weekend && screen==="career" ? career.weekend.weather.wetness : null)}</section>`;
 }
 function header() {
-  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.6.0</div></header>`;
+  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.7.0</div></header>`;
 }
 function tabs() {
   return `<div class="tabs"><button class="tab ${screen === "quick" ? "active" : ""}" data-screen="quick">Quick race</button><button class="tab ${screen === "career" ? "active" : ""}" data-screen="career">Career garage</button><button class="tab" data-action="school">Race School</button><button class="tab" data-action="help">How to drive ↗</button><button class="tab" data-action="settings">Settings</button></div>`;
@@ -167,8 +167,31 @@ function quickWeatherDescription() {
   const condition=preview.rain>.6 ? "Heavy rain" : preview.rain>.05 ? "Light rain" : "Dry";
   return `Start: ${condition} · ${Math.round(preview.wetness*100)}% track wetness. ${WEATHER_OPTIONS.find(option=>option.id===setup.weather)?.description || ""}`;
 }
+function startingAeroButton(spec) {
+  const unlocked=aeroUnlocked(screen==="career" ? career.weekend?.setup.playerUpgrades || career.upgrades : {});
+  if(!unlocked)return `<div class="field weather-choice"><span class="field-label">Starting aero package</span><div class="fixed-race-distance"><strong>Balanced · standard setup</strong><span>${screen==="career" ? "Buy Aerodynamics level 1 to unlock package selection." : "Standard car · no aero package bonus or penalty."}</span></div></div>`;
+  return `<div class="field weather-choice"><span class="field-label">Starting aero package</span><button class="circuit-picker-trigger" data-action="starting-aero" aria-haspopup="dialog"><span><b data-starting-aero-name>${AERO_PACKAGES[spec || "balanced"].name}</b><small>Choose your setup · free before the start</small></span><span aria-hidden="true">↗</span></button></div>`;
+}
+function showStartingAeroPicker() {
+  if(el("aero-picker"))return;
+  const weekend=screen==="career" ? career.weekend : null;
+  if(screen!=="career" || weekend?.phase!=="R" || !aeroUnlocked(weekend.setup.playerUpgrades || career.upgrades))return;
+  let selected=weekend.setup.aeroSpec || "balanced";
+  const trigger=document.activeElement,backdrop=document.createElement("div");backdrop.className="modal-backdrop";backdrop.id="aero-picker";
+  backdrop.innerHTML=`<section class="modal aero-picker-modal" role="dialog" aria-modal="true" aria-labelledby="starting-aero-title"><div class="track-picker-heading"><div><div class="eyebrow">RACE PREPARATION</div><h2 id="starting-aero-title">Starting aero package</h2></div><button class="ghost" data-close-aero aria-label="Close aero selector">×</button></div><p class="hint">Free to change before the start. Changes during qualifying or the race add 10 seconds of pit service.</p><div class="aero-packages">${Object.entries(AERO_PACKAGES).map(([spec,pack])=>`<button class="aero-choice" data-choose-aero="${spec}"><b>${pack.name}</b><span>${pack.desc}</span><small>${aeroPackageSummary(spec)}</small></button>`).join("")}</div><button class="primary" id="confirm-starting-aero">CONFIRM AERO →</button></section>`;
+  const close=openStrategyPicker(backdrop,race,trigger);
+  const refresh=()=>backdrop.querySelectorAll("[data-choose-aero]").forEach(button=>{const active=button.dataset.chooseAero===selected;button.classList.toggle("selected",active);button.setAttribute("aria-pressed",active);});
+  backdrop.querySelectorAll("[data-choose-aero]").forEach(button=>button.onclick=()=>{selected=button.dataset.chooseAero;refresh();});
+  backdrop.querySelector("[data-close-aero]").onclick=close;backdrop.onclick=event=>{if(event.target===backdrop)close();};
+  el("confirm-starting-aero").onclick=()=>{
+    if(!setAeroPackage(career,selected))return;save();
+    close();app.querySelectorAll("[data-starting-aero-name]").forEach(label=>label.textContent=AERO_PACKAGES[selected].name);
+    const garageSummary=app.querySelector('[data-garage-section="aero"] small');if(garageSummary)garageSummary.textContent=AERO_PACKAGES[selected].name+" · Choose your starting setup";
+  };
+  refresh();backdrop.querySelector('[aria-pressed="true"]').focus();
+}
 function setupCard() {
-  const scheduled = screen === "career" ? weekendSchedule(career.round) : null;
+  const scheduled = screen === "career" ? careerSchedule(career) : null;
   if (scheduled) {
     const key = career.season + ":" + career.round;
     if (setup.roundKey !== key) {
@@ -183,7 +206,7 @@ function setupCard() {
     if (setup.fuel < setup.laps * 0.85 || setup.fuel > setup.laps * 1.35)
       setup.fuel = +(setup.laps * 1.15).toFixed(1);
   }
-  return `<section class="race-card"><div class="track-header"><h3>${TRACK.name}</h3><span class="badge">${scheduled ? scheduled.name : "DYNAMIC WEATHER"}</span></div><div class="specs"><span>GRID<b>22 cars</b></span><span>CHARACTER<b>${TRACK.character}</b></span><span>LAP LENGTH<b>${(TRACK.length/1000).toFixed(2)} km</b></span></div>${!scheduled ? `<div class="field weather-choice"><span class="field-label">Circuit</span><button class="circuit-picker-trigger" id="track-choice" aria-label="Choose circuit: ${TRACK.name}" aria-haspopup="dialog"><span><b>${TRACK.name}</b><small>Choose from 12 circuits</small></span><span aria-hidden="true">▦</span></button></div>` : ""}<div class="form-row"><div class="field">${scheduled ? `<span class="field-label">Race distance</span><div class="fixed-race-distance"><strong>${scheduled.laps} laps</strong><span>Weekend distance · ${DIFFICULTIES[settings.difficulty].name} AI</span></div>` : `<label for="laps">Race distance</label>${selector("laps","Race distance",setup.laps)}<label for="starting-position" class="starting-position-label">Starting position</label>${selector("starting-position","Starting position",setup.startingPosition ?? 22)}`}</div><div class="field"><label>Starting compound</label><div class="compound-row">${compounds(setup.tyre, "start-tyre")}</div></div></div>${!scheduled ? `<div class="field weather-choice"><label for="weather-choice">Weather</label>${selector("weather-choice","Weather",setup.weather,"weather-description")}<p class="hint" id="weather-description">${quickWeatherDescription()}</p></div>` : ""}${scheduled ? `<div class="fuel-row"><span>Qualifying fuel</span><b>${getQualifyingFuel(career.upgrades).toFixed(2)} laps · fixed</b></div><p class="hint">Fuel is set for one out lap, one push lap and one in lap. Race fuel is chosen after qualifying.</p>` : `<div class="fuel-row"><span>Starting fuel <b id="fuel-value">${setup.fuel.toFixed(1)} laps</b></span><span id="fuel-risk"></span></div><input id="fuel" type="range" min="${setup.laps * 0.85}" max="${setup.laps * 1.35}" step="0.1" value="${setup.fuel}" aria-label="Starting fuel in laps"><p class="hint">Less fuel means less weight. Balanced driving uses ~1.10 fuel laps per lap; conserve to stretch it. No refuelling.</p>`}${tyreLifeIndicator()}${scheduled ? '<button class="ghost race-forecast-trigger" data-action="qualifying-forecast" aria-haspopup="dialog">Qualifying weather forecast ↗</button>' : ""}<button class="primary" data-action="start"><span>${screen === "career" ? `START QUALIFYING · ROUND ${career.round}` : "TAKE TO THE GRID"}</span><span>→</span></button><div class="setup-summary">${TYRES[setup.tyre].name} start · ${raceRuleText(scheduled?.raceFormat || quickRaceFormat(setup.laps))}.<br>Intermediates for damp tracks; wets for standing water.</div></section>`;
+  return `<section class="race-card"><div class="track-header"><h3>${TRACK.name}</h3><span class="badge">${scheduled ? scheduled.name : "DYNAMIC WEATHER"}</span></div><div class="specs"><span>GRID<b>22 cars</b></span><span>CHARACTER<b>${TRACK.character}</b></span><span>LAP LENGTH<b>${(TRACK.length/1000).toFixed(2)} km</b></span></div>${!scheduled ? `<div class="field weather-choice"><span class="field-label">Circuit</span><button class="circuit-picker-trigger" id="track-choice" aria-label="Choose circuit: ${TRACK.name}" aria-haspopup="dialog"><span><b>${TRACK.name}</b><small>Choose from 12 circuits</small></span><span aria-hidden="true">▦</span></button></div>` : ""}<div class="form-row"><div class="field">${scheduled ? `<span class="field-label">Race distance</span><div class="fixed-race-distance"><strong>${scheduled.laps} laps</strong><span>Weekend distance · ${DIFFICULTIES[settings.difficulty].name} AI</span></div>` : `<label for="laps">Race distance</label>${selector("laps","Race distance",setup.laps)}<label for="starting-position" class="starting-position-label">Starting position</label>${selector("starting-position","Starting position",setup.startingPosition ?? 22)}`}</div><div class="field"><label>Starting compound</label><div class="compound-row">${compounds(setup.tyre, "start-tyre")}</div></div></div>${!scheduled ? `<div class="field weather-choice"><label for="weather-choice">Weather</label>${selector("weather-choice","Weather",setup.weather,"weather-description")}<p class="hint" id="weather-description">${quickWeatherDescription()}</p></div>` : ""}${!scheduled ? startingAeroButton(setup.aeroSpec) : ""}${scheduled ? `<div class="fuel-row"><span>Qualifying fuel</span><b>${getQualifyingFuel(career.upgrades).toFixed(2)} laps · fixed</b></div><p class="hint">Fuel is set for one out lap, one push lap and one in lap. Race fuel is chosen after qualifying.</p>` : `<div class="fuel-row"><span>Starting fuel <b id="fuel-value">${setup.fuel.toFixed(1)} laps</b></span><span id="fuel-risk"></span></div><input id="fuel" type="range" min="${setup.laps * 0.85}" max="${setup.laps * 1.35}" step="0.1" value="${setup.fuel}" aria-label="Starting fuel in laps"><p class="hint">Less fuel means less weight. Balanced driving uses ~1.10 fuel laps per lap; conserve to stretch it. No refuelling.</p>`}${tyreLifeIndicator()}${scheduled ? '<button class="ghost race-forecast-trigger" data-action="qualifying-forecast" aria-haspopup="dialog">Qualifying weather forecast ↗</button>' : ""}<button class="primary" data-action="start"><span>${screen === "career" ? `START QUALIFYING · ROUND ${career.round}` : "TAKE TO THE GRID"}</span><span>→</span></button><div class="setup-summary">${TYRES[setup.tyre].name} start · ${raceRuleText(scheduled?.raceFormat || quickRaceFormat(setup.laps))}.<br>Intermediates for damp tracks; wets for standing water.</div></section>`;
 }
 function showTrackPicker() {
   if(el("track-picker-modal")) return;
@@ -224,7 +247,7 @@ function menu() {
   overview = false;
   settlement = null;
   if(screen==="career") migrateWeekend(career.weekend);
-  selectTrack(screen==="career" ? career.weekend?.setup.track || weekendSchedule(career.round).track : setup.track);
+  selectTrack(screen==="career" ? career.weekend?.setup.track || careerSchedule(career).track : setup.track);
   app.innerHTML =
     header() +
     `<main class="menu-shell scroll">${screen === "quick" ? `<div class="hero"><div class="eyebrow">THE LINE BETWEEN PACE & PATIENCE</div><h1>DRIVE FAST.<br><span style="color:var(--lime)">THINK AHEAD.</span></h1><p>Twenty-two cars. Every corner counts. Find your rhythm, protect your tyres, and make the call that changes your race.</p></div>${tabs()}${setupCard()}<div class="circuit-label"><div class="eyebrow">${TRACK.country.toUpperCase()} · ${(TRACK.length/1000).toFixed(2)} KM</div><div class="display">${TRACK.name.toUpperCase()}</div><p>${TRACK.character}.</p></div>` : careerPage()}${footer()}</main>`;
@@ -288,7 +311,7 @@ function garageSections(){
  const installed=Object.values(career.upgrades).reduce((sum,n)=>sum+n,0),locked=!!career.weekend;
  const sections=[
   {id:"development",title:"Car development",summary:`${installed} upgrade ${installed===1 ? "level" : "levels"} · ${locked ? "Weekend locked" : "9 upgrade paths"}`},
-  {id:"aero",title:"Aero package",summary:`${AERO_PACKAGES[career.aeroSpec || "balanced"].name} · ${locked ? "Pit changes · +10s" : "Choose your setup"}`},
+  {id:"aero",title:"Aero package",summary:`${AERO_PACKAGES[career.aeroSpec || "balanced"].name} · ${!aeroUnlocked(career.upgrades) ? "Requires Aerodynamics level 1" : locked && career.weekend.phase!=="R" ? "Pit changes · +10s" : "Choose your starting setup"}`},
   {id:"teams",title:"Team development",summary:"11 teams · Budgets & upgrades"},
  ];
  return `<nav class="garage-sections" aria-label="Career management">${sections.map(section=>`<button class="garage-section-choice" data-garage-section="${section.id}" aria-haspopup="dialog"><span><b>${section.title}</b><small>${section.summary}</small></span><span class="garage-section-arrow" aria-hidden="true">↗</span></button>`).join("")}</nav>`;
@@ -370,13 +393,14 @@ function developmentCard(){
  }).join("")}</div>`).join("")}<p class="hint">Review an upgrade to see its measured effects before buying. Development locks when qualifying starts. Aero changes remain available in the pit box for 10 seconds of extra service.</p></div>`;
 }
 function aeroCard(){
- return `<div class="aero-panel"><div class="panel-heading"><span class="eyebrow">${career.weekend ? "CHANGE IN PIT BOX · +10s" : "FREE TO SWITCH"}</span></div><p class="hint">${career.weekend ? "Use Choose aero on the track screen. Changing the package adds 10 seconds to pit service." : "All packages are available. Choose before qualifying for a free change."}</p><div class="aero-packages">${Object.entries(AERO_PACKAGES).map(([key,pack])=>{
+ const unlocked=aeroUnlocked(career.weekend?.setup.playerUpgrades || career.upgrades),locked=!unlocked || career.weekend && career.weekend.phase!=="R";
+ return `<div class="aero-panel"><div class="panel-heading"><span class="eyebrow">${!unlocked ? "REQUIRES AERODYNAMICS LEVEL 1" : locked ? "CHANGE IN PIT BOX · +10s" : "FREE TO SWITCH"}</span></div><p class="hint">${!unlocked ? "Buy Aerodynamics level 1 in Car development to unlock package selection. Your standard Balanced setup has no package bonuses or penalties." : locked ? "Use Choose aero on the track screen. Changing the package adds 10 seconds to pit service." : "All packages are available. Choose before qualifying or the race for a free change."}</p><div class="aero-packages">${Object.entries(AERO_PACKAGES).map(([key,pack])=>{
   const selected=(career.aeroSpec || "balanced")===key;
-  return `<button class="aero-choice ${selected?"selected":""}" data-aero-spec="${key}" aria-pressed="${selected}" ${career.weekend ? "disabled" : ""}><b>${pack.name}${selected?" ✓":""}</b><span>${pack.desc}</span><small>${aeroPackageSummary(key)}</small></button>`;
+  return `<button class="aero-choice ${selected?"selected":""}" data-aero-spec="${key}" aria-pressed="${selected}" ${locked ? "disabled" : ""}><b>${pack.name}${selected?" ✓":""}</b><span>${pack.desc}</span><small>${aeroPackageSummary(key)}</small></button>`;
  }).join("")}</div></div>`;
 }
 function rivalDevelopmentCard(){
- const snapshot=career.weekend?.setup.teamDevelopment || developmentSnapshot(career,weekendSchedule(career.round).track);
+ const snapshot=career.weekend?.setup.teamDevelopment || developmentSnapshot(career,careerSchedule(career).track);
  return `<div class="rivals-panel"><p class="hint">Teams fund parts from race and sponsor income. They pay the same prices and use the same upgrade effects. Budgets are per car, averaged across each team's drivers. No free parts or hidden catch-up money. Race results fund development; sponsors add a smaller bonus.</p>${career.teams.map(t=>{
   const yours=t.teamIndex===career.profile.teamIndex,upgrades=yours?career.upgrades:t.upgrades,budget=yours?career.cash:t.budget,count=Object.values(upgrades).reduce((a,b)=>a+b,0),pack=snapshot.find(x=>x.teamIndex===t.teamIndex)?.aeroSpec || "balanced";
   const bought=t.history[0]?.purchases || [];
@@ -458,10 +482,11 @@ function weekendCard() {
       return `<div class="history-row"><b>P${i + 1}</b><span>${escapeHTML(modelName)}</span><span>${classified ? classified.name+" · " : ""}${t ? time(t.time) : "NO TIME"}</span></div>`;
     })
     .join("");
-  return `<section class="race-card weekend-card"><div class="track-header"><h3>${phase === "R" ? "Race preparation" : phase + " qualifying"}</h3><span class="badge">${w.weather.rain > 0.6 ? "HEAVY RAIN" : w.weather.rain > 0.05 ? "RAIN" : w.weather.wetness > 0.1 ? "DRYING" : "DRY"} / ${Math.round(w.weather.wetness * 100)}% WET</span></div><p class="hint">${phase === "R" ? `Starting P${w.grid.indexOf(21) + 1} · ${w.setup.laps} laps · ${w.eventName || weekendSchedule(w.round).name} · ${DIFFICULTIES[normalizeDifficulty(w.setup.difficulty)].name} AI · choose any remaining set.` : eliminated ? "You have been knocked out. The remaining sessions will set the front of the grid." : `${w.active.length} cars · ${stage.keep} advance · ${Math.ceil((stage.duration - w.elapsed) / 60)} min remaining. Choose when to leave the garage. Each run has an out lap, one timed lap and an in lap.`}</p>${phase==="R" ? `<p class="hint">${raceRuleText(w.setup.raceFormat)}</p>` : ""}${phase==="R"&&w.qualifyingOutcome?.eliminated ? `<p class="hint">${w.qualifyingOutcome.stage} knockout · final P${w.qualifyingOutcome.position}. The top ${w.qualifyingOutcome.keep} advanced.</p>` : ""}<div class="fuel-row"><span>${phase === "R" ? "Race starting set" : "Selected tyre set"}</span><b>${sets.find(t=>t.id===selectedWeekendSet) ? tyreSetLabel(sets.find(t=>t.id===selectedWeekendSet)) : "No available sets"}</b></div><button class="ghost browse-tyres" data-action="browse-weekend-tyres" aria-haspopup="dialog" ${!sets.length ? "disabled" : ""}>Choose tyre set · fresh & used</button>${phase === "R" ? `<div class="fuel-row"><span>Race fuel</span><b id="weekend-fuel-label">${w.setup.fuel.toFixed(1)} laps</b></div><input id="weekend-fuel" aria-label="Race fuel in laps" type="range" min="${w.setup.laps * 0.85}" max="${w.setup.laps * 1.35}" step=".1" value="${w.setup.fuel}">` : ""}${tyreLifeIndicator(sets.find(t=>t.id===selectedWeekendSet) || {compound:setup.tyre,wear:0})}<p class="hint">${forecast(w.weather)} · surface water carries over from qualifying.</p>${phase !== "R" ? '<button class="ghost race-forecast-trigger" data-action="race-forecast" aria-haspopup="dialog">Qualifying weather forecast ↗</button>' : ""}${phase === "R" ? '<button class="ghost race-forecast-trigger" data-action="race-forecast" aria-haspopup="dialog">Weather forecast <span aria-hidden="true">↗</span></button><button class="primary" data-action="weekend-race">START RACE →</button>' : eliminated ? '<button class="primary" data-action="finish-qualifying">COMPLETE QUALIFYING →</button>' : `<button class="primary" data-action="qualifying-run" ${!sets.length || w.elapsed >= stage.duration ? "disabled" : ""}>${w.runCount ? "ANOTHER RUN" : "DRIVE " + phase} →</button><button class="ghost end-session" data-action="end-qualifying" ${!qualifyingReady(w) ? "disabled" : ""}>${pendingFirstRuns(w).length ? `Waiting for ${pendingFirstRuns(w).length} opponents to complete a first run` : !qualifyingReady(w) ? "Complete your first timed lap before ending the session" : `END ${phase} & ADVANCE`}</button>`}${phase!=="R"&&!eliminated ? `<p class="hint">Ending early completes the AI runs in the current weather and track conditions. Positions can still change.</p>` : ""}<details class="weekend-results"><summary>${phase === "R" ? "Starting grid" : "Session timing"}</summary>${rows}</details><p class="save-note">Weekend allocation and qualifying progress save automatically.</p></section>`;
+  return `<section class="race-card weekend-card"><div class="track-header"><h3>${phase === "R" ? "Race preparation" : phase + " qualifying"}</h3><span class="badge">${w.weather.rain > 0.6 ? "HEAVY RAIN" : w.weather.rain > 0.05 ? "RAIN" : w.weather.wetness > 0.1 ? "DRYING" : "DRY"} / ${Math.round(w.weather.wetness * 100)}% WET</span></div><p class="hint">${phase === "R" ? `Starting P${w.grid.indexOf(21) + 1} · ${w.setup.laps} laps · ${w.eventName || weekendSchedule(w.round,w.seasonOrder).name} · ${DIFFICULTIES[normalizeDifficulty(w.setup.difficulty)].name} AI · choose any remaining set.` : eliminated ? "You have been knocked out. The remaining sessions will set the front of the grid." : `${w.active.length} cars · ${stage.keep} advance · ${Math.ceil((stage.duration - w.elapsed) / 60)} min remaining. Choose when to leave the garage. Each run has an out lap, one timed lap and an in lap.`}</p>${phase==="R" ? `<p class="hint">${raceRuleText(w.setup.raceFormat)}</p>` : ""}${phase==="R"&&w.qualifyingOutcome?.eliminated ? `<p class="hint">${w.qualifyingOutcome.stage} knockout · final P${w.qualifyingOutcome.position}. The top ${w.qualifyingOutcome.keep} advanced.</p>` : ""}<div class="fuel-row"><span>${phase === "R" ? "Race starting set" : "Selected tyre set"}</span><b>${sets.find(t=>t.id===selectedWeekendSet) ? tyreSetLabel(sets.find(t=>t.id===selectedWeekendSet)) : "No available sets"}</b></div><button class="ghost browse-tyres" data-action="browse-weekend-tyres" aria-haspopup="dialog" ${!sets.length ? "disabled" : ""}>Choose tyre set · fresh & used</button>${phase === "R" ? `${startingAeroButton(w.setup.aeroSpec)}<div class="fuel-row"><span>Race fuel</span><b id="weekend-fuel-label">${w.setup.fuel.toFixed(1)} laps</b></div><input id="weekend-fuel" aria-label="Race fuel in laps" type="range" min="${w.setup.laps * 0.85}" max="${w.setup.laps * 1.35}" step=".1" value="${w.setup.fuel}">` : ""}${tyreLifeIndicator(sets.find(t=>t.id===selectedWeekendSet) || {compound:setup.tyre,wear:0})}<p class="hint">${forecast(w.weather)} · surface water carries over from qualifying.</p>${phase !== "R" ? '<button class="ghost race-forecast-trigger" data-action="race-forecast" aria-haspopup="dialog">Qualifying weather forecast ↗</button>' : ""}${phase === "R" ? '<button class="ghost race-forecast-trigger" data-action="race-forecast" aria-haspopup="dialog">Weather forecast <span aria-hidden="true">↗</span></button><button class="primary" data-action="weekend-race">START RACE →</button>' : eliminated ? '<button class="primary" data-action="finish-qualifying">COMPLETE QUALIFYING →</button>' : `<button class="primary" data-action="qualifying-run" ${!sets.length || w.elapsed >= stage.duration ? "disabled" : ""}>${w.runCount ? "ANOTHER RUN" : "DRIVE " + phase} →</button><button class="ghost end-session" data-action="end-qualifying" ${!qualifyingReady(w) ? "disabled" : ""}>${pendingFirstRuns(w).length ? `Waiting for ${pendingFirstRuns(w).length} opponents to complete a first run` : !qualifyingReady(w) ? "Complete your first timed lap before ending the session" : `END ${phase} & ADVANCE`}</button>`}${phase!=="R"&&!eliminated ? `<p class="hint">Ending early completes the AI runs in the current weather and track conditions. Positions can still change.</p>` : ""}<details class="weekend-results"><summary>${phase === "R" ? "Starting grid" : "Session timing"}</summary>${rows}</details><p class="save-note">Weekend allocation and qualifying progress save automatically.</p></section>`;
 }
 function bindWeekend() {
   const w = career.weekend;
+  app.querySelector("[data-action=starting-aero]")?.addEventListener("click",showStartingAeroPicker);
   app.querySelector("[data-action=race-forecast]")?.addEventListener("click",showRaceForecast);
   app.querySelector("[data-action=browse-weekend-tyres]")?.addEventListener("click",()=>showTyreSetPicker());
   if (el("weekend-fuel"))
@@ -727,10 +752,10 @@ async function completeQualifying(run=null){
  const progress=document.createElement("div");progress.id="qualifying-progress";progress.className="modal-backdrop";
  progress.innerHTML='<section class="modal" role="dialog" aria-modal="true" aria-labelledby="qualifying-progress-title"><div class="eyebrow">QUALIFYING</div><h2 id="qualifying-progress-title" tabindex="-1">Completing AI runs…</h2><p class="muted" role="status" aria-live="polite" id="qualifying-progress-detail">Updating opponent lap times and tyre wear.</p><progress aria-label="Completing qualifying"></progress></section>';
  app.appendChild(progress);el("qualifying-progress-title").focus();
- const yieldControl=()=>new Promise(resolve=>setTimeout(()=>{
+ const yieldControl=async()=>{
   const detail=el("qualifying-progress-detail");if(detail)detail.textContent=`${career.weekend.phase} · Updating opponent lap times and tyre wear.`;
-  resolve();
- },0));
+  await yieldSimulation();
+ };
  try{
   const outcome=run ? await run.endSessionAsync({yieldControl}) : await finishRemainingQualifyingAsync(career.weekend,career.upgrades,career.profile,{yieldControl});
   if(run&&!outcome)return;
@@ -773,11 +798,11 @@ function showRaceForecast() {
   if(el("race-forecast-modal"))return;
   if(isRace)startRaceWeather(w);
   setup.weatherSeed ??= Math.floor(Math.random()*4294967296);
-  const state=w?.weather || createWeather(weekendSchedule(career.round).weather,{seed:setup.weatherSeed,duration:46*60});
+  const state=w?.weather || createWeather(careerSchedule(career).weather,{seed:setup.weatherSeed,duration:46*60});
   const stage=w ? Q_STAGES.find(q=>q.name===w.phase) : Q_STAGES[0];
   const duration=isRace ? w.setup.weatherDuration : Math.max(1,stage.duration-(w?.elapsed || 0));
   const outlook=raceForecast(state,{duration,laps:isRace?w.setup.laps:1});
-  const eventName=w?.eventName || weekendSchedule(career.round).name;
+  const eventName=w?.eventName || careerSchedule(career).name;
   const minute=seconds=>{const total=Math.round(seconds);return `${Math.floor(total/60)}:${String(total%60).padStart(2,"0")}`;};
   const backdrop=document.createElement("div");backdrop.id="race-forecast-modal";backdrop.className="modal-backdrop";
   const icon=rain=>`<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">${rain==="dry" ? '<circle cx="16" cy="16" r="6"/><path d="M16 2v4m0 20v4M2 16h4m20 0h4M6 6l3 3m14 14 3 3M6 26l3-3M23 9l3-3"/>' : '<path d="M8 20h16a6 6 0 0 0 0-12 9 9 0 0 0-17 3 5 5 0 0 0 1 9Z"/><path d="m12 24-2 4m12-4-2 4"/>'+(rain==="heavy" ? '<path d="m17 24-2 6m12-6-2 6"/>' : '')}</svg>`;
@@ -946,7 +971,7 @@ function showAeroPicker() {
   const close=openStrategyPicker(backdrop,running,el("browse-race-aero"));
   const refresh=()=>{
     backdrop.querySelectorAll("[data-choose-aero]").forEach(button=>{const active=button.dataset.chooseAero===selected;button.classList.toggle("selected",active);button.setAttribute("aria-pressed",active);});
-    el("aero-selection-note").textContent=!canChange ? "In qualifying, choose your aero while stopped in the pit box." : selected===fitted ? "Keep fitted package · no additional service" : `${AERO_PACKAGES[selected].name} · +10s at ${running.player.garage || running.player.pit?.stage==="service" ? "this stop" : "your next stop"}`;
+    el("aero-selection-note").textContent=!aeroUnlocked(running.player.upgrades) ? "Buy Aerodynamics level 1 in Car development to unlock aero packages. The standard Balanced setup has no package bonuses or penalties." : !canChange ? "In qualifying, choose your aero while stopped in the pit box." : selected===fitted ? "Keep fitted package · no additional service" : `${AERO_PACKAGES[selected].name} · +10s at ${running.player.garage || running.player.pit?.stage==="service" ? "this stop" : "your next stop"}`;
   };
   backdrop.querySelector("[data-close-aero]").onclick=close;backdrop.onclick=event=>{if(event.target===backdrop)close();};
   backdrop.querySelectorAll("[data-choose-aero]").forEach(button=>button.onclick=()=>{selected=button.dataset.chooseAero;refresh();});
@@ -1238,7 +1263,7 @@ function updateHUD() {
   const aeroChoice=race.nextAeroSpec || p.aeroSpec || "balanced",aeroChanged=aeroChoice!==p.aeroSpec;
   app.querySelectorAll("[data-pit-aero]").forEach(button=>{const active=button.dataset.pitAero===aeroChoice;button.classList.toggle("active",active);button.setAttribute("aria-pressed",active);button.disabled=!race.canSelectAero();});
   el("race-aero-note").textContent=`Aero: ${AERO_PACKAGES[aeroChoice].name}${aeroChanged ? " · +10s service" : ""}${p.pit?.stage==="service" ? " · "+p.pit.timer.toFixed(1)+"s left" : ""}`;
-  el("browse-race-aero").textContent=aeroChanged ? "Aero · +10s" : "Choose aero";
+  el("browse-race-aero").textContent=!aeroUnlocked(p.upgrades) ? "Aero locked" : aeroChanged ? "Aero · +10s" : "Choose aero";
   el("browse-race-tyres").disabled=!!p.pit && !p.garage && !(race.qualifying && p.pit.stage==="service");
   if(mobileInput){
     el("pit-button").textContent=el("pit-button").textContent.replace(/ · (?:B|W \/ ↑)/g,"");

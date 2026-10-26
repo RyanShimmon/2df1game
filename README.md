@@ -1,6 +1,6 @@
 # V10 — Grand Prix
 
-Version **1.6.0**.
+Version **1.7.0**.
 
 A local browser game with top-down V10 racing, 22 cars, five tyre types, dynamic weather, qualifying and a saved career. Requires Node.js 18 or newer; no dependency installation is needed.
 
@@ -235,14 +235,14 @@ Flyover projection retains the current route even during a recoverable wide slid
 
 Advancing Q1 to Q2 or Q2 to Q3 keeps the driver on track, stationary in the pit garage. The next session retains the physical tyre set and its wear where eligible, the completed aero setup, fuel mode and time multiplier; timing resets for the new stage. Incomplete aero service is not granted by advancing.
 
-Choose aero offers High downforce and Low drag; 6/7 provide desktop shortcuts beside the tyre controls. Both Career and Quick Race allow the packages from the start; paid aero upgrades improve grip rather than unlock setup choices. Queue a race change before entering the pits, or update it during service. Qualifying changes are made while stopped in the box. A change adds ten seconds after tyre and penalty service and applies only after the crew finishes. Pit crew upgrades do not reduce this aero work. Selecting the fitted package cancels the remaining aero task without cancelling tyre/penalty work. A completed package carries into later sessions and the race.
+Choose aero offers High downforce and Low drag; 6/7 provide desktop shortcuts beside the tyre controls. Aerodynamics level 1 unlocks package choices for player and AI. Factory cars use Balanced with no package bonus or penalty; higher aero levels still improve grip. Career race preparation offers a free starting-package choice, saved through reloads. Qualifying changes remain pit-service jobs; Quick Race uses its standard car. Queue a race change before entering the pits, or update it during service. Qualifying changes are made while stopped in the box. A change adds ten seconds after tyre and penalty service and applies only after the crew finishes. Pit crew upgrades do not reduce this aero work. Selecting the fitted package cancels the remaining aero task without cancelling tyre/penalty work. A completed package carries into later sessions and the race.
 
 Tyre and aero dialogs pause the session, including AI and weather. Clicking a card stages a choice; Confirm applies it and resumes the previous pause state. Closing without confirmation discards the staged choice. Mobile exposes the two dialogs alongside Request pit; desktop keeps the quick shortcuts.
 
 Qualifying completion, expired-session results, knockout classification and race preparation remain over the circuit. Returning after a stranded outing reopens the same session in the pit box; advancement uses the completed run and opens the next garage without a menu detour.
 
 
-Final qualifying uses the archived stage classification for the results screen, garage grid and race placement. Completing Q3 shows the confirmed starting position only after opponent runs are resolved. Live and early-completion qualifying use the same 60 Hz physics step; unfinished outings are labelled provisional. Saved grids are reconciled with their Q1/Q2/Q3 classifications, preserving genuine lap times and eliminations. Regression checks cover all twelve circuits and both improving and worsening Q3 positions.
+Final qualifying uses the archived stage classification for the results screen, garage grid and race placement. Completing Q3 shows the confirmed starting position only after opponent runs are resolved. Live qualifying uses 60 Hz and unseen completion uses the supported 20 Hz physics step with the same driving, wear and service model. Static spline coefficients are cached for exact braking-lookahead geometry; unfinished outings are labelled provisional. Saved grids are reconciled with their Q1/Q2/Q3 classifications, preserving genuine lap times and eliminations. Regression checks cover all twelve circuits and both improving and worsening Q3 positions.
 
 Grand Prix preparation includes a Weather forecast popup covering the expected race duration. Chronological cards show rainfall, surface-water ranges, approximate minutes/laps and tyre guidance. It projects the saved race plan with the same water model as driving, without advancing time or rerolling conditions. Lap ranges are estimates because driving pace and pit stops affect the timing.
 
@@ -272,3 +272,16 @@ AI traffic planning searches for open corridors around side-by-side cars when th
 Directional pace controls use F to step toward Save and G to step toward Push, stopping at either end. The HUD, pause menu, briefing and Race School share this guidance; mobile lessons retain direct pace-button instructions.
 
 AI passing uses the same compound, surface-water, axle wear and temperature limits as driving. Exit forecasts now use rear-axle grip, physical following clearance accounts for shortened inside-corner distances, and clearing one car keeps the attack active while another is still alongside. Regression battles cover Soft/Medium, Medium/Hard, Intermediate/Wet in damp conditions and Wet/Intermediate in heavy water; no compound receives a scripted overtaking bonus.
+
+
+### Circuit aero balance and AI motion
+
+Circuit geometry now gives the specialist aero packages different useful sections. Northline, Alpine, Crossover, Dunes, Forest, Metro, Copper Canyon and Aurora are mixed layouts. Velocity and Sunset favour speed; Harbour and Riviera favour downforce. `layoutScale` changes physical dimensions at the existing road width, extending acceleration zones and opening corner radii. Grid spacing, pit entry/exit joins and bridge topology are retained. Fuel and nominal tyre wear still use distance as a fraction of a lap, while tyre temperature continues to respond to real elapsed time and driving loads. Laps and pit-lane transits are longer.
+
+Run `node scripts/benchmark-aero.mjs [track-id] [dry|wet|worn]` for a reproducible comparison. Leave the track argument empty (`''`) to measure all circuits. The benchmark uses equal equipment, seed 42, Normal AI, Balanced pace, fixed six-lap fuel load, ideal temperatures and no traffic. It measures the third flying lap, with fractional crossings across 24 distance sections. Dry uses fresh Mediums; wet uses fresh Wets on 80% surface water; worn uses Mediums at 65% wear. JSON includes all three packages, section times, speed, controls and track-limit counts. These are controlled comparisons, not promised human race times.
+
+On these controls, the eight mixed layouts put high downforce and low drag within 3% of each other in the dry, with at least seven of the 24 sections favouring each. Crossover, Dunes and Forest change from a slight low-drag preference in the dry to downforce in rain. Balanced remains a strong solo-lap compromise on mixed circuits; specialist setups offer local passing/defending advantages rather than a guaranteed overall gain. Setup effects remain the same for player and AI, including the mirrored cornering/top-speed trade-off.
+
+AI heading now follows the displacement actually applied after traffic constraints, with deliberate tyre slip applied separately. Previously the body could keep pointing along the unrestricted racing line while its lateral motion was blocked, producing visible crabbing. Collision and drafting velocities now use the same travel direction, and collision-induced sideways momentum decays independently of planned slip. Mutually abandoned overtakes give the leading car priority, with a deterministic tie-break when level, so both cars cannot brake each other to a standstill.
+
+Each new career and season shuffles all twelve events once and saves that calendar. Every circuit appears exactly once; race format, distance and weather preset travel with its event. Existing careers preserve completed rounds and any active weekend, shuffling only future rounds on migration.

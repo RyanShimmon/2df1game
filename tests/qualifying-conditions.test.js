@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {newCareer,loadCareer} from '../src/core.js';
+import {loadCareer} from '../src/core.js';
+import {newCareer} from './career-fixture.js';
 import {createWeekend,QualifyingRun,recordLap,stageOrder} from '../src/weekend.js';
 const profile={driverName:'Velocity replay',teamIndex:2};
 for(const saved of [false,true])test(`Velocity Q1: a leading 32.80 lap survives early completion (${saved?'saved garage':'live session'})`,async()=>{

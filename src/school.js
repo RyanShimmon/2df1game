@@ -1,6 +1,7 @@
 import {Race,newCareer,sample,TRACK} from './core.js';
 import {createWeekend,QualifyingRun} from './weekend.js';
 import {createWeather} from './weather.js';
+import {WEEKENDS} from './calendar.js';
 export const SCHOOL_KEY='v10.race-school.v1';
 export const SCHOOL_INTRO=[
  {title:'Your Grand Prix weekend',text:'Q1 trims 22 drivers to 16, Q2 keeps 10, and Q3 decides the front of the grid. Your best valid lap counts. Each outing has an out lap, one timed lap and an in lap. Return to the pits before another timed lap can count.'},
@@ -15,7 +16,7 @@ export class RaceSchool {
  save(storage){try{storage.setItem(SCHOOL_KEY,JSON.stringify(this.state));}catch{}}
  createQualifying(){
   this.state.phase='qualifying';const profile={driverName:'Rookie',teamIndex:2};
-  const w=this.state.weekend ? JSON.parse(JSON.stringify(this.state.weekend)) : createWeekend(newCareer(profile),{track:'northline',laps:8,fuel:10,tyre:'S',weather:'dry',difficulty:'easy'});
+  const w=this.state.weekend ? JSON.parse(JSON.stringify(this.state.weekend)) : createWeekend(newCareer(profile,{seasonOrder:WEEKENDS.map(w=>w.track)}),{track:'northline',laps:8,fuel:10,tyre:'S',weather:'dry',difficulty:'easy'});
   w.weather=createWeather('dry');
   const q=new QualifyingRun(w,'S1',{engine:0,aero:0,tyres:0,crew:0},profile);
   q.stage={...q.stage,duration:3600};q.school=true;q.autoPitLimiter=true;

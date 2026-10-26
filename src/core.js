@@ -1,7 +1,7 @@
 import {planRaceStrategy,strategyWearLimit} from "./strategy.js";
 import {paceMode,fuelPerLap,applyThrottle,tyreWearFactor,stintLaps,cornerAccelerationLimit} from "./performance.js";
 import {GRAND_PRIX_POINTS,racePoints,raceFormat,quickRaceFormat} from "./race-rules.js";
-import {SEASON_LENGTH,weekendSchedule} from "./calendar.js";
+import {SEASON_LENGTH,careerSchedule,shuffledSeasonOrder,ensureSeasonOrder} from "./calendar.js";
 import {SPONSORS,sponsorMet} from "./sponsors.js";
 export {SPONSORS} from "./sponsors.js";
 import {engineerReport} from "./engineer.js";
@@ -71,10 +71,11 @@ export function normalizeProfile(profile) {
     .slice(0, 24);
   return driverName ? { driverName, teamIndex: profile.teamIndex } : null;
 }
-export function newCareer(profile = null) {
+export function newCareer(profile = null, {seasonOrder=shuffledSeasonOrder()}={}) {
   return {
     version: 1,
     calendarVersion:2,
+    seasonOrder:[...seasonOrder],calendarSeason:1,
     profile: normalizeProfile(profile),
     cash: 7000,
     round: 1,
@@ -140,7 +141,7 @@ export function loadCareer(storage) {
 }
 export function settleCareer(career, result) {
   const legal = !result.dnf && result.legal;
-  const format=result.raceFormat ?? career.weekend?.setup?.raceFormat ?? weekendSchedule(career.round).raceFormat;
+  const format=result.raceFormat ?? career.weekend?.setup?.raceFormat ?? careerSchedule(career).raceFormat;
   const points = legal ? racePoints(result.position,format) : 0;
   const difficulty=normalizeDifficulty(career.weekend?.setup?.difficulty ?? result.difficulty);
   const basePrize=racePrize({...result,legal}).base;
@@ -180,6 +181,7 @@ export function settleCareer(career, result) {
   if (seasonEnded) {
     career.round = 1;
     career.season++;
+    ensureSeasonOrder(career);
     career.seasonPoints = 0;
   }
   career.sponsor = null;
@@ -217,9 +219,11 @@ function spline(t,anchors,ovalRadius=0) {
  return [0,1].map(k=>(2*f**3-3*f*f+1)*p1[k]+(f**3-2*f*f+f)*m1[k]+(-2*f**3+3*f*f)*p2[k]+(f**3-f*f)*m2[k]);
 }
 export function makeTrack(circuit=CIRCUITS[0]) {
- const anchors=circuitAnchors(circuit),raw=[];let length=0;
+ // Geometry is expanded, not car performance: longer straights and wider radii
+ // let the speed package recover time without removing the technical sections.
+ const scale=circuit.layoutScale || 1,anchors=circuitAnchors(circuit).map(p=>p.map(v=>v*scale)),raw=[];let length=0;
  for(let i=0;i<=1400;i++){
-  const [x,y]=spline((i/1400)*anchors.length,anchors,circuit.ovalRadius),previous=raw.at(-1);
+  const [x,y]=spline((i/1400)*anchors.length,anchors,(circuit.ovalRadius || 0)*scale),previous=raw.at(-1);
   if(previous)length+=Math.hypot(x-previous.x,y-previous.y);
   raw.push({x,y,s:length});
  }
@@ -262,18 +266,18 @@ export function sample(s) {
 }
 
 export function findApexes() {
-  const curves = [];
+  const curves = [],scale=TRACK.layoutScale || 1;
   const curve = (s) =>
-    angleDiff(sample(s + 65).angle, sample(s - 65).angle) / 130;
-  for (let s = 0; s < TRACK.length; s += 45) {
+    angleDiff(sample(s + 65*scale).angle, sample(s - 65*scale).angle) / (130*scale);
+  for (let s = 0; s < TRACK.length; s += 45*scale) {
     const k = curve(s);
     if (
-      Math.abs(k) > 0.002 &&
-      Math.abs(k) >= Math.abs(curve(s - 45)) &&
-      Math.abs(k) >= Math.abs(curve(s + 45))
+      Math.abs(k) > 0.002/scale &&
+      Math.abs(k) >= Math.abs(curve(s - 45*scale)) &&
+      Math.abs(k) >= Math.abs(curve(s + 45*scale))
     ) {
       const prior = curves.at(-1);
-      if (prior && s - prior.s < 210) {
+      if (prior && s - prior.s < 210*scale) {
         if (Math.abs(k) > Math.abs(prior.k)) {
           prior.s = s;
           prior.k = k;
@@ -586,8 +590,8 @@ export function grip(car, axis="all") {
 export function brakingDeceleration(car) {
   return Math.min(300,240+level(car.upgrades,"brakes")*12)*grip(car,"front");
 }
-export function accelerationGrip(car) {
-  const lateral=grip(car,"rear")*(1+level(car.upgrades,"suspension")*.025);
+export function accelerationGrip(car,rearGrip=grip(car,"rear")) {
+  const lateral=rearGrip*(1+level(car.upgrades,"suspension")*.025);
   if(!["I","W"].includes(car.tyre)) return lateral;
   const water=clamp(car.trackWetness || 0,0,1);
   const suitability=tyreWeatherGrip(car.tyre,water);
@@ -597,16 +601,16 @@ export function accelerationGrip(car) {
 }
 // Traffic forecasts use the same mechanical limits as the driving controller.
 // Normalize banking so cars at different ends of a bend are compared fairly.
-export function passingPerformance(car,difficulty="normal") {
+export function passingPerformance(car,difficulty="normal",contact=null) {
  if(!car)return null;
  const water=car.trackWetness || 0,style=car.driverStyle || {wetSkill:.7,pace:1};
  const skill=DIFFICULTIES[normalizeDifficulty(difficulty)],bank=bankingGrip(car.s || 0);
  const commitment=car.player ? 1 : clamp((.98+water*.04*style.wetSkill)*(car.pace || 1)*style.pace*(car.ai?.pace || 1)*(1-car.fuel*.002),.65,1.035);
  const brakingSkill=car.player ? 1 : Math.min(1,skill.braking+water*.14*style.wetSkill);
  const throttleSkill=car.player ? 1 : Math.min(1,skill.throttle+water*.10*style.wetSkill);
- return {grip:grip(car)/bank,rearGrip:grip(car,"rear")/bank,braking:brakingDeceleration(car)*brakingSkill/bank,
+ return {grip:(contact?.all ?? grip(car))/bank,rearGrip:(contact?.rear ?? grip(car,"rear"))/bank,braking:(contact ? Math.min(300,240+level(car.upgrades,"brakes")*12)*contact.front : brakingDeceleration(car))*brakingSkill/bank,
   top:maximumSpeed(car),commitment,
-  acceleration:acceleration({...car,speed:clamp(car.speed,180,280)})*clamp(accelerationGrip(car),.25,1)*throttleSkill};
+  acceleration:acceleration({...car,speed:clamp(car.speed,180,280)})*clamp(accelerationGrip(car,contact?.rear),.25,1)*throttleSkill};
 }
 export function targetSpeed(car, s = car.s) {
   let curv = 0;
@@ -797,7 +801,7 @@ export class Race {
     this.player.aeroSpec=aeroPackage(upgrades,setup.aeroSpec)===AERO_PACKAGES.balanced ? "balanced" : setup.aeroSpec;
     for(const car of this.cars)if(!car.player){
       const team=setup.teamDevelopment?.find(t=>t.teamIndex===TEAMS.indexOf(car.team));
-      if(team){car.upgrades=normalizeUpgrades(team.upgrades);car.aeroSpec=team.aeroSpec || "balanced";}
+      if(team){car.upgrades=normalizeUpgrades(team.upgrades);car.aeroSpec=aeroPackage(car.upgrades,team.aeroSpec)===AERO_PACKAGES.balanced ? "balanced" : team.aeroSpec;}
       car.fuel*=fuelMultiplier(car.upgrades);
       car.ai.strategy.forecastHorizon+=level(car.upgrades,"engineer")*15;
     }
@@ -867,7 +871,7 @@ export class Race {
   }
   canSelectAero() {
     const c=this.player;
-    return !this.done &&
+    return !this.done && level(c.upgrades,"aero")>=1 &&
       (!this.qualifying || !!c.pit && (c.garage || c.pit.stage==="service"));
   }
   selectAero(spec) {
@@ -1099,8 +1103,9 @@ export class Race {
     car.x = loc.x - Math.sin(loc.angle) * offset;
     car.y = loc.y + Math.cos(loc.angle) * offset;
     car.angle = loc.angle;
-    if(car.player) car.motionAngle=loc.angle;
+    car.motionAngle=loc.angle;
     car.sideSpeed = 0;
+    if(car.ai){car.ai.slip=0;car.ai.slipSideSpeed=0;}
     car.offset = 0;
     if (p.distance >= PIT_LANE.length) {
       car.pit = null;
@@ -1464,8 +1469,10 @@ export class Race {
     const passingAttack=ai.lane?.phase==="passing" && ai.strategy.plannedMode!=="save" &&
       c.wear<strategyWearLimit(c,c.tyre)-.06 && c.fuel>remain*fuelPerLap("balanced",c.upgrades)+.4;
     c.drive=yielding ? (c.qState==="in" ? "save" : "balanced") : mustSave ? "save" : this.qualifying || ai.mode==="attack" || passingAttack ? "push" : ai.mode==="conserve" ? "save" : c.ai.strategy.plannedMode || "balanced";
-    ai.racePace=passingPerformance(c,this.difficulty);
-    const braking=brakingDeceleration(c);
+    // Reuse grip until movement changes the contact point or speed.
+    const contact={all:grip(c),front:grip(c,"front"),rear:grip(c,"rear")};
+    ai.racePace=passingPerformance(c,this.difficulty,contact);
+    const braking=Math.min(300,240+level(c.upgrades,"brakes")*12)*contact.front;
     // Difficulty changes how closely the driver uses the same mechanical limits.
     // Separate braking and throttle skills remain meaningful on fast circuits.
     const skill=DIFFICULTIES[this.difficulty];
@@ -1476,10 +1483,14 @@ export class Race {
     const commitment=clamp(confidence*(c.pace || 1)*style.pace*ai.pace*(1-c.fuel*.002),.65,1.035);
     const brakingSkill=Math.min(1,skill.braking+water*.14*style.wetSkill);
     const drivenPath=laneGeometry(AI_LINE,c.s,c.offset-path.offset);
-    let target=brakingTarget(AI_LINE,c.s,grip(c),braking*brakingSkill,maximumSpeed(c),commitment,c.offset-path.offset);
+    const pitSpeedLimit=pitApproach ? Math.sqrt(PIT_SPEED**2+2*braking*.82*Math.max(0,pitApproach.distance-25)) : Infinity;
+    // Out/in laps and pit approaches already have a lower speed ceiling.
+    // Start lookahead at that ceiling so irrelevant distant corners cost no work.
+    const paceCeiling=Math.min(yielding ? 210 : Infinity,mistake ? Infinity : pitSpeedLimit)/(yielding ? .82 : 1);
+    let target=brakingTarget(AI_LINE,c.s,contact.all,braking*brakingSkill,maximumSpeed(c),commitment,c.offset-path.offset,paceCeiling);
     if(yielding) target=Math.min(target*.82,210);
     if(mistake)target*=mistake==='wide' ? .88 : .94;
-    if(pitApproach)target=Math.min(target,Math.sqrt(PIT_SPEED**2+2*braking*.82*Math.max(0,pitApproach.distance-25)));
+    if(pitApproach)target=Math.min(target,pitSpeedLimit);
     const lane=planRacingLane(c,AI_LINE,this.traffic || this.cars,{time:this.time,
       allowPass:!launching&&!pitApproach&&!mistake&&(!this.qualifying||c.qState==="timed"),
       baseOffset:launching ? ai.launch.offset+(path.offset-ai.launch.offset)*launchProgress : null,
@@ -1491,7 +1502,7 @@ export class Race {
     target=Math.min(target,lane.followingSpeed);
     if(mistake==="wide")desiredOffset=clamp(path.offset+(ai.mistakeSide || -Math.sign(curvature))*22,lane.min,lane.max);
     if(pitApproach)desiredOffset=pitApproach.offset;
-    const demand=c.speed*c.speed*Math.abs(drivenPath.curvature)/(225*Math.max(.08,grip(c)));
+    const demand=c.speed*c.speed*Math.abs(drivenPath.curvature)/(225*Math.max(.08,contact.all));
     // Hold a small rotation near the wet traction limit and countersteer it.
     // The direction follows the actual racing arc, not the track centreline.
     const onset=water>.15 ? .84+.06*(1-style.wetSkill) : .98;
@@ -1500,7 +1511,12 @@ export class Race {
     const slipTarget=pitApproach || yielding ? 0 : -turn*clamp(excess*.38+
       (mistake==="oversteer" ? .2 : 0),0,mistake ? .28 : .12);
     ai.slip+=(slipTarget-ai.slip)*(1-Math.exp(-(slipTarget ? 3 : (5+style.wetSkill*3)*(1+level(c.upgrades,"suspension")*.06))*dt));
-    c.sideSpeed+=(c.speed*Math.sin(ai.slip)-(c.sideSpeed || 0))*(1-Math.exp(-5*dt));
+    // Slip is already smoothed above. Keep its velocity consistent with the
+    // body angle, while a separate impact component decays rather than being
+    // erased by the line controller after a collision.
+    const impactSideSpeed=((c.sideSpeed || 0)-(ai.slipSideSpeed || 0))*Math.exp(-5*dt);
+    ai.slipSideSpeed=c.speed*Math.sin(ai.slip);
+    c.sideSpeed=ai.slipSideSpeed+impactSideSpeed;
     // Follow the path's lateral velocity directly; smooth only the recovery
     // toward it. Filtering both together made the car lag each apex and then
     // countersteer repeatedly, even when it was alone on the circuit.
@@ -1511,7 +1527,7 @@ export class Race {
     if(launching)feedForward*=launchProgress;
     if(!pitApproach && (desiredOffset<=lane.min+.1&&feedForward<0 || desiredOffset>=lane.max-.1&&feedForward>0))feedForward=0;
     const recovery=clamp((desiredOffset-c.offset)*2.4-c.sideSpeed,-55,55);
-    ai.recoveryVelocity=(ai.recoveryVelocity || 0)+clamp((recovery-(ai.recoveryVelocity || 0))*8,-180*Math.max(.25,grip(c)),180*Math.max(.25,grip(c)))*dt;
+    ai.recoveryVelocity=(ai.recoveryVelocity || 0)+clamp((recovery-(ai.recoveryVelocity || 0))*8,-180*Math.max(.25,contact.all),180*Math.max(.25,contact.all))*dt;
     ai.lineVelocity=clamp(feedForward+ai.recoveryVelocity,-c.speed*.85-c.sideSpeed,c.speed*.85-c.sideSpeed);
     // A smoothed steering correction must not carry us through the space
     // reserved for a car alongside. Limit motion, never teleport the car.
@@ -1541,14 +1557,16 @@ export class Race {
     const loc = sample(c.s);
     c.x = loc.x - Math.sin(loc.angle) * c.offset;
     c.y = loc.y + Math.cos(loc.angle) * c.offset;
-    // Countersteering is a wheel input, not a new travel direction. Showing
-    // recovery velocity as body heading made cars visibly flick left/right.
-    // Use the lateral motion actually applied, not the unclamped correction.
-    // At walking pace the latter could visually rotate a stationary car by 90°.
-    const travelHeading=pitApproach || yielding || launching ? loc.angle+Math.atan2(ai.lineVelocity+c.sideSpeed,Math.max(1,forward)) :
-      racingPoint(AI_LINE,c.s).angle+Math.atan2(ai.lineVelocity-feedForward+c.sideSpeed,Math.max(1,c.speed));
-    c.angle=travelHeading-ai.slip;
-    c.motionAngle=travelHeading;
+    // The sprite, collision box and slipstream must follow the movement that
+    // actually happened. A traffic-constrained lane no longer points the body
+    // along the unrestricted racing-line tangent (the old sideways "crab").
+    const distance=Math.hypot(c.x-oldX,c.y-oldY);
+    if(distance>.0001){
+      c.motionAngle=Math.atan2(c.y-oldY,c.x-oldX);
+      c.angle=c.motionAngle-ai.slip;
+      ai.slipSideSpeed=c.speed*Math.sin(ai.slip);
+      c.sideSpeed=ai.slipSideSpeed+impactSideSpeed;
+    }
     const turning=angleDiff(c.angle,oldAngle)/dt;
     const turnRate=(2.3/(1+c.speed/180))*(.55+.45*clamp(grip(c,"front"),.1,1));
     const brake=clamp((oldSpeed-c.speed)/(braking*dt),0,1),steer=clamp(turning/Math.max(.1,turnRate),-1,1);
@@ -1604,7 +1622,7 @@ export class Race {
         }
         if (!normal) continue;
         // Resolve the contact normal with equal masses; the struck car receives momentum.
-        const velocity=c=>c.player && c.motionAngle!==undefined ?
+        const velocity=c=>c.motionAngle!==undefined ?
           {x:Math.abs(c.speed)*Math.cos(c.motionAngle),y:Math.abs(c.speed)*Math.sin(c.motionAngle)} :
           {x:c.speed*Math.cos(c.angle)-(c.sideSpeed||0)*Math.sin(c.angle),
           y:c.speed*Math.sin(c.angle)+(c.sideSpeed||0)*Math.cos(c.angle)};
@@ -1614,7 +1632,7 @@ export class Race {
           const impulse=Math.min(65,closing*.525);
           for(const [c,v,sign] of [[a,av,-1],[b,bv,1]]) {
             v.x+=normal.x*impulse*sign; v.y+=normal.y*impulse*sign;
-            if(c.player && c.motionAngle!==undefined) {
+            if(c.motionAngle!==undefined) {
               c.speed=(c.speed<0 ? -1 : 1)*Math.min(maximumSpeed(c),Math.hypot(v.x,v.y));
               c.motionAngle=Math.atan2(v.y,v.x);
               c.sideSpeed=c.speed*Math.sin(angleDiff(c.motionAngle,c.angle));

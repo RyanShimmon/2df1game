@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createWeather,advanceWeather,rainAt,migrateWeather,projectWeather,weatherTimeline,trackWater,tyreWeatherGrip,forecast,raceWeatherDuration} from '../src/weather.js';
 import {forecastWater} from '../src/racecraft.js';
-import {Race,TYRES,newCareer} from '../src/core.js';
+import {Race,TYRES} from '../src/core.js';
+import {newCareer} from './career-fixture.js';
 import {createWeekend,startRaceWeather} from '../src/weekend.js';
 const constant=(rain,water=0)=>({...createWeather('dry',{seed:1}),rain,wetness:water,sectors:Array(32).fill(water),points:[[0,rain],[4000,rain]]});
 function sample(pattern,seed,duration=900){

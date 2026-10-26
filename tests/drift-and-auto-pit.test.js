@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {Race,TRACK,TYRES,sample,angleDiff,resources} from '../src/core.js';
 import {createWeather} from '../src/weather.js';
 import {createWeekend,QualifyingRun} from '../src/weekend.js';
-import {newCareer} from '../src/core.js';
+import {newCareer} from './career-fixture.js';
 const upgrades={engine:0,aero:0,tyres:0,crew:0};
 function race(tyre='S'){const r=new Race({laps:12,fuel:14,tyre},upgrades);r.cars=[r.player];r.countdown=0;return r;}
 test('wet slicks build visible sideways drift while retaining their momentum',()=>{

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {Race,TRACK,TEAMS,SPONSORS,UPGRADES,newCareer,loadCareer,buyUpgrade,upgradeCost,settleCareer,selectTrack,sample,resources,grip,accelerationGrip,brakingDeceleration,angleDiff} from '../src/core.js';
+import {Race,TRACK,TEAMS,SPONSORS,UPGRADES,loadCareer,buyUpgrade,upgradeCost,settleCareer,selectTrack,sample,resources,grip,accelerationGrip,brakingDeceleration,angleDiff} from '../src/core.js';
+import {newCareer} from './career-fixture.js';
 import {emptyUpgrades,level,developTeams,fuelMultiplier,sponsorPayout,setAeroPackage,developmentSnapshot} from '../src/development.js';
 import {developmentBench,upgradePreview} from '../src/development-preview.js';
 import {THERMAL,prepareTyres,updateTyreTemperatures} from '../src/tyre-temperature.js';
@@ -28,7 +29,7 @@ test('all purchases use quoted escalating costs and caps, and development cannot
 test('V10 development improves measured acceleration and aero packages suit different circuits',()=>{
  const before=developmentBench(emptyUpgrades()),after=developmentBench({...emptyUpgrades(),engine:1});
  assert.ok(after.accelerate<before.accelerate*.96);
- const c=newCareer(profile);assert.equal(setAeroPackage(c,'lowDrag'),true);assert.equal(loadCareer({getItem:()=>JSON.stringify(c)}).aeroSpec,'lowDrag');c.upgrades.aero=3;c.upgrades.engine=2;
+ const c=newCareer(profile);c.upgrades.aero=1;assert.equal(setAeroPackage(c,'lowDrag'),true);assert.equal(loadCareer({getItem:()=>JSON.stringify(c)}).aeroSpec,'lowDrag');c.upgrades.aero=3;c.upgrades.engine=2;
  // The mirrored ±10% balance rewards Low drag on the fast oval; mixed
  // circuits can favour Balanced or High downforce despite their straights.
  selectTrack('sunset');assert.ok(developmentBench(c.upgrades,'lowDrag').lap<developmentBench(c.upgrades,'downforce').lap);

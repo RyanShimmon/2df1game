@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {Race,TRACK,sample,newCareer,settleCareer} from '../src/core.js';
+import {Race,TRACK,sample,settleCareer} from '../src/core.js';
+import {newCareer} from './career-fixture.js';
 function nearFinish({fuel=0,penalty=0,mode='quick'}={}){
  const r=new Race({track:'northline',laps:1,fuel,tyre:'M',weather:'dry'}, {},mode),p=r.player;
  r.cars=[p];r.countdown=0;r.time=60;

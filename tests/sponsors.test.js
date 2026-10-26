@@ -1,6 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {SPONSORS,sponsorMet,sponsorOffers} from '../src/sponsors.js';
-import {newCareer,loadCareer,settleCareer,Race} from '../src/core.js';
+import {loadCareer,settleCareer,Race} from '../src/core.js';
+import {newCareer} from './career-fixture.js';
 const row={position:8,gridPosition:14,contacts:0,penalties:0,stops:1,legal:true,dnf:false};
 test('twelve sponsors offer six stable, distinct and varied contracts each weekend',()=>{
  assert.equal(SPONSORS.length,12);assert.equal(new Set(SPONSORS.map(s=>s.id)).size,12);

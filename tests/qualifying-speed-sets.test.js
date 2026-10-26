@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {newCareer} from '../src/core.js';
+import {newCareer} from './career-fixture.js';
 import {createWeekend,QualifyingRun,recordLap,finishQualifyingStage,finishRemainingQualifying,pendingFirstRuns} from '../src/weekend.js';
 const profile={driverName:'Test',teamIndex:2},upgrades={engine:0,aero:0,tyres:0,crew:0};
 function create(){return new QualifyingRun(createWeekend(newCareer(profile),{track:'northline',laps:24,fuel:28,tyre:'S'}),'S1',upgrades,profile);}

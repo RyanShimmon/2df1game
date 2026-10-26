@@ -1,6 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {RaceSchool,loadSchool,SCHOOL_KEY} from '../src/school.js';
-import {newCareer,TRACK,sample} from '../src/core.js';
+import {TRACK,sample} from '../src/core.js';
+import {newCareer} from './career-fixture.js';
 import {driveQualifyingOuting} from './qualifying-driver.js';
 const storage=()=>({items:new Map(),getItem(k){return this.items.get(k)||null;},setItem(k,v){this.items.set(k,v);}});
 function observe(s,q){const step=q.step.bind(q);q.step=(...args)=>{step(...args);s.observe(q);};return q;}

@@ -18,10 +18,13 @@ for(const {id} of CIRCUITS)test(`${id}: AI launches straight in its own grid lan
  }
  assert.ok(frames>500);assert.ok(r.cars.every(c=>!c.contacts));
 });
-function pair(track='northline',chaseTyre='S',leadTyre='M',water=0){
+function pair(track='northline',chaseTyre='S',leadTyre='M',water=0,nearCorner=false){
  const r=new Race({...setup,track}),[lead,chase]=r.cars;r.cars=[lead,chase];r.player=chase;r.countdown=0;r.time=10;
  const style={...lead.driverStyle,pace:.94,line:0,aggression:.7,consistency:1};
- for(const [c,s,tyre] of [[lead,80,leadTyre],[chase,0,chaseTyre]]){
+ // Longer straights legitimately offer no grip-only advantage at equal speed.
+ // Mechanical forecasts are exercised on approach to a grip-limited corner.
+ const start=nearCorner ? AI_LINE.points.reduce((a,b)=>Math.abs(a.curvature)>Math.abs(b.curvature)?a:b).s-300 : 0;
+ for(const [c,s,tyre] of [[lead,start+80,leadTyre],[chase,start,chaseTyre]]){
   const ref=racingPoint(AI_LINE,s),loc=sample(s);
   Object.assign(c,{s,offset:ref.offset,x:loc.x-Math.sin(loc.angle)*ref.offset,y:loc.y+Math.cos(loc.angle)*ref.offset,angle:ref.angle,motionAngle:ref.angle,speed:230,tyre,trackWetness:water,fuel:18,pace:1,wear:0,wheelWear:[0,0,0,0],upgrades:{},drive:'balanced',used:new Set(['S','M','H'])});
   c.driverStyle={...style};c.ai.nextDecision=Infinity;c.ai.strategy.nextReview=Infinity;c.ai.strategy.plannedMode='balanced';
@@ -31,20 +34,20 @@ function pair(track='northline',chaseTyre='S',leadTyre='M',water=0){
 function gain(chase,lead){return projectedPaceAdvantage(AI_LINE,chase.s,chase.speed,passingPerformance(chase),passingPerformance(lead));}
 test('matched road speeds do not hide a fresh compound advantage from the pass planner',()=>{
  for(const [own,other] of [['S','M'],['M','H']]){
-  const {lead,chase}=pair('northline',own,other);assert.equal(chase.speed,lead.speed);assert.ok(gain(chase,lead)>.8);
+  const {lead,chase}=pair('northline',own,other,0,true);assert.equal(chase.speed,lead.speed);assert.ok(gain(chase,lead)>.8);
   const plan=planRacingLane(chase,AI_LINE,[lead],{time:10,paceAdvantage:()=>gain(chase,lead)});
   assert.equal(plan.phase,'passing');
  }
 });
 test('predicted advantage respects wear, weather, pace mode and engine/aero development',()=>{
- const {lead,chase}=pair();assert.ok(gain(chase,lead)>0);
+ const {lead,chase}=pair('northline','S','M',0,true);assert.ok(gain(chase,lead)>0);
  chase.wear=.9;chase.wheelWear=Array(4).fill(.9);assert.ok(gain(chase,lead)<0,'worn Soft must lose to fresh Medium');
  const worn=planRacingLane(chase,AI_LINE,[lead],{time:10,paceAdvantage:()=>gain(chase,lead)});assert.equal(worn.phase,'line');
  chase.wear=0;chase.wheelWear=[0,0,0,0];chase.tyre='M';const balanced=gain(chase,lead);
  chase.drive='push';assert.ok(gain(chase,lead)>balanced);chase.drive='save';assert.ok(gain(chase,lead)<balanced);
  chase.drive='balanced';chase.upgrades={engine:3};assert.ok(gain(chase,lead)>balanced);
  chase.tyre='S';chase.trackWetness=.45;lead.tyre='I';lead.trackWetness=.45;assert.ok(gain(chase,lead)<0);
- const oval=pair('sunset','M','M');oval.chase.s=3200;oval.lead.s=3280;oval.chase.speed=310;oval.lead.speed=310;const equal=gain(oval.chase,oval.lead);oval.chase.aeroSpec='lowDrag';assert.ok(gain(oval.chase,oval.lead)>equal);
+ const oval=pair('sunset','M','M');oval.chase.upgrades.aero=1;oval.lead.upgrades.aero=1;oval.chase.s=3200;oval.lead.s=3280;oval.chase.speed=310;oval.lead.speed=310;const equal=gain(oval.chase,oval.lead);oval.chase.aeroSpec='lowDrag';assert.ok(gain(oval.chase,oval.lead)>equal);
 });
 for(const [track,own,other] of [['northline','S','M'],['northline','M','H'],['harbour','S','M']])test(`${track}: ${own} completes a clean pass on ${other} from matching speed`,()=>{
  const {r,lead,chase}=pair(track,own,other);let side=0,usedPush=false;
@@ -111,7 +114,7 @@ for(const [own,other,water] of [['S','M',0],['M','H',0],['I','W',.35],['W','I',.
 
 for(const [own,other,water] of [['S','M',0],['M','H',0],['I','W',.35],['W','I',.85],['I','H',.35],['H','M',.18]])
  test(`${own}/${other} at ${water*100}% water: mechanical advantage and pass prediction agree`,()=>{
- const {lead,chase}=pair('northline',own,other,water);
+ const {lead,chase}=pair('northline',own,other,water,true);
  assert.ok(grip(chase)>grip(lead));assert.ok(brakingDeceleration(chase)>brakingDeceleration(lead));
  assert.ok(accelerationGrip(chase)>=accelerationGrip(lead));
  assert.ok(gain(chase,lead)>.8,'the planner must see the usable advantage');

@@ -1,21 +1,8 @@
 import {driveQualifyingOuting} from "./qualifying-driver.js";
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  Race,
-  TRACK,
-  PIT_LANE,
-  APEXES,
-  TYRES,
-  sample,
-  angleDiff,
-  clamp,
-  targetSpeed,
-  grip,
-  newCareer,
-  updateTrackLimits,
-  tyreRuleMet,
-} from "../src/core.js";
+import {Race,TRACK,PIT_LANE,APEXES,TYRES,sample,angleDiff,clamp,targetSpeed,grip,updateTrackLimits,tyreRuleMet,} from '../src/core.js';
+import {newCareer} from './career-fixture.js';
 import {
   createWeather,
   advanceWeather,
@@ -145,7 +132,7 @@ test("apex markers lie on the inside of real corners", () => {
   for (const a of APEXES) {
     const p = sample(a.s);
     assert.ok(Math.hypot(a.x - p.x, a.y - p.y) < TRACK.width / 2);
-    assert.ok(Math.abs(a.k) > 0.002);
+    assert.ok(Math.abs(a.k) > 0.002/(TRACK.layoutScale || 1));
   }
 });
 test("AI traffic does not teleport and committed passing sides stay stable", () => {

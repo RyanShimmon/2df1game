@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {Race,newCareer,acceleration,cleanAirTopSpeed,maximumSpeed,selectTrack} from '../src/core.js';
+import {Race,acceleration,cleanAirTopSpeed,maximumSpeed,selectTrack} from '../src/core.js';
+import {newCareer} from './career-fixture.js';
 import {createWeekend,QualifyingRun,nextQualifyingSession,recordLap,finishQualifyingStage,prepareRace} from '../src/weekend.js';
 import {developmentBench} from '../src/development-preview.js';
 const profile={driverName:'Pit tester',teamIndex:2};
@@ -69,9 +70,12 @@ test('unfinished aero work is not granted by advancing, and completed work carri
  const w=next.weekend;w.phase='R';w.grid=Array.from({length:22},(_,i)=>i);w.raceStarted=false;
  const r=new Race(w.setup,next.player.upgrades,'career',profile);prepareRace(r,w,'M1');assert.equal(r.player.aeroSpec,'downforce');
 });
-test('both quick race and a zero-upgrade career allow aero setup',()=>{
- const quick=new Race(setup,{});quick.pitRandom=()=>0;assert.equal(quick.selectAero('lowDrag'),true);box(quick);wait(quick,15.6);assert.equal(quick.player.aeroSpec,'lowDrag');assert.ok(cleanAirTopSpeed(quick.player)>330);
- const c=newCareer(profile),w=createWeekend(c,setup),q=new QualifyingRun(w,'S1',c.upgrades,profile);assert.equal(q.selectAero('lowDrag'),true);q.cars=[q.player];for(let i=0;i<202;i++)q.step(.05,{});assert.equal(q.player.aeroSpec,'lowDrag');assert.equal(q.player.upgrades.aero,0);assert.equal(quick.selectAero('invalid'),false);
+test('factory cars cannot select aero in quick race or career qualifying',()=>{
+ const quick=new Race({...setup,aeroSpec:'lowDrag'},{});
+ assert.equal(quick.player.aeroSpec,'balanced');assert.equal(quick.canSelectAero(),false);assert.equal(quick.selectAero('lowDrag'),false);
+ const c=newCareer(profile),w=createWeekend(c,setup),q=new QualifyingRun(w,'S1',c.upgrades,profile);
+ assert.equal(q.selectAero('downforce'),false);assert.equal(q.player.pit.timer,0);assert.equal(q.player.aeroSpec,'balanced');
+ assert.equal(q.selectAero('invalid'),false);
 });
 test('each engine level increases acceleration across all speeds and packages without changing the aero or draft cap',()=>{
  const r=race(),c=r.player;c.drive='push';c.fuel=0;c.pace=1;

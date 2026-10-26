@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {Race,grip,accelerationGrip,resources,newCareer} from '../src/core.js';
+import {Race,grip,accelerationGrip,resources} from '../src/core.js';
+import {newCareer} from './career-fixture.js';
 import {THERMAL,thermalGrip,thermalWear,updateTyreTemperatures} from '../src/tyre-temperature.js';
 import {createWeekend,QualifyingRun} from '../src/weekend.js';
 const ideal=tyre=>(THERMAL[tyre].low+THERMAL[tyre].high)/2;

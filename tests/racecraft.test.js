@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {Race,TRACK,AI_LINE,CIRCUITS,selectTrack,sample,MAX_SPEED,cleanAirTopSpeed,maximumSpeed,tyreRuleMet} from '../src/core.js';
 import {updateSlipstream,brakingTarget,racingPoint} from '../src/racecraft.js';
 import {createWeekend,QualifyingRun,prepareRace,finishRemainingQualifying} from '../src/weekend.js';
-import {newCareer} from '../src/core.js';
+import {newCareer} from './career-fixture.js';
 test.afterEach(()=>selectTrack('northline'));
 const setup={track:'northline',laps:16,fuel:19,tyre:'M',weather:'dry',aiSeed:42};
 const mock=(id,s,x,y=0)=>({id,s,x,y,angle:0,offset:0,speed:330,fuel:1,pace:1,drive:'push',upgrades:{}});

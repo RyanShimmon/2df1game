@@ -34,8 +34,8 @@ test('package top-speed ratios remain symmetric with fuel, drive mode and engine
   approx(cleanAirTopSpeed(car('lowDrag',extra))/balanced,1.10);
  }
  const factory={upgrades:emptyUpgrades()};
- approx(cleanAirTopSpeed(car('downforce',factory))/cleanAirTopSpeed(car('balanced',factory)),.90);
- approx(grip(car('lowDrag',factory))/grip(car('balanced',factory)),.81);
+ approx(cleanAirTopSpeed(car('downforce',factory))/cleanAirTopSpeed(car('balanced',factory)),1);
+ approx(grip(car('lowDrag',factory))/grip(car('balanced',factory)),1);
 });
 test('actual player acceleration reaches each package ceiling without a hidden 330 cap',()=>{
  for(const [aeroSpec,expected] of [['balanced',330],['downforce',297],['lowDrag',363]]){

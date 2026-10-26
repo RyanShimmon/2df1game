@@ -1,5 +1,5 @@
 import {TRACK, sample, clamp, angleDiff, targetSpeed} from '../src/core.js';
-export function driveQualifyingOuting(q, seconds=180, {pace=.8}={}) {
+export function driveQualifyingOuting(q, seconds=60+TRACK.length*3/130, {pace=.8}={}) {
   q.autoPitLimiter=false; // This helper exercises manual outings and garage release.
   const starting=q.player.stops;
   for(let i=0;i<60*seconds && !q.done && q.player.stops===starting;i++) {

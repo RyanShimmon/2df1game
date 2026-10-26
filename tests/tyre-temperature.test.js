@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {THERMAL,prepareTyres,updateTyreTemperatures,thermalGrip,thermalWear,coolStoredSets,temperatureColour,thermalFactor} from '../src/tyre-temperature.js';
 import {Race,grip,accelerationGrip,resources,TRACK,sample,targetSpeed,clamp,angleDiff} from '../src/core.js';
 import {createWeekend,fitSet,QualifyingRun} from '../src/weekend.js';
-import {newCareer} from '../src/core.js';
+import {newCareer} from './career-fixture.js';
 const car=(tyre='M',temp=90)=>({tyre,wear:0,speed:180,trackWetness:0,tyreTemperatures:Array(4).fill(temp),fuel:20,tyreAge:600,offset:0,used:new Set()});
 const run=(c,seconds,load)=>{for(let i=0;i<seconds*60;i++)updateTyreTemperatures(c,1/60,load);return c;};
 const mean=a=>a.reduce((a,b)=>a+b)/a.length;
@@ -72,7 +72,7 @@ test('AI eases off with overheated tyres and maintains independent wheel tempera
 
 test('Softs stay competitive across two controlled dry push laps without early thermal grip loss',()=>{
  const r=new Race({laps:8,fuel:12,tyre:'S',weather:'dry',aiSeed:17});r.countdown=0;r.cars=[r.player];const p=r.player;p.drive='push';let peak=0;
- for(let i=0;i<60*100 && p.s<2*TRACK.length;i++){
+ for(let i=0;i<60*(20+2*TRACK.length/160) && p.s<2*TRACK.length;i++){
   const goal=sample(p.s+clamp(p.speed*.55,35,100));
   const steer=clamp(angleDiff(Math.atan2(goal.y-p.y,goal.x-p.x),p.angle)*3.5,-1,1),target=targetSpeed(p)*.94;
   r.step(1/60,{steer,throttle:p.speed<target,brake:p.speed>target+3});peak=Math.max(peak,...p.tyreTemperatures);

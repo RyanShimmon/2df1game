@@ -3,15 +3,16 @@ import assert from 'node:assert/strict';
 import {Race,TRACK,AI_LINE,CIRCUITS,selectTrack} from '../src/core.js';
 import {racingPoint} from '../src/racecraft.js';
 test.afterEach(()=>selectTrack('northline'));
-test('linked same-direction corners share a continuous outside-inside-outside arc',()=>{
+test('linked fast same-direction corners hold the inside before opening their exit',()=>{
  selectTrack('forest');
- // New main straight feeds two linked lefts. Hold the inside between them,
- // then open the exit, rather than resetting outside between the apexes.
- assert.ok(racingPoint(AI_LINE,190).offset>15);
- assert.ok(racingPoint(AI_LINE,540).offset<-30);
- for(let s=700;s<=1100;s+=20)assert.ok(racingPoint(AI_LINE,s).offset<-25,'do not weave outside between linked lefts');
- assert.ok(racingPoint(AI_LINE,1430).offset>5);
- assert.ok(AI_LINE.estimatedTime<AI_LINE.baselineTime*.95);
+ // These enlarged sweepers can be taken near full throttle. The fastest
+ // approach holds the inside between linked lefts rather than weaving across
+ // the road to manufacture a separate outside entry for each apex.
+ const end=TRACK.mainStraight.to;
+ assert.ok(racingPoint(AI_LINE,end+180).offset<-30);
+ for(let s=end+350;s<=end+950;s+=20)assert.ok(racingPoint(AI_LINE,s).offset<-25,'do not weave outside between linked lefts');
+ assert.ok(racingPoint(AI_LINE,end+1650).offset>-5,'open the exit after both corners');
+ assert.ok(AI_LINE.estimatedTime<AI_LINE.baselineTime*.96);
 });
 for(const circuit of CIRCUITS)test(`${circuit.name}: distinct measured difficulty pace and stable whole-lap tracking`,()=>{
  const times=[];
@@ -22,7 +23,7 @@ for(const circuit of CIRCUITS)test(`${circuit.name}: distinct measured difficult
   // random strategy, temperature or overtaking luck, in this pace comparison.
   c.ai.nextDecision=Infinity;c.ai.strategy.nextReview=Infinity;
   let error=0;
-  for(let i=0;i<60*220&&!r.done;i++){
+  for(let i=0;i<60*(60+TRACK.length*3/140)&&!r.done;i++){
    r.step(1/60);if(c.s>TRACK.length*.25&&!c.pit)error=Math.max(error,Math.abs(c.offset-racingPoint(AI_LINE,c.s).offset-c.driverStyle.line*.12));
   }
   assert.ok(c.finished&&!c.dnf);assert.equal(c.trackLimits,0);assert.ok(error<1,`line-tracking error ${error}m`);

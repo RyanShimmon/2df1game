@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {newCareer,PIT_MARKERS,nearest} from '../src/core.js';
+import {PIT_MARKERS,nearest} from '../src/core.js';
+import {newCareer} from './career-fixture.js';
 import {createWeekend,QualifyingRun,recordLap,finishQualifyingStage,finishRemainingQualifying} from '../src/weekend.js';
 const profile={driverName:'Alex',teamIndex:2},upgrades={engine:0,aero:0,tyres:0,crew:0};
 function create(){const w=createWeekend(newCareer(profile),{track:'northline',laps:24,fuel:28,tyre:'S',weather:'dry'});return new QualifyingRun(w,'S1',upgrades,profile);}

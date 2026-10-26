@@ -1,5 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {newCareer,Race} from '../src/core.js';
+import {Race} from '../src/core.js';
+import {newCareer} from './career-fixture.js';
 import {createWeekend,migrateWeekend,selectableSets,QualifyingRun,prepareRace} from '../src/weekend.js';
 const profile={driverName:'Test',teamIndex:2},setup={track:'northline',laps:24,fuel:28,tyre:'S',aiSeed:42};
 function legacy(){

@@ -2,19 +2,8 @@ import {driveQualifyingOuting} from "./qualifying-driver.js";
 import test from "node:test";
 import {createWeather} from "../src/weather.js";
 import assert from "node:assert/strict";
-import {
-  Race,
-  TRACK,
-  sample,
-  angleDiff,
-  clamp,
-  targetSpeed,
-  newCareer,
-  resources,
-  grip,
-  settleCareer,
-  PIT_LANE,
-} from "../src/core.js";
+import {Race,TRACK,sample,angleDiff,clamp,targetSpeed,resources,grip,settleCareer,PIT_LANE,} from '../src/core.js';
+import {newCareer} from './career-fixture.js';
 import {
   Q_STAGES,
   tyreAllocation,
@@ -93,7 +82,7 @@ test("qualifying runs one timed lap between its out and in laps, returning to th
   assert.equal(q.player.stops,1);
   assert.ok(q.player.garage);
   assert.equal(q.player.qLaps,1);
-  assert.ok(q.player.bestLap < 45);
+  assert.ok(q.player.bestLap < TRACK.length/160);
   assert.ok(w.results.some((r) => r.id === 21));
   assert.ok(w.inventories[21].find((t) => t.id === "S1").wear > 0.1);
   assert.ok(w.runInProgress);

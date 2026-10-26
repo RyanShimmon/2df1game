@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createWeather,raceForecast,advanceWeather,recommendedTyre} from '../src/weather.js';
-import {newCareer,Race} from '../src/core.js';
+import {Race} from '../src/core.js';
+import {newCareer} from './career-fixture.js';
 import {createWeekend,startRaceWeather,finishQualifyingStage,recordLap,prepareRace} from '../src/weekend.js';
 for(const pattern of ['dry','intermediate','sustainedRain','wetToDry','lateRain','showers','dynamic'])test(`${pattern}: garage forecast covers the whole race without changing its plan`,()=>{
  const w=createWeather(pattern,{seed:42,duration:1200});advanceWeather(w,30);

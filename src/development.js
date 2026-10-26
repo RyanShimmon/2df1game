@@ -6,7 +6,7 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export const UPGRADES={
  engine:{name:"V10 development",desc:"7% more engine power per level, from corner exit all the way to top speed. Your aero package sets the top-speed trade-off.",cost:9000,max:5,group:"Powertrain"},
  efficiency:{name:"Fuel efficiency",desc:"2% less fuel per level. Start lighter or spend longer in Push.",cost:7500,max:5,group:"Powertrain"},
- aero:{name:"Aerodynamics",desc:"More high-speed corner support with every aero package. Setup choices are available from the start.",cost:8500,max:5,group:"Chassis"},
+ aero:{name:"Aerodynamics",desc:"More high-speed corner support with every aero package. Level 1 unlocks aero package selection before sessions and during pit stops.",cost:8500,max:5,group:"Chassis"},
  suspension:{name:"Suspension & differential",desc:"More progressive traction and stronger countersteer recovery. You still control the slide.",cost:7500,max:5,group:"Chassis"},
  brakes:{name:"Brakes & balance",desc:"Stronger, more stable braking. Compound, wear, temperature and rain still limit stopping power.",cost:6500,max:5,group:"Chassis"},
  tyres:{name:"Tyre engineering",desc:"7% less wear per level, a gentler grip cliff and better control of excess heat.",cost:8500,max:5,group:"Race operations"},
@@ -36,14 +36,17 @@ export const upgradePrice=(upgrades,key)=>UPGRADES[key] ? Math.round(UPGRADES[ke
 export const fuelMultiplier=upgrades=>1-level(upgrades,"efficiency")*.02;
 export const sponsorMultiplier=upgrades=>1+level(upgrades,"commercial")*.10;
 export const sponsorPayout=(upgrades,amount)=>Math.round(amount*sponsorMultiplier(upgrades));
-export function aeroPackage(upgrades,spec="balanced"){return AERO_PACKAGES[spec] || AERO_PACKAGES.balanced;}
+export const aeroUnlocked=upgrades=>level(upgrades,"aero")>=1;
+export function aeroPackage(upgrades,spec="balanced"){return aeroUnlocked(upgrades) && AERO_PACKAGES[spec] || AERO_PACKAGES.balanced;}
 export function aeroGrip(car){
  const speed=clamp(Math.abs(car.speed || 0)/280,0,1),support=.35+.65*speed*speed;
  return (1+level(car.upgrades,"aero")*.035*support)*aeroPackage(car.upgrades,car.aeroSpec).corner**2;
 }
 export function setAeroPackage(career,spec){
- if(career.weekend || !AERO_PACKAGES[spec])return false;
- career.aeroSpec=spec;return true;
+ if(!aeroUnlocked(career.weekend?.setup?.playerUpgrades || career.upgrades) || career.weekend && career.weekend.phase!=="R" || !AERO_PACKAGES[spec])return false;
+ career.aeroSpec=spec;
+ if(career.weekend)career.weekend.setup.aeroSpec=spec;
+ return true;
 }
 export function upgradeDetails(key,installedLevel){
  const upgrade=UPGRADES[key];if(!upgrade)return null;
@@ -51,7 +54,7 @@ export function upgradeDetails(key,installedLevel){
  const descriptions={
   engine:`${pct(n*7)} more engine power across the entire speed range. Improves acceleration; the aero package still sets the speed trade-off.`,
   efficiency:`Uses ${pct(n*2)} less fuel. The car can start lighter or spend more time in Push.`,
-  aero:`${pct(n*3.5)} more grip at high speed, with a smaller benefit at low speed. Works with Balanced, High downforce and Low drag packages.`,
+  aero:`${pct(n*3.5)} more grip at high speed, with a smaller benefit at low speed. Unlocks High downforce and Low drag packages alongside Balanced.`,
   suspension:`${pct(n*2.5)} more traction support and ${pct(n*6)} more countersteer support. Helps put power down and recover slides.`,
   brakes:`${pct(n*5)} more braking force. Tyre compound, wear, temperature and rain still determine how much grip is available.`,
   tyres:`${pct(n*7)} less tyre wear, a gentler worn-tyre grip cliff and better control of overheating.`,
@@ -68,7 +71,7 @@ export const racePrize=(row,difficultyBonus=0)=>{
 export function createTeamDevelopment(){return Array.from({length:11},(_,teamIndex)=>({teamIndex,budget:7000,upgrades:emptyUpgrades(),aeroSpec:"balanced",lastRound:0,fundedRound:0,history:[]}));}
 export function migrateDevelopment(career){
  migrateCalendar(career);
- career.aeroSpec=AERO_PACKAGES[career.aeroSpec] ? career.aeroSpec : "balanced";
+ career.aeroSpec=aeroUnlocked(career.upgrades) && AERO_PACKAGES[career.aeroSpec] ? career.aeroSpec : "balanced";
  if(!Number.isInteger(career.developmentSeed))career.developmentSeed=null;
  const defaults=createTeamDevelopment();
  career.teams=defaults.map((fresh,i)=>{
@@ -102,7 +105,7 @@ export function developTeams(career,seed=null){
 export function developmentSnapshot(career,trackId){
  const fast=["velocity","sunset","dunes","canyon"].includes(trackId),technical=["harbour","riviera","forest","metro"].includes(trackId);
  return career.teams.map(t=>t.teamIndex===career.profile?.teamIndex
-  ? {teamIndex:t.teamIndex,upgrades:normalizeUpgrades(career.upgrades),aeroSpec:career.aeroSpec || "balanced"}
+  ? {teamIndex:t.teamIndex,upgrades:normalizeUpgrades(career.upgrades),aeroSpec:aeroUnlocked(career.upgrades) ? career.aeroSpec || "balanced" : "balanced"}
   : {teamIndex:t.teamIndex,upgrades:normalizeUpgrades(t.upgrades),aeroSpec:level(t.upgrades,"aero") ? fast ? "lowDrag" : technical ? "downforce" : "balanced" : "balanced"});
 }
 // Pick a plausible target before the race, using previous results rather than
