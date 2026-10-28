@@ -18,11 +18,14 @@ test(`${track}: constrained AI faces its actual travel direction, with only deli
  let frames=0,turning=0,passing=0;
  const step=r.stepAI.bind(r);
  r.stepAI=(c,dt)=>{
-  const {x,y,angle}=c;step(c,dt);if(c.pit||c.speed<30)return;
+  const {x,y,angle,offset,speed}=c;step(c,dt);if(c.pit||c.speed<30)return;
   const dx=c.x-x,dy=c.y-y,motion=Math.atan2(dy,dx);
   assert.ok(Math.abs(angleDiff(motion,c.angle+c.ai.slip))<.01,'body crabs across its actual path');
   assert.ok(Math.abs(angleDiff(motion,c.motionAngle))<.01,'collision/drafting velocity disagrees with travel');
-  assert.ok(Math.hypot(dx,dy)<c.speed*dt*1.12+.02,'no lateral teleport to a new lane');
+  // Measure the lateral change directly. Comparing total world displacement
+  // with centreline progress also measures the curved-road approximation,
+  // which is not a lane teleport (especially on the inside of Harbour).
+  assert.ok(Math.abs(c.offset-offset)<=Math.max(speed,c.speed)*dt+.02,'no lateral teleport to a new lane');
   if(Math.abs(angleDiff(c.angle,angle))>.001)turning++;
   if(c.ai.lane.phase==='passing')passing++;frames++;
  };

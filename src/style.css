@@ -1618,6 +1618,7 @@ input[type="range"] {
 .mobile-racing .race-bottom > .engineer { bottom:calc(100% + 6px); max-width:100%; text-align:center; }
 
 #settings-title { margin-bottom:20px; }
+#settings-modal .speed-units-field { margin-bottom:20px; }
 .mobile-settings .sensitivity-field { margin-top:18px; }
 
 #settings-modal .setting-choice { margin-bottom:4px; }
@@ -1677,7 +1678,7 @@ input[type="range"] {
 
 /* Compact garage sections open independently, like the tyre selector. */
 .garage-sections { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; width:min(100%,1050px); margin-top:20px; }
-.garage-section-choice { display:flex; align-items:center; justify-content:space-between; gap:12px; min-width:0; padding:17px; border:1px solid var(--line); border-radius:9px; background:#101e27ef; color:inherit; text-align:left; }
+.garage-section-choice { display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; padding:17px; border:1px solid var(--line); border-radius:9px; background:#101e27ef; color:inherit; text-align:left; }
 .garage-section-choice:hover { border-color:var(--lime); background:#203135; }
 .garage-section-choice b { display:block; font-size:15px; }
 .garage-section-choice small { display:block; margin-top:7px; color:var(--muted); font-size:10px; line-height:1.5; }
@@ -1855,3 +1856,100 @@ body:not(.mobile-racing) .race-actions { max-width:max(100px,calc((100vw - 560px
   .choice-picker-modal .track-picker-heading h2 { font-size:26px; }
   .choice-positions .choice-option { min-height:54px; }
 }
+
+/* Desktop: conditions are part of the telemetry panel, leaving the road clear. */
+body:not(.mobile-game) .race-forecast-trigger + .primary { margin-top:14px; }
+body:not(.mobile-game) .top-dashboard {
+ display:grid; grid-template-columns:70px minmax(0,1fr) minmax(0,1fr) 50px;
+ grid-template-rows:24px 28px; column-gap:12px; row-gap:8px;
+ width:560px; min-width:0; padding:12px 14px;
+}
+body:not(.mobile-game) .top-dashboard.temperatures-disabled { grid-template-columns:70px minmax(0,1fr) minmax(0,1fr); }
+body:not(.mobile-game) .top-dashboard .telemetry { min-width:0; grid-row:1; }
+body:not(.mobile-game) .top-dashboard > .telemetry:not(.fuel-telemetry) { grid-column:2; }
+body:not(.mobile-game) .top-dashboard > .fuel-telemetry { grid-column:3; }
+body:not(.mobile-game) .top-dashboard .telemetry-header { gap:8px; margin-bottom:5px; line-height:14px; white-space:nowrap; }
+body:not(.mobile-game) .top-dashboard .telemetry > p { display:none; }
+body:not(.mobile-game) .top-dashboard .speed { min-width:0; padding-right:8px; grid-column:1; grid-row:1 / 3; }
+body:not(.mobile-game) .top-dashboard .speed strong { font-size:40px; }
+body:not(.mobile-game) .top-dashboard .speed span { font-size:8px; letter-spacing:1px; margin-top:6px; }
+body:not(.mobile-game) .top-dashboard .tyre-temperature { grid-column:4; grid-row:1 / 3; width:50px; min-width:0; align-self:center; }
+body:not(.mobile-game) .top-dashboard .temperature-label { display:none; }
+body:not(.mobile-game) .top-dashboard .temperature-wheels { grid-template-columns:16px 16px; gap:6px 14px; margin:0; }
+body:not(.mobile-game) .top-dashboard .temperature-wheel { height:22px; }
+body:not(.mobile-game) .dashboard-controls { grid-column:2 / 4; grid-row:2; display:flex; align-items:center; justify-content:space-between; gap:12px; min-width:0; }
+body:not(.mobile-game) .dashboard-controls .drive-modes { flex:none; min-width:0; margin:0; }
+body:not(.mobile-game) .pace-selector { display:flex; }
+body:not(.mobile-game) .pace-selector svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+body:not(.mobile-game) .pace-selector > button { display:flex; align-items:center; justify-content:center; }
+body:not(.mobile-game) .pace-current { display:flex; align-items:center; justify-content:center; border-radius:4px; border:1px solid currentColor; }
+body:not(.mobile-game) .pace-current svg { width:15px; height:15px; }
+body:not(.mobile-game) .pace-selector[data-mode=save] .pace-current { color:#6ee4a3; background:#266b454d; }
+body:not(.mobile-game) .pace-selector[data-mode=balanced] .pace-current { color:#87c6ff; background:#316a9e4d; }
+body:not(.mobile-game) .pace-selector[data-mode=push] .pace-current { color:#ffb374; background:#a44d204d; }
+body:not(.mobile-game) .dashboard-controls .drive-modes button { width:24px; height:24px; min-height:24px; padding:3px; }
+body:not(.mobile-game) .fuel-low { color:#ffd17e; }
+.top-dashboard .dashboard-conditions {
+ position:static; transform:none; min-width:0; display:flex; flex-direction:row; flex:none;
+ align-items:center; gap:9px; padding:0; border:0; border-radius:0; background:none; text-align:left;
+}
+.dashboard-conditions > div,.dashboard-conditions > span { display:flex; align-items:center; gap:6px; white-space:nowrap; }
+.dashboard-conditions b { color:#c8d6cf; font-size:10px; font-variant-numeric:tabular-nums; }
+.dashboard-conditions svg { width:16px; height:16px; flex:none; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+.dashboard-conditions .conditions-weather { color:var(--lime); }
+.dashboard-conditions .conditions-water { color:#69b5ff; }
+.dashboard-conditions .conditions-limits { margin-left:auto; color:var(--muted); }
+.dashboard-conditions .limit-dots { display:flex; gap:3px; }
+.dashboard-conditions .limit-dots i { width:5px; height:5px; border-radius:50%; background:#ffffff25; }
+.dashboard-conditions .limit-dots i.used { background:#ffd17e; }
+.dashboard-conditions .conditions-penalty,.dashboard-conditions .has-warning b { color:#ffd17e; }
+.dashboard-conditions .conditions-penalty b { color:inherit; }
+.dashboard-conditions [hidden] { display:none; }
+
+
+/* Desktop race controls: readable counters, icon tools and compact pit actions. */
+body:not(.mobile-game) .standings-counters .race-chips { grid-template-columns:86px 82px minmax(0,1fr); }
+body:not(.mobile-game) .standings-counters .race-chip { min-height:56px; padding:6px 8px; }
+body:not(.mobile-game) .race-chip > span { line-height:12px; }
+body:not(.mobile-game) .race-chip > b { line-height:26px; }
+body:not(.mobile-game) #clock.session-expired { display:flex; align-items:center; gap:5px; height:26px; }
+body:not(.mobile-game) #clock.session-expired svg { width:15px; height:17px; fill:none; stroke:currentColor; stroke-width:1.6; flex:none; }
+body:not(.mobile-game) #clock.session-expired span { font:600 11px/1 "DM Sans",sans-serif; letter-spacing:0; color:#e8eee8; white-space:nowrap; }
+body:not(.mobile-game) .lap-summary { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:8px 10px; border-bottom:1px solid var(--line); flex:none; }
+body:not(.mobile-game) .lap-summary p { display:flex; align-items:center; justify-content:space-between; gap:6px; margin:0 !important; }
+body:not(.mobile-game) .lap-summary span { color:var(--muted); font-size:8px; letter-spacing:.6px; }
+body:not(.mobile-game) .lap-summary b { font-size:11px; font-variant-numeric:tabular-nums; color:#dbe4dc; }
+body:not(.mobile-game) #lap:has(.session-name) { display:flex; flex-direction:column; gap:2px; line-height:1; }
+body:not(.mobile-game) #lap .session-name { font:700 19px/1 "Barlow Condensed",sans-serif; color:#e8eee8; letter-spacing:0; }
+body:not(.mobile-game) #lap small { font:600 9px/1.15 "DM Sans",sans-serif; color:var(--muted); letter-spacing:.5px; }
+body:not(.mobile-game) .race-actions { gap:6px; }
+body:not(.mobile-game) .race-actions .hud-icon { width:36px; height:36px; min-width:36px; min-height:36px; padding:8px; display:flex; align-items:center; justify-content:center; }
+body:not(.mobile-game) .race-actions .hud-icon svg { width:20px; height:20px; flex:none; }
+body:not(.mobile-game) .race-actions .hud-icon.active { color:var(--lime); border-color:var(--lime); }
+body:not(.mobile-game) .race-actions #qualifying-speed { width:58px; gap:4px; }
+body:not(.mobile-game) #qualifying-speed small { font-size:10px; }
+body:not(.mobile-game) .pit-panel { width:300px; min-width:300px; padding:12px; }
+body:not(.mobile-game) .pit-panel .eyebrow { margin-bottom:8px; }
+body:not(.mobile-game) .pit-panel #pit-hint,
+body:not(.mobile-game) .pit-panel #race-set-note,
+body:not(.mobile-game) .pit-panel #race-aero-note,
+body:not(.mobile-game) .pit-panel .limiter { display:none; }
+body:not(.mobile-game) .pit-panel .aero-shortcut { height:32px; min-height:32px; padding:4px 8px; }
+body:not(.mobile-game) .aero-shortcut svg { width:20px; height:20px; }
+body:not(.mobile-game) .pit-panel .pit-picker-buttons { margin:8px 0; }
+body:not(.mobile-game) .pit-panel .pit-picker-buttons > button { height:34px; min-height:34px; padding:5px 8px; font-size:11px; }
+body:not(.mobile-game) .pit-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+body:not(.mobile-game) .pit-actions > button { width:100%; min-width:0; min-height:34px; height:34px; margin:0; padding:5px 8px; display:flex; align-items:center; justify-content:center; font-size:11px; }
+body:not(.mobile-game) .pit-actions [data-action=pit] > span:last-child:not(#pit-button) { display:none; }
+body:not(.mobile-game) .pit-actions [hidden] { display:none; }
+body:not(.mobile-game) .aero-picker-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+body:not(.mobile-game) .forecast-legend { align-items:center; gap:18px; }
+body:not(.mobile-game) .forecast-legend > b,body:not(.mobile-game) .forecast-legend > span { flex:none; }
+body:not(.mobile-game) .engineer-radio { position:static; transform:none; flex:1; width:auto; min-width:0; max-width:none; display:flex; align-items:center; gap:5px; margin:0; padding:0; border:0; border-radius:0; background:none; font-size:10px; line-height:13px; letter-spacing:0; pointer-events:auto; }
+body:not(.mobile-game) .engineer-radio > span { display:flex; flex:none; margin:0; color:var(--lime); }
+body:not(.mobile-game) .engineer-radio svg { width:12px; height:12px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+body:not(.mobile-game) .engineer-radio #message { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; min-width:0; }
+body:not(.mobile-game) .engineer-radio.hidden { display:flex !important; visibility:hidden; }
+
+body:not(.mobile-game) .forecast-legend { height:16px; }
+body:not(.mobile-game) #weather-timebar { display:block; height:calc(100% - 16px); }

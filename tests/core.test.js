@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {Race,TRACK,TYRES,grip,resources,sample,nearest,loadCareer,buyUpgrade,settleCareer,targetSpeed,clamp,angleDiff,TEAMS,normalizeProfile,PIT_LANE,samplePit,pitPoint,acceleration,} from '../src/core.js';
+import {Race,TRACK,TYRES,grip,resources,sample,nearest,loadCareer,buyUpgrade,settleCareer,targetSpeed,clamp,angleDiff,TEAMS,normalizeProfile,PIT_LANE,samplePit,pitPoint,acceleration,wrap,} from '../src/core.js';
 import {newCareer} from './career-fixture.js';
 const setup = { laps: 16, tyre: "M", fuel: 18.5 };
 function pitInputs(car) {
@@ -255,14 +255,11 @@ test("player steering physics can complete a legal race with a requested pit sto
       r.pitLimiter = true;
     }
     if (p.stops && !p.pit) r.pitLimiter = false;
-    const goal = sample(p.s + clamp(p.speed * 0.55, 35, 100));
-    if(r.pitRequested && p.s%TRACK.length>TRACK.pitEntry-400) {
-      const offset=104*clamp((p.s%TRACK.length-TRACK.pitEntry+400)/240,0,1);
-      goal.x-=Math.sin(goal.angle)*offset;goal.y+=Math.cos(goal.angle)*offset;
-    }
+    const toEntry=wrap(TRACK.pitEntry-p.s,TRACK.length);
+    const goal = r.pitRequested && toEntry<130 ? samplePit(90) : sample(p.s + clamp(p.speed * 0.55, 35, 100));
     const desired = Math.atan2(goal.y - p.y, goal.x - p.x);
     let target = targetSpeed(p) * 0.82;
-    if (r.pitRequested && p.s % TRACK.length > TRACK.pitEntry - 220)
+    if (r.pitRequested && toEntry<400)
       target = 72;
     r.step(
       1 / 60,
@@ -338,7 +335,7 @@ test("player reaches 330 km/h with enough straight-line acceleration", () => {
   p.fuel = 0.1;
   p.pace = 1;
   // Keep car on a long straight while exercising the real acceleration path.
-  for (let i = 0; i < 1100; i++) {
+  for (let i = 0; i < 3600; i++) {
     p.fuel = 1;
     p.x = sample(0).x;
     p.y = sample(0).y;

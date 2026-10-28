@@ -11,7 +11,7 @@ for(const circuit of CIRCUITS)test(`${circuit.name}: race and qualifying AI stay
   c.ai.strategy.pitRequested=true;c.ai.strategy.choice=r.chooseAITyres(c,5)[0]?.set;
   c.ai.strategy.nextReview=Infinity;c.ai.nextDecision=Infinity;
   r.qualifying=qualifying;c.qState=qualifying ? 'in' : undefined;r.cars=[c];r.traffic=[c];
-  assert.equal(aiPitApproach(start),null,'must not send the driver towards the edge 800m early');
+  assert.ok(Math.abs(aiPitApproach(start)?.offset || 0)<TRACK.width/2-12,'early positioning remains on the racing surface');
   let maxJump=0;
   for(let i=0;i<30/dt&&!c.pit;i++){
    const x=c.x,y=c.y;r.time+=dt;r.stepAI(c,dt);

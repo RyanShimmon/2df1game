@@ -1,6 +1,6 @@
 // Controlled comparisons, not a predicted human lap time. No save data is read.
 // Run: node scripts/benchmark-tyres.mjs [track-id] > /tmp/tyre-benchmark.json
-import {Race,TRACK,AI_LINE,CIRCUITS,sample,PIT_LANE,PIT_SPEED,TYRES} from '../src/core.js';
+import {Race,TRACK,AI_LINE,CIRCUITS,sample,PIT_LANE,PIT_SPEED,TYRES,estimatedPitLoss} from '../src/core.js';
 import {racingPoint} from '../src/racecraft.js';
 const mode=process.argv[3] || 'balanced';
 const selected=process.argv[2],circuits=CIRCUITS.filter(t=>!selected||t.id===selected);
@@ -28,6 +28,6 @@ function measure(track,tyre,wearEnabled){
 const results=circuits.map(track=>{
  const compounds=Object.fromEntries(['S','M','H'].map(tyre=>[tyre,{grip:TYRES[tyre].grip,nominalLife:TYRES[tyre].life,
   freshLapSeconds:measure(track.id,tyre,false).at(-1).seconds,stint:measure(track.id,tyre,true)}]));
- return {track:track.id,estimatedPitLossSeconds:PIT_LANE.length/PIT_SPEED-(TRACK.length-TRACK.pitEntry+TRACK.pitExit)/210+3.7,compounds};
+ return {track:track.id,estimatedPitLossSeconds:estimatedPitLoss({pace:1,fuel:6,drive:mode,upgrades:{}}),compounds};
 });
 console.log(JSON.stringify({mode,conditions:'Normal AI, seed 42, selected pace mode, equal equipment, fixed fuel 6, dry, ideal temperature, 60 Hz, no traffic. Stints include wear; fresh laps hold wear at zero. Pit losses are estimates.',results},null,2));

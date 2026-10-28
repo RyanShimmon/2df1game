@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {recordTiming} from '../src/timing.js';
 import assert from 'node:assert/strict';
 import {Race,TRACK,PIT_LANE,PIT_MARKERS,makePitLane,pitEntranceLocation,clamp,angleDiff,sample,samplePit,nearest,raceProgress,updateRaceLaps,liveInterval} from '../src/core.js';
 const setup={laps:12,fuel:14,tyre:'M'};
@@ -14,7 +15,7 @@ test('pit limiting begins at entry rather than invisibly before its line and end
  const r=race(),p=r.player;r.cars=[p];p.s=TRACK.pitEntry-70;let loc=sample(p.s);
  Object.assign(p,{x:loc.x,y:loc.y,angle:loc.angle,speed:120});r.pitRequested=true;
  r.stepPlayer(p,.01,{throttle:true});assert.equal(p.pit,null);assert.equal(r.pitLimiter,false);assert.ok(p.speed>80);
- p.s=TRACK.pitEntry-1;loc=sample(p.s);Object.assign(p,{x:loc.x-Math.sin(loc.angle)*104,y:loc.y+Math.cos(loc.angle)*104,angle:loc.angle,motionAngle:loc.angle,speed:120});
+ p.s=TRACK.pitEntry-1;loc=PIT_MARKERS.entry;Object.assign(p,{x:loc.x-Math.cos(loc.angle),y:loc.y-Math.sin(loc.angle),angle:loc.angle,motionAngle:loc.angle,speed:120});
  r.stepPlayer(p,.02,{throttle:true});assert.ok(p.pit);assert.equal(r.pitLimiter,true);assert.equal(p.speed,80);
  p.pit.serviced=true;p.pit.distance=PIT_LANE.length-1;
  r.stepPit(p,.05,{throttle:true});assert.equal(p.pit,null);assert.equal(r.pitLimiter,false);
@@ -34,12 +35,14 @@ test('completed laps survive repeated coordinate wraps and crossing backwards do
  assert.equal(raceProgress(p),3*TRACK.length+5);
  const old=p.s;p.s=TRACK.length-5;assert.equal(updateRaceLaps(p,old),false);assert.equal(p.completedLaps,2);
 });
-test('live intervals include unserved penalties without reordering the track positions',()=>{
+test('live intervals use passage times and show penalties separately from the physical gap',()=>{
  const r=race(),p=r.player,other=r.cars[0];r.cars=[p,other];
- p.s=1000;p.penalty=5;other.s=900;
- assert.equal(r.order()[0],p);assert.equal(liveInterval(p,p),'+5.0 · +5s PEN');
- other.speed=200;other.penalty=5;assert.equal(liveInterval(p,other),'+5.5 · +5s PEN');
- other.s=p.s-TRACK.length-100;assert.equal(liveInterval(p,other),'+1 LAP · +5s PEN');
+ p.speed=200;recordTiming(p,0,0,TRACK.length);recordTiming(p,5,1000,TRACK.length);
+ Object.assign(p,{s:1000,penalty:5});other.s=900;recordTiming(other,5,900,TRACK.length);
+ assert.equal(r.order()[0],p);assert.equal(liveInterval(p,p),'LEAD · +5s PEN');
+ other.speed=200;other.penalty=5;assert.equal(liveInterval(p,other),'+0.5 · +5s PEN');
+ other.speed=0;assert.equal(liveInterval(p,other),'+0.5 · +5s PEN');
+ p.s+=TRACK.length;assert.equal(liveInterval(p,other),'+1 LAP · +5s PEN');
  other.penalty=0;assert.equal(liveInterval(p,other),'+1 LAP');
 });
 test('live finish order remains on-track while final classification applies time penalties',()=>{
@@ -92,15 +95,12 @@ test('rebuilding pit geometry keeps both original route intersections stable',()
  assert.equal(rebuilt.length,PIT_LANE.length);assert.deepEqual(rebuilt.pts,PIT_LANE.pts);
 });
 
-test('a requested stop captures physical turn-ins beyond the old 80m entry window',()=>{
- for(const distance of [0,60,150,240]) {
+test('a late arrival anywhere along the pit road cannot engage pit assistance',()=>{
+ for(const distance of [10,60,150,240,PIT_LANE.boxDistance-50]) {
   const r=race(),p=r.player;r.cars=[p];r.pitRequested=true;
   const loc=samplePit(distance);
   Object.assign(p,{s:TRACK.pitEntry+loc.progress,x:loc.x,y:loc.y,angle:loc.angle,motionAngle:loc.angle,speed:60});
-  r.stepPlayer(p,1/60,{throttle:true});
-  assert.ok(p.pit,`missed paved entrance at ${distance}m`);
-  for(let i=0;i<4000 && p.pit;i++) r.stepPit(p,1/60,{});
-  assert.equal(p.stops,1);assert.equal(p.pit,null);
+  r.stepPlayer(p,1/60,{throttle:true});assert.equal(p.pit,null,`illegal capture at ${distance}m`);
  }
 });
 test('entry detection excludes the racing surface and nearby grass',()=>{
@@ -117,9 +117,9 @@ test('painted pit asphalt retains the full original tails for a flush boundary c
  assert.ok(nearest(PIT_LANE.surfacePts.at(-1).x,PIT_LANE.surfacePts.at(-1).y).dist<1);
 });
 
-test('late entry preserves off-centre placement rather than snapping sideways',()=>{
- const r=race(),p=r.player;r.pitRequested=true;const loc=samplePit(170);
- Object.assign(p,{s:TRACK.pitEntry+loc.progress,x:loc.x-Math.sin(loc.angle)*20,y:loc.y+Math.cos(loc.angle)*20,angle:loc.angle,motionAngle:loc.angle,speed:60});
+test('a forward gate crossing preserves off-centre placement rather than snapping sideways',()=>{
+ const r=race(),p=r.player;r.pitRequested=true;const loc=PIT_MARKERS.entry;
+ Object.assign(p,{s:TRACK.pitEntry-1,x:loc.x-Math.sin(loc.angle)*20-Math.cos(loc.angle),y:loc.y+Math.cos(loc.angle)*20-Math.sin(loc.angle),angle:loc.angle,motionAngle:loc.angle,speed:120});
  r.stepPlayer(p,1/60,{throttle:true});assert.ok(p.pit);
  const before={x:p.x,y:p.y};r.stepPit(p,1/60,{});
  assert.ok(Math.hypot(p.x-before.x,p.y-before.y)<3);

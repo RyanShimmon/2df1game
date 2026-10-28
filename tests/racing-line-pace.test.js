@@ -5,13 +5,13 @@ import {racingPoint} from '../src/racecraft.js';
 test.afterEach(()=>selectTrack('northline'));
 test('linked fast same-direction corners hold the inside before opening their exit',()=>{
  selectTrack('forest');
- // These enlarged sweepers can be taken near full throttle. The fastest
+ // The compact opening sweepers lead into a right-hand bend. The fastest
  // approach holds the inside between linked lefts rather than weaving across
  // the road to manufacture a separate outside entry for each apex.
  const end=TRACK.mainStraight.to;
  assert.ok(racingPoint(AI_LINE,end+180).offset<-30);
- for(let s=end+350;s<=end+950;s+=20)assert.ok(racingPoint(AI_LINE,s).offset<-25,'do not weave outside between linked lefts');
- assert.ok(racingPoint(AI_LINE,end+1650).offset>-5,'open the exit after both corners');
+ for(let s=end+350;s<=end+600;s+=20)assert.ok(racingPoint(AI_LINE,s).offset<-25,'do not weave outside between linked lefts');
+ assert.ok(racingPoint(AI_LINE,end+950).offset>-5,'open the exit after both corners');
  assert.ok(AI_LINE.estimatedTime<AI_LINE.baselineTime*.96);
 });
 for(const circuit of CIRCUITS)test(`${circuit.name}: distinct measured difficulty pace and stable whole-lap tracking`,()=>{
@@ -33,7 +33,9 @@ for(const circuit of CIRCUITS)test(`${circuit.name}: distinct measured difficult
   // On the new flat-out oval, skilled drivers reach the same mechanical cap.
   // Extra skill cannot create top speed once the car is already flat out.
   for(let i=1;i<times.length;i++)assert.ok(times[i]<=times[i-1]+.02);
-  assert.ok(times[3]<times[0]*.95);
+  // Wider banking leaves little lifting even on Easy; keep a measurable
+  // skill difference without demanding road-course gaps or extra top speed.
+  assert.ok(times[3]<times[0]*.99,`oval difficulty lap times: ${times.join(', ')}`);
  }else{
   for(let i=1;i<times.length;i++)assert.ok(times[i]<times[i-1]*.995,`difficulty lap times: ${times.join(', ')}`);
   assert.ok(times[3]<times[0]*.90,'Expert must be measurably faster than Easy on the same car');

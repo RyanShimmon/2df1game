@@ -1,3 +1,4 @@
+import {recordTiming,intervalSeconds} from "./timing.js";
 import {planRaceStrategy,strategyWearLimit} from "./strategy.js";
 import {paceMode,fuelPerLap,applyThrottle,tyreWearFactor,stintLaps,cornerAccelerationLimit} from "./performance.js";
 import {GRAND_PRIX_POINTS,racePoints,raceFormat,quickRaceFormat} from "./race-rules.js";
@@ -387,7 +388,7 @@ export function samplePit(distance) {
     angle: Math.atan2(b.y - a.y, b.x - a.x),
   };
 }
-// Find the actual drivable entrance road, including late turn-ins before the boxes.
+// Project onto the pit route for an already validated entrance handover.
 export function pitEntranceLocation(x,y) {
   let best=null;
   const end=PIT_LANE.boxDistance-100;
@@ -404,6 +405,19 @@ export function pitEntranceLocation(x,y) {
 }
 // Painted boundaries and assisted routing use precisely the same endpoints.
 export let PIT_MARKERS={entry:samplePit(0),exit:samplePit(PIT_LANE.length)};
+const PIT_BOUNDARY_HALF_LENGTH=55;
+export function pitBoundaryMark(name) {
+  const marker=PIT_MARKERS[name],s=nearest(marker.x,marker.y).s;
+  const points=[];
+  for(let d=-PIT_BOUNDARY_HALF_LENGTH;d<=PIT_BOUNDARY_HALF_LENGTH;d+=5) {
+    const p=sample(s+d),offset=TRACK.width/2+1;
+    points.push({x:p.x-Math.sin(p.angle)*offset,y:p.y+Math.cos(p.angle)*offset});
+  }
+  const p=sample(s),offset=TRACK.width/2+15;
+  let angle=p.angle;
+  if(Math.cos(angle)<0) angle+=Math.PI;
+  return {points,label:{x:p.x-Math.sin(p.angle)*offset,y:p.y+Math.cos(p.angle)*offset,angle}};
+}
 export function selectTrack(id="northline") {
   const circuit=circuitById(id);
   if(TRACK.id===circuit.id) return TRACK;
@@ -416,16 +430,44 @@ export function selectTrack(id="northline") {
 // only at the entrance. Blend from the racing line instead of hugging grass.
 export function aiPitApproach(s){
  const distance=wrap(TRACK.pitEntry-s+TRACK.length/2,TRACK.length)-TRACK.length/2;
- if(distance>300 || distance< -180)return null;
+ if(distance>900 || distance< -80)return null;
  const offsetAt=at=>{
   const toEntry=wrap(TRACK.pitEntry-at+TRACK.length/2,TRACK.length)-TRACK.length/2;
   const progress=Math.max(0,TRACK.pitEntry-PIT_ROUTE_ENTRY-toEntry);
   const span=TRACK.length-PIT_ROUTE_ENTRY+PIT_ROUTE_EXIT;
   const routeOffset=180*smootherStep(progress/400)*smootherStep((span-progress)/400);
-  const blend=smootherStep((300-toEntry)/180);
-  return racingPoint(AI_LINE,at).offset*(1-blend)+routeOffset*blend;
+  const pitSide=TRACK.width/2-20,blend=smootherStep((900-toEntry)/550);
+  // Establish the pit-side lane early; do not sweep back to the racing line
+  // before following the actual paved turn-in at the marked entrance.
+  return Math.max(racingPoint(AI_LINE,at).offset*(1-blend)+pitSide*blend,routeOffset);
  };
  return {distance,offset:offsetAt(s),slope:(offsetAt(s+4)-offsetAt(s-4))/8};
+}
+// Entry is a one-way gate, not proximity to any point along the pit road.
+export function crossesPitEntry(previous,car,entryS){
+ if(!Number.isFinite(entryS) || Math.abs(car.s-entryS)>80)return false;
+ const gate=PIT_MARKERS.entry,tx=Math.cos(gate.angle),ty=Math.sin(gate.angle);
+ const dx=car.x-previous.x,dy=car.y-previous.y,travel=Math.max(.001,Math.hypot(dx,dy));
+ const road=sample(TRACK.pitEntry),rx=Math.cos(road.angle),ry=Math.sin(road.angle);
+ if((dx*tx+dy*ty)/travel<.5 || dx*rx+dy*ry<=0)return false;
+ // The orange marking runs along the road edge. A driver may cross any
+ // paved part of that marking, not only the pit route's centre point.
+ const edge=TRACK.width/2+1;
+ const inside=(previous.x-road.x)*-ry+(previous.y-road.y)*rx-edge;
+ const outside=(car.x-road.x)*-ry+(car.y-road.y)*rx-edge;
+ if(inside<=0 && outside>=0 && outside-inside>.0001){
+  const f=-inside/(outside-inside),x=previous.x+dx*f,y=previous.y+dy*f;
+  const along=(x-road.x)*rx+(y-road.y)*ry;
+  if(Math.abs(along)<=PIT_BOUNDARY_HALF_LENGTH && pitEntranceLocation(x,y).separation<=PIT_LANE.width/2-1)return true;
+ }
+ // Cars already following the outside half of the entrance can also cross
+ // the route start. This never accepts a late join further down the lane.
+ const before=(previous.x-gate.x)*tx+(previous.y-gate.y)*ty;
+ const after=(car.x-gate.x)*tx+(car.y-gate.y)*ty;
+ if(before>0 || after<0 || after-before<.0001)return false;
+ const f=-before/(after-before),x=previous.x+dx*f,y=previous.y+dy*f;
+ const lateral=(x-gate.x)*-ty+(y-gate.y)*tx;
+ return Math.abs(lateral)<=PIT_LANE.width/2-3 && nearest(x,y,entryS).offset>=TRACK.width/2-2;
 }
 export const trackLayer=s=>(TRACK.bridges || []).some(([a,b])=>wrap(s,TRACK.length)>=a && wrap(s,TRACK.length)<=b) ? 1 : 0;
 export function bankingGrip(s) {
@@ -451,19 +493,24 @@ export function updateRaceLaps(car,oldS) {
   if(change > TRACK.length/2) car.completedLaps=Math.max(0,car.completedLaps-1);
   return false;
 }
-export function liveInterval(leader,car) {
-  const distance=Math.max(0,raceProgress(leader)-raceProgress(car));
-  const seconds=distance/Math.max(170,car.speed);
-  const penalty=Math.max(0,car.penalty || 0);
-  const laps=Math.floor(distance/TRACK.length);
-  const base=car.dnf ? "DNF" : laps ? `+${laps} LAP${laps>1 ? "S" : ""}` :
-    car===leader && penalty<.05 ? "LEAD" : "+"+(seconds+penalty).toFixed(1);
-  return base+(penalty ? ` · +${penalty}s PEN` : "")+(car.pit ? " · PIT" : "");
+export function liveInterval(ahead,car) {
+  if(car.dnf)return "DNF";
+  const distance=Math.max(0,raceProgress(ahead)-raceProgress(car));
+  const laps=Math.floor(distance/TRACK.length),seconds=intervalSeconds(ahead,car,raceProgress(car));
+  const base=car===ahead ? "LEAD" : laps ? `+${laps} LAP${laps>1 ? "S" : ""}` :
+    seconds===null ? "—" : "+"+seconds.toFixed(1);
+  // Unserved penalties affect final classification, never the physical gap.
+  return base+(car.penalty ? ` · +${car.penalty}s PEN` : "")+(car.pit ? " · PIT" : "");
 }
 export function cleanAirTopSpeed(car){
   const mode=paceMode(car).top;
   const pack=aeroPackage(car.upgrades,car.aeroSpec);
   return Math.min(MAX_SPEED,MAX_SPEED*(1+level(car.upgrades,"engine")*.035)*(car.pace || 1)*(1-car.fuel*.0006))*mode*pack.top;
+}
+export function estimatedPitLoss(car){
+ const service=(2.3+Math.max(2.3,5.5-level(car.upgrades,"crew")*.5))/2;
+ const straightSpeed=Math.min(cleanAirTopSpeed(car),300);
+ return Math.max(8,PIT_LANE.length/PIT_SPEED-(TRACK.length-TRACK.pitEntry+TRACK.pitExit)/Math.max(160,straightSpeed)+service);
 }
 export function maximumSpeed(car){return cleanAirTopSpeed(car)+18*(car.slipstream?.carry || 0);}
 export function acceleration(car) {
@@ -476,7 +523,11 @@ export function acceleration(car) {
   // The aero package scales the clean-air ceiling; a tow reduces resistance.
   // Once clear, the additional kinetic energy decays instead of a speed snap.
   if(car.speed>cleanAirTopSpeed(car)+.01 && tow<.02)return 0;
-  return Math.max(0,power-drag*(1-.16*tow)-4-car.speed*.012-Math.max(0,car.speed-MAX_SPEED*pack.top)*.55);
+  // Keep corner exits responsive; use progressively less net thrust near the
+  // package ceiling. Engine power, Push and a tow still improve acceleration.
+  const approach=clamp((car.speed/maximumSpeed(car)-.60)/.40,0,1);
+  const reserve=1-.84*approach*approach*(3-2*approach);
+  return Math.max(0,power-drag*(1-.16*tow)-4-car.speed*.012-Math.max(0,car.speed-MAX_SPEED*pack.top)*.55)*reserve;
 }
 function overspeedDrag(car){return Math.max(0,car.speed-cleanAirTopSpeed(car))*.6*(1-(car.slipstream?.strength || 0));}
 // Passive loss from a held slide, shared by player and AI. Braking force is
@@ -609,7 +660,7 @@ export function passingPerformance(car,difficulty="normal",contact=null) {
  const brakingSkill=car.player ? 1 : Math.min(1,skill.braking+water*.14*style.wetSkill);
  const throttleSkill=car.player ? 1 : Math.min(1,skill.throttle+water*.10*style.wetSkill);
  return {grip:(contact?.all ?? grip(car))/bank,rearGrip:(contact?.rear ?? grip(car,"rear"))/bank,braking:(contact ? Math.min(300,240+level(car.upgrades,"brakes")*12)*contact.front : brakingDeceleration(car))*brakingSkill/bank,
-  top:maximumSpeed(car),commitment,
+  top:maximumSpeed(car),commitment,aero:{level:level(car.upgrades,"aero"),corner:aeroPackage(car.upgrades,car.aeroSpec).corner,gripScale:aeroGrip(car)},
   acceleration:acceleration({...car,speed:clamp(car.speed,180,280)})*clamp(accelerationGrip(car,contact?.rear),.25,1)*throttleSkill};
 }
 export function targetSpeed(car, s = car.s) {
@@ -843,13 +894,16 @@ export class Race {
     });
   }
   requestPit() {
-    if (this.player.finished || this.player.dnf || this.player.pit) return;
-    this.pitRequested = !this.pitRequested;
-    this.say(
-      this.pitRequested
-        ? this.autoPitLimiter ? "Box this lap. Steer into the separate pit road; assistance starts at its entrance." : "Box this lap. Steer into the pit road and slow to 80 km/h before its entrance."
-        : "Pit request cancelled.",
-    );
+    if (this.player.pit) return;
+    if(this.pitRequested){
+      this.pitRequested=false;
+      this.player.ai.pitEntryS=null;
+      this.say("Pit request cancelled.");
+      return;
+    }
+    if (this.player.finished || this.player.dnf) return;
+    this.pitRequested=true;
+    this.say(this.autoPitLimiter ? "Box this lap. Steer into the separate pit road; assistance starts at its entrance." : "Box this lap. Steer into the pit road and slow to 80 km/h before its entrance.");
   }
   togglePitLimiter() {
     if(this.autoPitLimiter) { this.say("Pit limiter is automatic. Choose manual control in Settings to use P."); return; }
@@ -895,6 +949,21 @@ export class Race {
       AERO_PACKAGES[spec].name+" selected · adds 10 seconds in the pit box.");
     return true;
   }
+  pitEntryTarget(car,requested){
+    if(!requested){car.ai.pitEntryS=null;return null;}
+    if(car.ai.pitEntryS==null || car.s>car.ai.pitEntryS+80){
+      const next=car.s+wrap(TRACK.pitEntry-car.s,TRACK.length),current=next-TRACK.length;
+      car.ai.pitEntryS=car.player && car.s-current<=PIT_BOUNDARY_HALF_LENGTH ? current : next;
+    }
+    return car.ai.pitEntryS;
+  }
+  tryEnterPit(car,previous,entryS){
+    if(car.pit || !crossesPitEntry(previous,car,entryS))return false;
+    this.enterPit(car);
+    if(car.pit && car.slipstream){car.slipstream.strength=0;car.slipstream.carry=0;}
+    return !!car.pit;
+  }
+  // Service setup is called only after tryEnterPit validates a forward crossing.
   enterPit(car) {
     let nextSet = null;
     const aiChoice=!car.player ? (!this.qualifying && car.ai.strategy.choice) || this.chooseAITyres(car,this.qualifying ? 3 : undefined)[0]?.set : null;
@@ -926,6 +995,11 @@ export class Race {
     const close = entry.separation < PIT_LANE.width/2;
     const entryDistance = close ? entry.distance : 0;
     const entryProgress = close ? entry.progress : clamp(wrap(car.s, TRACK.length)-TRACK.pitEntry,0,25);
+    const entryLoc=samplePit(entryDistance),entryOffset=close ? entry.offset : 0;
+    // The painted mouth extends before the trimmed centreline starts. Blend
+    // its remaining longitudinal displacement too, so assistance never snaps.
+    const entryShiftX=close ? car.x-(entryLoc.x-Math.sin(entryLoc.angle)*entryOffset) : 0;
+    const entryShiftY=close ? car.y-(entryLoc.y+Math.cos(entryLoc.angle)*entryOffset) : 0;
     car.weatherPitTime = this.time;
     car.pit = {
       distance: entryDistance,
@@ -935,7 +1009,7 @@ export class Race {
       serviced: false,
       boxDistance: this.pitBoxForCar(car),
       startS: car.s - entryProgress,
-      entryOffset: close ? entry.offset : 0,
+      entryOffset,entryShiftX,entryShiftY,
       speeding: false,
       nextTyre:
         nextSet?.compound ||
@@ -1017,13 +1091,25 @@ export class Race {
       const cap = car.player && !this.pitLimiter ? 180 : PIT_SPEED;
       const remaining = p.boxDistance - p.distance;
       const automatic=!car.player || this.autoPitLimiter;
-      const target = !automatic
+      let target = !automatic
         ? input.reverse || (input.brake && car.speed<=.5 && (p.serviced || Math.abs(remaining)>20))
           ? -30
           : input.brake ? 0 : input.throttle ? cap : 0
         : !p.serviced
           ? Math.min(PIT_SPEED, Math.sqrt(Math.max(0, remaining) * 280))
           : PIT_SPEED;
+      if(automatic && p.serviced){
+        const exitRemaining=PIT_LANE.length-p.distance;
+        if(exitRemaining<140){
+          const arrival=exitRemaining/Math.max(25,car.speed),exitS=p.startS+PIT_LANE.span;
+          const blocked=this.cars.some(other=>{
+            if(other===car || other.pit || other.garage || other.dnf || other.finished || other.offset<24)return false;
+            const gap=wrap(other.s-exitS+TRACK.length/2,TRACK.length)-TRACK.length/2;
+            return Math.abs(gap+other.speed*arrival)<65 || Math.abs(gap)<45;
+          });
+          if(blocked)target=Math.min(target,Math.sqrt(Math.max(0,exitRemaining-35)*280));
+        }
+      }
       const rate = !automatic
         ? input.brake
           ? 240
@@ -1100,8 +1186,9 @@ export class Race {
     const offset =
       p.entryOffset * (1 - smootherStep((p.distance-(p.entryDistance || 0)) / 150)) +
       26 * bayEntry * bayExit;
-    car.x = loc.x - Math.sin(loc.angle) * offset;
-    car.y = loc.y + Math.cos(loc.angle) * offset;
+    const entryBlend=1-smootherStep((p.distance-(p.entryDistance || 0))/150);
+    car.x = loc.x - Math.sin(loc.angle) * offset + (p.entryShiftX || 0)*entryBlend;
+    car.y = loc.y + Math.cos(loc.angle) * offset + (p.entryShiftY || 0)*entryBlend;
     car.angle = loc.angle;
     car.motionAngle=loc.angle;
     car.sideSpeed = 0;
@@ -1109,6 +1196,7 @@ export class Race {
     car.offset = 0;
     if (p.distance >= PIT_LANE.length) {
       car.pit = null;
+      if(car.ai)car.ai.pitExitUntil=car.s+220;
       car.offset = nearest(car.x,car.y).offset;
       if(car.player && this.autoPitLimiter) this.pitLimiter=false;
       if (car.player)
@@ -1128,6 +1216,7 @@ export class Race {
       return;
     }
     capturePoses(this.cars);
+    for(const car of this.cars)if(!car.finished&&!car.dnf)recordTiming(car,this.time,raceProgress(car),TRACK.length);
     this.time += dt;
     advanceWeather(this.weather, dt);
     this.traffic = this.cars.map((c) => ({
@@ -1182,6 +1271,7 @@ export class Race {
       }
     }
     this.collisions();
+    for(const car of this.cars)if(!car.dnf)recordTiming(car,car.trackFinishTime ?? this.time,raceProgress(car),TRACK.length);
     this.updateEngineer();
     this.skids = this.skids.filter((s) => this.time - s.t < 16);
     if (
@@ -1208,7 +1298,7 @@ export class Race {
       };
     }
   }
-  engineerReport(){return engineerReport(this,{track:TRACK,pitLane:PIT_LANE,tyres:TYRES,progress:raceProgress});}
+  engineerReport(){return engineerReport(this,{track:TRACK,pitLane:PIT_LANE,tyres:TYRES,progress:raceProgress,basePitLoss:estimatedPitLoss(this.player)});}
   updateEngineer(){
     if(this.qualifying || this.time<(this.nextEngineer || 20) || this.time<this.messageUntil || !level(this.player.upgrades,"engineer"))return;
     const report=this.engineerReport();this.nextEngineer=this.time+25;
@@ -1218,6 +1308,7 @@ export class Race {
   }
   raceField(){return this.classification().map((c,i)=>({id:c.id,teamIndex:TEAMS.indexOf(c.team),position:i+1,dnf:c.dnf,legal:tyreRuleMet(c),raceFormat:this.setup.raceFormat,contacts:c.contacts,penalties:c.penalties,gridPosition:c.gridPosition,stops:c.stops}));}
   stepPlayer(c, dt, input) {
+    const previousPosition={x:c.x,y:c.y,s:c.s},entryS=this.pitEntryTarget(c,this.pitRequested);
     if(this.autoPitLimiter) {
       this.pitLimiter=!!c.pit;
     }
@@ -1290,8 +1381,7 @@ export class Race {
       (rejoining && Math.abs(delta)<c.recoveryDistance+35)) c.s+=delta;
     if(rejoining) c.recoveryDistance=0;
     c.offset = next.offset;
-    const entranceApproach = this.pitRequested && next.offset>0 &&
-      pitEntranceLocation(c.x,c.y).separation<=PIT_LANE.width/2;
+    const entranceApproach = this.pitRequested && crossesPitEntry(previousPosition,c,entryS);
     const limits = updateTrackLimits(c, dt, entranceApproach ? 0 : next.dist);
     if (limits) this.say(limits);
     const distance = Math.hypot(dx, dy),
@@ -1306,12 +1396,7 @@ export class Race {
       c.speed *= 0.7;
       this.say("Off circuit. Ease back onto the racing line.");
     }
-    if(this.pitRequested && next.offset >= TRACK.width/2-1) {
-      const entrance=pitEntranceLocation(c.x,c.y);
-      if(entrance.separation <= PIT_LANE.width/2-3 &&
-        Math.cos(angleDiff(c.motionAngle ?? c.angle,entrance.angle))>0)
-        this.enterPit(c);
-    }
+    if(this.pitRequested)this.tryEnterPit(c,previousPosition,entryS);
     if (c.wear > 0.9 && this.time % 20 < dt)
       this.say("Tyres are fading. Consider a stop.");
   }
@@ -1350,7 +1435,7 @@ export class Race {
   }
   chooseAIStartingTyre(c){
     const water=trackWater(this.weather,c.s,TRACK.length,c.offset);
-    const ranked=rankTyres(c,{tyres:TYRES,remaining:this.laps,water,futureWater:this.freezeWeather ? c.trackWetness : forecastWater(this.weather,c.ai.strategy.forecastHorizon),lapTime:Math.max(25,TRACK.length/205),pitLoss:18,starting:true});
+    const ranked=rankTyres(c,{tyres:TYRES,remaining:this.laps,water,futureWater:this.freezeWeather ? c.trackWetness : forecastWater(this.weather,c.ai.strategy.forecastHorizon),lapTime:Math.max(25,TRACK.length/205),pitLoss:estimatedPitLoss(c),starting:true});
     if(!ranked.length)return null;
     const options=ranked.filter(o=>o.score<ranked[0].score+.18),weights=options.map(o=>Math.exp(-(o.score-ranked[0].score)/(.05+c.ai.strategy.risk*.1)));
     let pick=c.aiRandom()*weights.reduce((a,b)=>a+b,0);
@@ -1359,7 +1444,7 @@ export class Race {
   }
   aiStrategyContext(c,remaining){
     const lapTime=Math.max(15,TRACK.length/(205*(c.pace || 1)));
-    const baseLoss=Math.max(8,PIT_LANE.length/PIT_SPEED-(TRACK.length-TRACK.pitEntry+TRACK.pitExit)/210+3.7);
+    const baseLoss=estimatedPitLoss(c);
     const rejoin=c.s-baseLoss*TRACK.length/lapTime;
     const traffic=(this.traffic || []).some(o=>o.id!==c.id && !o.pit && !o.dnf && wrap(o.s-rejoin,TRACK.length)<120);
     return {tyres:TYRES,remaining,water:c.trackWetness || 0,
@@ -1378,12 +1463,6 @@ export class Race {
     const staying=planRaceStrategy(c,{...context,sets:availableAISets(c),current:{compound:c.tyre,wear:c.wear,id:c.tyreSet?.id}})[0];
     if(staying)plan.plannedMode=staying.mode;
     const family=tyre=>["I","W"].includes(tyre)?tyre:"dry";
-    // Whole-race estimates have limited weather precision. Cross-family stops
-    // must earn their loss in the near-term weather check below, not exploit
-    // a small difference between two bounded long-range searches.
-    const strategicStop=staying && best?.totalTime!=null && family(best.set.compound)===family(c.tyre) &&
-      c.tyreAge>TRACK.length*1.5 && this.time-plan.lastStop>context.lapTime*2 &&
-      best.totalTime+context.pitLoss*1.2+2<staying.totalTime;
     plan.projectedStopLaps=staying?.stint ?? null;
     if(!best || remaining<.55)return plan.pitRequested=false;
     const water=c.trackWetness || 0;
@@ -1391,17 +1470,34 @@ export class Race {
     const effort=paceMode(c).wear;
     const wearRate=dryWear*effort*(1+(c.sliding || 0)*.5)*thermalWear(c)*(1-(c.upgrades?.tyres || 0)*.07)/TYRES[c.tyre].life;
     const toEntry=wrap(TRACK.pitEntry-c.s,TRACK.length)/TRACK.length;
-    const mustChange=!tyreRuleMet(c) && remaining<2.2;
+    // Leave another entrance available if traffic prevents a safe turn-in.
+    const mustChange=!tyreRuleMet(c) && remaining<3.25+plan.risk*.5;
     const currentGrip=TYRES[c.tyre].grip*tyreWeatherGrip(c.tyre,water)*tyreWearFactor(c.tyre,c.wear,level(c.upgrades,"tyres"));
     const replacementGrip=best.grip*tyreWearFactor(best.set.compound,best.set.wear,level(c.upgrades,"tyres"));
     const usefulReplacement=replacementGrip>currentGrip*1.015 && (best.set.compound!==c.tyre || c.wear-best.set.wear>.06);
+    // A fresh-set search can find a better *later* stint split than the bounded
+    // keep-tyres search. That is not evidence to throw away healthy tyres now.
+    // Open an optional stop only when the current stint reaches this entrance;
+    // allow enough lead time for the next review and the physical pit approach.
+    const reviewLead=Math.min(.25,(plan.nextReview-this.time)/context.lapTime+900/TRACK.length);
+    const stopWindow=staying?.stops>0 && staying.stint<=toEntry+reviewLead;
+    const strategicStop=stopWindow && usefulReplacement && best.totalTime!=null &&
+      family(best.set.compound)===family(c.tyre) &&
+      best.totalTime+context.pitLoss*1.2+2<staying.totalTime;
     const canFinish=remaining<1.8 && c.wear+wearRate*remaining<.97;
     const tyreLife=!canFinish && usefulReplacement && (c.wear+wearRate*toEntry>strategyWearLimit(c,c.tyre) || (c.wear+wearRate>.98 && remaining>1.1));
     const urgent=c.wear>.96 && usefulReplacement || mustChange;
     const gain=(Math.pow(1/Math.max(.08,currentGrip),.32)-Math.pow(1/Math.max(.08,replacementGrip),.32))*Math.max(25,TRACK.length/205)*Math.min(remaining,2.5+plan.forecastHorizon/Math.max(25,TRACK.length/205));
-    const weather=family(best.set.compound)!==family(c.tyre) && usefulReplacement &&
+    // Damp conditions can favour a different slick as well as Intermediates.
+    // The surface-grip advantage must still repay the stop, regardless of age.
+    const weatherAdvantage=family(best.set.compound)!==family(c.tyre) ||
+      tyreWeatherGrip(best.set.compound,water)>tyreWeatherGrip(c.tyre,water)*1.15;
+    const weather=weatherAdvantage && usefulReplacement &&
       ((currentGrip<.52 && replacementGrip>currentGrip*1.35) || gain>context.pitLoss*(1.15+plan.risk*.35));
-    if(plan.pitRequested && plan.reason==='weather crossover' && !tyreLife && !mustChange && currentGrip>.75 && gain<5 && wrap(TRACK.pitEntry-c.s,TRACK.length)>600){plan.pitRequested=false;plan.choice=null;}
+    const committed=plan.pitRequested && c.ai.pitEntryS!=null && c.ai.pitEntryS-c.s>=-80 && c.ai.pitEntryS-c.s<=900;
+    const expiredStrategy=plan.reason==='faster race strategy' && !strategicStop && !tyreLife && !weather && !mustChange;
+    const expiredWeather=plan.reason==='weather crossover' && !tyreLife && !mustChange && currentGrip>.75 && gain<5;
+    if(plan.pitRequested && !committed && (expiredStrategy || expiredWeather)){plan.pitRequested=false;plan.choice=null;}
     const recent=this.time-plan.lastStop<18;
     const teammate=(this.traffic || []).some(o=>o.id!==c.id && o.team===c.team.name && (o.boxRequested || o.pit && !o.pit.serviced));
     // A teammate already committing to the box can make a marginal stop costly.
@@ -1409,13 +1505,13 @@ export class Race {
     if(teammate && !urgent && !weather && c.wear+wearRate<.95){plan.reason='teammate traffic';return plan.pitRequested=false;}
     if(plan.pitRequested || (!recent && (tyreLife || weather || mustChange || strategicStop))){
       plan.pitRequested=true;plan.choice=best.set;
-      plan.reason=mustChange ? 'compound rule' : weather ? 'weather crossover' : tyreLife ? 'tyre life' : 'faster race strategy';
+      plan.reason=mustChange ? 'compound rule' : weather ? 'weather crossover' : tyreLife ? 'tyre life' : strategicStop ? 'faster race strategy' : plan.reason;
     }
     plan.lastReview=this.time;
     return plan.pitRequested;
   }
   stepAI(c, dt) {
-    const oldX=c.x,oldY=c.y,oldAngle=c.angle;
+    const oldX=c.x,oldY=c.y,oldS=c.s,oldAngle=c.angle;
     const remain=this.laps-raceProgress(c)/TRACK.length;
     const water=c.trackWetness || 0;
     const style=c.driverStyle,ai=c.ai;
@@ -1427,23 +1523,13 @@ export class Race {
     // Commit to the next entrance when the request begins. In qualifying the
     // timed lap ends just AFTER some circuits' pit entries: that is the start
     // of an in lap, not permission to cut sideways into the boxes behind us.
-    if(!shouldPit)ai.pitEntryS=null;
-    else if(ai.pitEntryS==null || c.s>ai.pitEntryS+180)
-      ai.pitEntryS=c.s+wrap(TRACK.pitEntry-c.s,TRACK.length);
-    const pitApproach=shouldPit && c.s>=ai.pitEntryS-300 ? aiPitApproach(c.s) : null;
-    if(pitApproach && pitApproach.distance<=0 && c.offset>=TRACK.width/2-8 && remain>.6){
-      const entrance=pitEntranceLocation(c.x,c.y);
-      if(entrance.separation<=PIT_LANE.width/2-3 && Math.cos(angleDiff(c.angle,entrance.angle))>0){
-        c.weatherTarget=this.qualifying ? recommendedTyre(water) : c.ai.strategy.choice?.compound;
-        this.enterPit(c);
-        if(c.pit){if(c.slipstream){c.slipstream.strength=0;c.slipstream.carry=0;}return;}
-      }
-    }
+    const entryS=this.pitEntryTarget(c,shouldPit);
+    const pitApproach=shouldPit && c.s>=entryS-900 ? aiPitApproach(c.s) : null;
     const curvature=angleDiff(sample(c.s+15).angle,sample(c.s-15).angle)/30;
     const path=racingPoint(AI_LINE,c.s);
     const courtesy=this.qualifying ? qualifyingLane(c,AI_LINE,this.traffic || this.cars) : null;
     ai.qualifyingLane=courtesy;
-    const yielding=courtesy && !courtesy.preparing;
+    const yielding=courtesy && !courtesy.preparing && !pitApproach;
     const nearby=(this.traffic || this.cars).find(o=>o.id!==c.id && !o.pit && !o.garage && !o.dnf && !o.finished &&
       wrap(o.s-c.s,TRACK.length)>0 && wrap(o.s-c.s,TRACK.length)<150);
     if(this.time>=ai.nextDecision) {
@@ -1487,13 +1573,14 @@ export class Race {
     // Out/in laps and pit approaches already have a lower speed ceiling.
     // Start lookahead at that ceiling so irrelevant distant corners cost no work.
     const paceCeiling=Math.min(yielding ? 210 : Infinity,mistake ? Infinity : pitSpeedLimit)/(yielding ? .82 : 1);
-    let target=brakingTarget(AI_LINE,c.s,contact.all,braking*brakingSkill,maximumSpeed(c),commitment,c.offset-path.offset,paceCeiling);
+    let target=brakingTarget(AI_LINE,c.s,contact.all,braking*brakingSkill,maximumSpeed(c),commitment,c.offset-path.offset,paceCeiling,ai.racePace.aero);
     if(yielding) target=Math.min(target*.82,210);
     if(mistake)target*=mistake==='wide' ? .88 : .94;
     if(pitApproach)target=Math.min(target,pitSpeedLimit);
     const lane=planRacingLane(c,AI_LINE,this.traffic || this.cars,{time:this.time,
       allowPass:!launching&&!pitApproach&&!mistake&&(!this.qualifying||c.qState==="timed"),
       baseOffset:launching ? ai.launch.offset+(path.offset-ai.launch.offset)*launchProgress : null,
+      routeOffset:pitApproach?.offset ?? null,
       paceAdvantage:(other,shift=0)=>projectedPaceAdvantage(AI_LINE,c.s,c.speed,ai.racePace,
         other.performance || other.ai?.racePace || passingPerformance(this.cars.find(o=>o.id===other.id),this.difficulty),
         {ownShift:shift,otherShift:other.offset-racingPoint(AI_LINE,other.s).offset}),
@@ -1501,7 +1588,7 @@ export class Race {
     let desiredOffset=lane.offset;
     target=Math.min(target,lane.followingSpeed);
     if(mistake==="wide")desiredOffset=clamp(path.offset+(ai.mistakeSide || -Math.sign(curvature))*22,lane.min,lane.max);
-    if(pitApproach)desiredOffset=pitApproach.offset;
+    // The pit route is a lane request; traffic keeps priority over that request.
     const demand=c.speed*c.speed*Math.abs(drivenPath.curvature)/(225*Math.max(.08,contact.all));
     // Hold a small rotation near the wet traction limit and countersteer it.
     // The direction follows the actual racing arc, not the track centreline.
@@ -1525,22 +1612,25 @@ export class Race {
     let feedForward=pitApproach || yielding ? slope*progressRate :
       (racingPoint(AI_LINE,c.s+progressRate*dt).offset-path.offset)/dt;
     if(launching)feedForward*=launchProgress;
-    if(!pitApproach && (desiredOffset<=lane.min+.1&&feedForward<0 || desiredOffset>=lane.max-.1&&feedForward>0))feedForward=0;
+    if(desiredOffset<=lane.min+.1&&feedForward<0 || desiredOffset>=lane.max-.1&&feedForward>0&&(!pitApproach || lane.max<pitApproach.offset-.1))feedForward=0;
     const recovery=clamp((desiredOffset-c.offset)*2.4-c.sideSpeed,-55,55);
     ai.recoveryVelocity=(ai.recoveryVelocity || 0)+clamp((recovery-(ai.recoveryVelocity || 0))*8,-180*Math.max(.25,contact.all),180*Math.max(.25,contact.all))*dt;
     ai.lineVelocity=clamp(feedForward+ai.recoveryVelocity,-c.speed*.85-c.sideSpeed,c.speed*.85-c.sideSpeed);
     // A smoothed steering correction must not carry us through the space
     // reserved for a car alongside. Limit motion, never teleport the car.
-    if(!pitApproach && !yielding && lane.min<=lane.max){
+    if(!yielding && lane.min<=lane.max){
       const margin=TRACK.width/2-18;
       if(lane.min>-margin)ai.lineVelocity=Math.max(ai.lineVelocity,Math.min(0,(lane.min-c.offset)/dt)-c.sideSpeed);
-      if(lane.max<margin)ai.lineVelocity=Math.min(ai.lineVelocity,Math.max(0,(lane.max-c.offset)/dt)-c.sideSpeed);
+      if(lane.max<(pitApproach || ai.pitExitUntil>c.s ? Math.max(margin,c.offset,pitApproach?.offset || 0) : margin))ai.lineVelocity=Math.min(ai.lineVelocity,Math.max(0,(lane.max-c.offset)/dt)-c.sideSpeed);
     }
     c.offset+=ai.lineVelocity*dt+c.sideSpeed*dt;
     c.sliding=clamp(Math.abs(ai.slip)/.2,0,1);
     const oldSpeed=c.speed;
     const throttleSkill=Math.min(1,skill.throttle+water*.10*style.wetSkill);
-    const throttle=applyThrottle(c,target>c.speed+.01 ? 1 : 0,dt);
+    // Holding the corner target still needs throttle. Cutting it to zero
+    // at equality repeatedly reset power delivery, penalising the grippier
+    // car as it reached its target earlier and tried to accelerate away.
+    const throttle=applyThrottle(c,target>=c.speed-.01 ? 1 : 0,dt);
     const accel = Math.min(acceleration(c) * throttle * clamp(accelerationGrip(c), 0.25, 1)*throttleSkill,
       cornerAccelerationLimit(c.speed,drivenPath.curvature,grip(c,"rear")));
     c.speed += clamp(target - c.speed, -braking * dt, accel * dt)-overspeedDrag(c)*dt;
@@ -1577,6 +1667,10 @@ export class Race {
     // Charge the actual route travelled, including lateral movement, with the
     // same slide/braking effort and tyre model used by the player.
     resources(c,dt,Math.hypot(c.x-oldX,c.y-oldY),drivingTyreEffort(c,{qualifying:!!this.qualifying,brake,steer}),load);
+    if(pitApproach && remain>.6){
+      c.weatherTarget=this.qualifying ? recommendedTyre(water) : c.ai.strategy.choice?.compound;
+      this.tryEnterPit(c,{x:oldX,y:oldY,s:oldS},entryS);
+    }
     if(c.sliding>.18 && this.time%(1/12)<dt && this.skids.length<1400)
       this.skids.push({x:c.x,y:c.y,a:c.angle,t:this.time});
   }

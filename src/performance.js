@@ -1,4 +1,19 @@
 // Shared by the physics, strategy planner and driver-facing estimates.
+// Mechanical grip dominates below 80 km/h. Aero builds smoothly through
+// medium-speed bends and reaches its full package effect at 280 km/h.
+export function aeroGripMultiplier(speed,level=0,corner=1){
+ const v=Math.max(0,Math.min(1,(Math.abs(speed)-80)/200)),support=.35+.65*Math.min(1,Math.abs(speed)/280)**2;
+ return (1+level*.035*support)*(1+(corner-1)*v*v*(3-2*v))**2;
+}
+// Resolve the corner's own speed, rather than carrying straight-line downforce
+// into a hairpin. Both AI braking and passing projections use this same curve.
+export function corneringSpeed(grip,curvature,top,commitment=1,aero=null){
+ const base=225*Math.max(.001,grip)/(Math.max(.0001,Math.abs(curvature))*(aero?.gripScale || 1));
+ let speed=Math.min(top,Math.sqrt(base)*commitment);
+ if(aero)for(let i=0;i<6;i++)speed=Math.min(top,Math.sqrt(base*aeroGripMultiplier(speed,aero.level,aero.corner))*commitment);
+ return speed;
+}
+
 export const PACE_MODES = {
  save:{name:"Save",power:.88,top:.94,fuel:.90,wear:.82,response:2.8,description:"Gentler power. Save fuel and tyre life; recover hot tyres."},
  balanced:{name:"Balanced",power:1,top:1,fuel:1,wear:1,response:5,description:"Sustainable race pace with predictable power delivery."},

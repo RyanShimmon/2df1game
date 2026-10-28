@@ -7,7 +7,7 @@ import {createWeather} from '../src/weather.js';
 const profile={driverName:'Balance test',teamIndex:2},results=[];
 for(const [track,defaultWeather] of [['northline','dry'],['metro','dry'],['harbour','intermediate'],['dunes','dry']].filter(([track])=>!process.argv[2]||track===process.argv[2])){
  const weather=process.argv[3] || defaultWeather;
- const career=newCareer(profile);career.round=WEEKENDS.findIndex(w=>w.track===track)+1;
+ const career=newCareer(profile,{seasonOrder:WEEKENDS.map(w=>w.track)});career.round=WEEKENDS.findIndex(w=>w.track===track)+1;
  const w=createWeekend(career,{tyre:'M',aiSeed:117,tyreTemperatureEnabled:true});
  w.phase='R';w.grid=Array.from({length:22},(_,i)=>i);w.weather=createWeather(weather,{seed:117,duration:w.setup.weatherDuration});w.raceWeatherReady=true;
  // Model qualifying consumption without inventing fresh race sets.

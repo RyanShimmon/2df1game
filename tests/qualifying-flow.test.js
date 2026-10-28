@@ -72,7 +72,7 @@ test('forecast advances across rain changes and predicts water remaining after r
 });
 test('session expiry prevents new departures and starting a new timed lap',()=>{
   const q=create(),p=q.player;
-  q.weekend.elapsed=q.stage.duration;
+  q.weekend.elapsed=q.stage.duration;q.time=q.stage.duration-q.stageStart;
   assert.equal(q.launch(p),false);
   p.qState='out';q.crossLine(p);assert.equal(p.qStart,null);
 });

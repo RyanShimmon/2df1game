@@ -81,11 +81,18 @@ export function migrateWeekend(w) {
     w.softSetNumbering=1;
   }
   w.allocationVersion=3;
+  if(!w.qualifyingDurations){
+    w.qualifyingDurations=qualifyingDurations(w.setup.track);
+    // An old save may already exceed the new clock. Leave one final outing
+    // rather than declaring the driver out as soon as that save is opened.
+    if(w.phase!=="R" && w.elapsed>w.qualifyingDurations[w.phase]-60)
+      w.qualifyingDurations[w.phase]=Math.ceil((w.elapsed+w.qualifyingDurations[w.phase]/3)/15)*15;
+  }
   restoreQualifyingGrid(w);
   w.setup.weatherSeed ??= (w.setup.aiSeed^0x9e3779b9)>>>0;
   w.setup.weatherDuration ??= raceWeatherDuration(w.setup.laps,makeTrack(circuitById(w.setup.track)).length);
-  if (!w.weather) w.weather = createWeather(w.setup.weather || weekendSchedule(w.round,w.seasonOrder).weather,{seed:w.setup.weatherSeed,duration:46*60});
-  migrateWeather(w.weather,{seed:w.setup.weatherSeed,duration:46*60});
+  if (!w.weather) w.weather = createWeather(w.setup.weather || weekendSchedule(w.round,w.seasonOrder).weather,{seed:w.setup.weatherSeed,duration:qualifyingWeatherDuration(w)});
+  migrateWeather(w.weather,{seed:w.setup.weatherSeed,duration:qualifyingWeatherDuration(w)});
 }
 export function startRaceWeather(w) {
   if (w.raceWeatherReady) return;
@@ -96,10 +103,40 @@ export function startRaceWeather(w) {
   w.raceWeatherReady = true;
 }
 export const Q_STAGES = [
-  { name: "Q1", duration: 18 * 60, keep: 16 },
-  { name: "Q2", duration: 15 * 60, keep: 10 },
-  { name: "Q3", duration: 13 * 60, keep: 10 },
+  { name: "Q1", keep: 16 },
+  { name: "Q2", keep: 10 },
+  { name: "Q3", keep: 10 },
 ];
+// Budget three out/timed/in outings, not real-world F1 minutes on arcade laps.
+// Eight laps reach the third timed-lap finish; allow pit travel, two services
+// and a short preparation window. This is a time budget, never a lap limit.
+const qualifyingClockCache=new Map();
+export function qualifyingDurations(trackId="northline") {
+  if(!qualifyingClockCache.has(trackId)){
+    const track=makeTrack(circuitById(trackId));
+    const referenceLap=Math.max(25,track.length/225);
+    const budget=8*referenceLap+100;
+    qualifyingClockCache.set(trackId,Object.fromEntries(Q_STAGES.map((stage,i)=>
+      [stage.name,Math.ceil((budget-i*10)/15)*15])));
+  }
+  return {...qualifyingClockCache.get(trackId)};
+}
+export function qualifyingStage(w,name=w.phase) {
+  const stage=Q_STAGES.find(q=>q.name===name);
+  return stage ? {...stage,duration:(w.qualifyingDurations || qualifyingDurations(w.setup.track))[name]} : null;
+}
+export function qualifyingWeatherDuration(w) {
+  return Object.values(w.qualifyingDurations || qualifyingDurations(w.setup.track)).reduce((sum,seconds)=>sum+seconds,0);
+}
+// Both the first Start qualifying button and later saved outings enter the
+// same on-track garage. Honour the compound chosen before the weekend opens.
+export function beginQualifying(w,upgrades,profile,{setId,compound=w.setup.tyre}={}) {
+  const sets=selectableSets(w.inventories[21],w.phase);
+  const selected=sets.find(t=>t.id===setId) || sets.filter(t=>t.compound===compound).sort((a,b)=>a.wear-b.wear)[0] || sets[0];
+  if(!selected)throw Error("No qualifying tyre sets available");
+  w.selectedSetId=selected.id;w.selectedPhase=w.phase;
+  return new QualifyingRun(w,selected.id,upgrades,profile);
+}
 export function createWeekend(career, setup) {
   const schedule = careerSchedule(career);
   developTeams(career,setup.aiSeed);
@@ -108,6 +145,7 @@ export function createWeekend(career, setup) {
   const weatherDuration=raceWeatherDuration(schedule.laps,makeTrack(circuitById(schedule.track)).length);
   return {
     version: 1,
+    qualifyingDurations:qualifyingDurations(schedule.track),
     distanceVersion:2,
     tyreModelVersion: 2,
     allocationVersion: 3,
@@ -129,7 +167,7 @@ export function createWeekend(career, setup) {
       teamDevelopment:developmentSnapshot(career,schedule.track),
     },
     eventName: schedule.name,
-    weather: createWeather(schedule.weather,{seed:weatherSeed,duration:46*60}),
+    weather: createWeather(schedule.weather,{seed:weatherSeed,duration:qualifyingWeatherDuration({setup:{track:schedule.track}})}),
     conditions: { weather: "Dry", temperature: 24 },
     phase: "Q1",
     active: Array.from({ length: 22 }, (_, i) => i),
@@ -199,7 +237,7 @@ export function recordLap(w, id, lap, at) {
   }
 }
 export function qualifyingExpired(w) {
-  const stage=Q_STAGES.find(q=>q.name===w.phase);
+  const stage=qualifyingStage(w);
   return !!stage && w.elapsed>=stage.duration;
 }
 export function pendingFirstRuns(w) {
@@ -236,13 +274,13 @@ export function stageOrder(w) {
   });
 }
 function* simulateAIQualifyingSteps(w,upgrades,profile,options={}) {
-  const stage=Q_STAGES.find(q=>q.name===w.phase);
+  const stage=qualifyingStage(w);
   const ids=w.active.filter(id=>id!==21 && !w.results.some(r=>r.id===id));
   if(!stage || w.elapsed>=stage.duration || !ids.length)return;
   const q=new QualifyingRun(w,null,upgrades,profile,{...options,aiOnly:true,driverIds:ids});
   // Two complete outings where the remaining clock and real tyre stock allow.
   // This is the same weather, pit, temperature and wear simulation as live play.
-  for(let i=0;i<20*(stage.duration+90) && !q.done;i++){
+  for(let i=0;(i<20*(stage.duration+90) || q.hasTimedLaps()) && !q.done;i++){
     q.step(.05,{});
     for(const c of q.cars)if(c.stops>=2)c.qReleaseAt=Infinity;
     if(q.cars.every(c=>c.stops>=2 || c.qUnavailable))break;
@@ -274,7 +312,7 @@ async function responsiveSimulation(steps,{yieldControl=yieldSimulation,budgetMs
 export function simulateAIQualifying(w,upgrades,profile){return exhaustSimulation(simulateAIQualifyingSteps(w,upgrades,profile));}
 function* finishQualifyingStageSteps(w, upgrades, profile, options={}) {
   if (w.phase === "R") return;
-  const stage = Q_STAGES.find((q) => q.name === w.phase);
+  const stage = qualifyingStage(w);
   yield* simulateAIQualifyingSteps(w,upgrades,profile,options);
   if(w.phase!==stage.name)return null;
   const order = stageOrder(w);
@@ -361,7 +399,7 @@ export function nextQualifyingSession(previous,upgrades,profile) {
   return qualifyingGarage(previous,upgrades,profile);
 }
 export function resumeQualifyingSession(previous,upgrades,profile) {
-  const w=previous.weekend,stage=Q_STAGES.find(q=>q.name===w.phase);
+  const w=previous.weekend,stage=qualifyingStage(w);
   if(!stage || w.phase!==previous.stage.name || !w.active.includes(21) || w.elapsed>=stage.duration)return null;
   return qualifyingGarage(previous,upgrades,profile);
 }
@@ -390,7 +428,7 @@ export class QualifyingRun extends Race {
     this.timeScale=1;
     this.weather = w.weather;
     this.weekend = w;
-    this.stage = Q_STAGES.find(q => q.name === w.phase);
+    this.stage = qualifyingStage(w);
     this.countdown = 0;
     this.pitLimiter = true;
     this.stageStart = w.elapsed;
@@ -434,7 +472,7 @@ export class QualifyingRun extends Race {
   }
   releaseDelay(c) {
     // Individual, varied departure times; another delay follows each serviced run.
-    return 5 + c.aiRandom()*65 + c.ai.strategy.reaction*1.5;
+    return (c.stops ? 6 : 4) + c.aiRandom()*(c.stops ? 12 : 24) + c.ai.strategy.reaction*1.5;
   }
   launch(c) {
     if (c.qState !== "garage" || !c.pit || !c.pit.serviced || this.weekend.elapsed >= this.stage.duration) return false;
@@ -503,7 +541,7 @@ export class QualifyingRun extends Race {
     // still use real tyres and wear, but cannot gain an AI-only drying-track advantage.
     // Use the supported 50 ms physics step for unseen runs. Every car still
     // drives its full route with traffic, tyre wear, fuel and pit service.
-    for(let i=0;i<20*(this.stage.duration+90) && !this.done;i++){this.step(.05,{});yield;}
+    for(let i=0;(i<20*(this.stage.duration+90) || this.hasTimedLaps()) && !this.done;i++){this.step(.05,{});yield;}
     this.endRun();
     if(this.weekend.phase!==this.stage.name)return null;
     const session=yield* finishQualifyingStageSteps(this.weekend,this.player.upgrades,this.profile,{freezeWeather:true});
@@ -531,18 +569,26 @@ export class QualifyingRun extends Race {
     }
     this.result = { qualifying:true };
   }
-  crossLine(c) {
-    if (c.qState === "out" && this.weekend.elapsed < this.stage.duration) {
-      c.qState = "timed";
-      c.qStart = this.time;
+  hasTimedLaps() {
+    return this.cars.some(c=>!c.garage && !c.pit && !c.dnf && c.qState==="timed" &&
+      Number.isFinite(c.qStart) && this.stageStart+c.qStart<this.stage.duration);
+  }
+  crossLine(c,at=this.time) {
+    if (c.qState === "out") {
+      c.qState = this.stageStart+at < this.stage.duration ? "timed" : "in";
+      c.qStart = c.qState === "timed" ? at : null;
       c.qInvalid = false;
+      if(c.player && c.qState === "in") {
+        this.pitRequested=true;
+        this.say("Chequered flag. Return to the pits; this out lap cannot start a timed lap.");
+      }
     } else if (c.qState === "timed") {
-      const lap = this.time-c.qStart;
+      const lap = at-c.qStart;
       c.lastLap = lap;
       c.qLaps = 1;
-      if (!c.qInvalid) {
+      if (!c.qInvalid && Number.isFinite(c.qStart) && this.stageStart+c.qStart<this.stage.duration) {
         c.bestLap = Math.min(c.bestLap,lap);
-        recordLap(this.weekend,c.id,lap,this.stageStart+this.time);
+        recordLap(this.weekend,c.id,lap,this.stageStart+at);
       } else {
         this.weekend.attempts ||= {};this.weekend.attempts[c.id]=(this.weekend.attempts[c.id] || 0)+1;
         if(c.player) this.say("Lap deleted: track limits. Complete your in lap.");
@@ -556,6 +602,14 @@ export class QualifyingRun extends Race {
   step(dt,input={}) {
     if(this.done || this.weekend.phase!==this.stage.name) return;
     dt=Math.min(dt,.05);
+    // Complete qualifying in batches, but keep the same physics, weather and
+    // decision steps as live driving. Coarse updates could skip short braking
+    // features and change tyre temperatures/wear enough to reverse the result.
+    if(dt>1/60+1e-8){
+      const steps=Math.ceil(dt*60);
+      for(let i=0;i<steps;i++)this.step(dt/steps,input);
+      return;
+    }
     capturePoses(this.cars);
     this.time+=dt;
     if(!this.freezeWeather)advanceWeather(this.weather,dt);
@@ -599,7 +653,12 @@ export class QualifyingRun extends Race {
       else {
         super.stepAI(c,dt);
       }
-      if(!c.pit && Math.floor(c.s/TRACK.length)>Math.floor(old/TRACK.length)) this.crossLine(c);
+      if(!c.pit && Math.floor(c.s/TRACK.length)>Math.floor(old/TRACK.length)) {
+        // The crossing can precede zero even when this physics step ends after it.
+        const line=(Math.floor(old/TRACK.length)+1)*TRACK.length;
+        const crossedAt=this.time-dt+dt*(line-old)/(c.s-old);
+        this.crossLine(c,crossedAt);
+      }
       if(c.player && c.qState==="timed") {
         const p=sample(c.s);
         if(Math.hypot(c.x-p.x,c.y-p.y)>TRACK.width/2+8) c.qInvalid=true;
@@ -607,18 +666,18 @@ export class QualifyingRun extends Race {
       if(!c.pit && c.fuel<=0 && c.speed<4) {
         c.garage=true;
         c.qState="stranded";
-        if(c.player) { this.say("Out of fuel. Return to the garage to prepare another outing."); this.endRun(); }
+        if(c.player) { this.say("Out of fuel. Return to the garage to prepare another outing."); if(!this.hasTimedLaps())this.endRun(); }
       }
     }
     this.collisions();
     if((this.weekend.elapsed>=this.stage.duration && this.cars.every(c=>c.garage)) ||
-      this.stageStart+this.time>this.stage.duration+90) this.endRun();
+      this.stageStart+this.time>this.stage.duration+90 && !this.hasTimedLaps()) this.endRun();
     this.skids=this.skids.filter(s=>this.time-s.t<16);
   }
 }
 
 export function qualifyingProgress(w, playerId=21, stageName=w.phase) {
-  const stage=Q_STAGES.find(q=>q.name===stageName);
+  const stage=qualifyingStage(w,stageName);
   if(!stage) return null;
   const {order,results}=qualifyingClassification(w,stageName), rank=order.indexOf(playerId)+1;
   const cutoffId=order[stageName==='Q3' ? 0 : stage.keep-1], cutoff=results.find(r=>r.id===cutoffId);

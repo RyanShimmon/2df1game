@@ -14,7 +14,17 @@ test('12 distinct tracks have varied lengths, smooth pits and exact edge joins',
   let previous=samplePit(0).angle;
   for(let d=2;d<PIT_LANE.length;d+=2){const p=samplePit(d);assert.ok(Math.abs(angleDiff(p.angle,previous))<.04,`${circuit.id} pit kink`);previous=p.angle;}
  }
- assert.equal(new Set(lengths.map(Math.round)).size,12);assert.ok(Math.max(...lengths)>Math.min(...lengths)*1.8);
+ // Keep varied layouts within the new 25–50-second arcade lap window.
+ assert.equal(new Set(lengths.map(Math.round)).size,12);assert.ok(Math.max(...lengths)>Math.min(...lengths)*1.5);
+});
+test('Dunes retains a long, separated return straight parallel to the main straight',()=>{
+ selectTrack('dunes');const y=sample(0).y,pts=TRACK.pts;let length=0,longest=0;
+ for(let i=1;i<pts.length;i++){
+  const p=pts[i],parallel=Math.abs(angleDiff(p.angle,Math.PI))<.08;
+  if(parallel && y-p.y>300 && y-p.y<1000)length+=p.s-pts[i-1].s;else length=0;
+  longest=Math.max(longest,length);
+ }
+ assert.ok(longest>TRACK.mainStraight.length*.6,`parallel return straight: ${longest}m`);
 });
 test('all circuits support a full AI race with a legal compound stop and no fuel retirement',()=>{
  for(const track of CIRCUITS.map(t=>t.id)) {

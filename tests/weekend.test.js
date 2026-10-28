@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import {Race,TRACK,sample,angleDiff,clamp,targetSpeed,resources,grip,settleCareer,PIT_LANE,} from '../src/core.js';
 import {newCareer} from './career-fixture.js';
 import {
-  Q_STAGES,
+  qualifyingStage,
   tyreAllocation,
   selectableSets,
   createWeekend,
@@ -33,7 +33,7 @@ test("limited weekend stock shares four general-use dry sets and a reserved Q3 S
   assert.equal(selectableSets(inv,"R").length,8);
   assert.ok(!selectableSets(inv, "Q2").some((t) => t.id === "S3"));
   assert.ok(selectableSets(inv, "Q3").some((t) => t.id === "S3"));
-  assert.equal(Q_STAGES[2].duration, 13 * 60);
+  assert.ok(qualifyingStage(create(),"Q3").duration < 10 * 60);
 });
 test("22→16→10 knockouts set final positions by their own stage, with fresh stage times", () => {
   const w = create();

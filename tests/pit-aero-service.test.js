@@ -90,3 +90,12 @@ test('each engine level increases acceleration across all speeds and packages wi
  const base=developmentBench({aero:1,engine:0},'lowDrag'),upgraded=developmentBench({aero:1,engine:5},'lowDrag');
  assert.ok(upgraded.highSpeed<base.highSpeed*.65,`${base.highSpeed} -> ${upgraded.highSpeed}`);
 });
+
+test('returning from either aero package to Balanced restores neutral performance after ten seconds',()=>{
+ for(const spec of ['downforce','lowDrag']){
+  const r=race(),c=r.player,neutral=cleanAirTopSpeed(c);c.aeroSpec=spec;
+  assert.equal(r.selectAero('balanced'),true);box(r);approx(c.pit.timer,12.3);
+  wait(r,12.28);assert.equal(c.aeroSpec,spec);wait(r,.03);
+  assert.equal(c.aeroSpec,'balanced');approx(cleanAirTopSpeed(c),neutral);assert.equal(c.history.at(-1).aeroSeconds,10);
+ }
+});

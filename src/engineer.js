@@ -4,7 +4,7 @@ import {fuelMultiplier,level} from "./development.js";
 import {forecastWater} from "./racecraft.js";
 import {tyreWeatherGrip} from "./weather.js";
 import {selectableSets} from "./tyre-stock.js";
-export function engineerReport(race,{track,pitLane,tyres,progress}){
+export function engineerReport(race,{track,pitLane,tyres,progress,basePitLoss}){
  const p=race.player,lvl=level(p.upgrades,"engineer"),items=[];
  if(!lvl)return {level:0,items};
  const remaining=race.qualifying ? p.qState==="out" ? 3 : p.qState==="timed" ? 2 : 1 : Math.max(0,race.laps-progress(p)/track.length);
@@ -33,7 +33,7 @@ export function engineerReport(race,{track,pitLane,tyres,progress}){
   const lap=p.lastLap>0 ? p.lastLap : Number.isFinite(p.bestLap) ? p.bestLap : track.length/(205*(p.pace || 1));
   const speed=track.length/Math.max(15,lap),service=(2.3+Math.max(2.3,5.5-level(p.upgrades,"crew")*.5))/2;
   const queue=race.cars.find(c=>c!==p&&c.team.name===p.team.name&&c.pit?.stage==="service");
-  pitLoss=Math.max(0,pitLane.length/80+service+(p.penalty || 0)+(queue?.pit.timer || 0)-(track.length-track.pitEntry+track.pitExit)/speed);
+  pitLoss=(basePitLoss ?? Math.max(0,pitLane.length/80+service-(track.length-track.pitEntry+track.pitExit)/speed))+(p.penalty || 0)+(queue?.pit.timer || 0);
   const after=progress(p)-pitLoss*speed;
   const others=race.cars.filter(c=>c!==p&&!c.dnf).sort((a,b)=>progress(b)-progress(a));
   rejoin=1+others.filter(c=>progress(c)>after).length;

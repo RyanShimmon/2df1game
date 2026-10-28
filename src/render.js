@@ -1,3 +1,4 @@
+import {speedValue} from "./units.js";
 import {gridSlot,
   TRACK,
   trackLayer,
@@ -7,6 +8,7 @@ import {gridSlot,
   wrap,
   PIT_LANE,
   PIT_MARKERS,
+  pitBoundaryMark,
   targetSpeed,
   samplePit,
   APEXES,
@@ -43,18 +45,7 @@ export function countdownPulse(countdown) {
   const phase=(4-countdown)%1;
   return Math.sin(Math.PI*phase)**2;
 }
-export function pitBoundaryMark(name) {
-  const marker=PIT_MARKERS[name],s=nearest(marker.x,marker.y).s;
-  const points=[];
-  for(let d=-55;d<=55;d+=5) {
-    const p=sample(s+d),offset=TRACK.width/2+1;
-    points.push({x:p.x-Math.sin(p.angle)*offset,y:p.y+Math.cos(p.angle)*offset});
-  }
-  const p=sample(s),offset=TRACK.width/2+15;
-  let angle=p.angle;
-  if(Math.cos(angle)<0) angle+=Math.PI;
-  return {points,label:{x:p.x-Math.sin(p.angle)*offset,y:p.y+Math.cos(p.angle)*offset,angle}};
-}
+export {pitBoundaryMark} from "./core.js";
 export const NORTHLINE_BUILDING={x:1490,y:2070,width:340,height:140};
 export class Renderer {
   constructor(canvas) {
@@ -213,12 +204,12 @@ export class Renderer {
       ctx.stroke();
       ctx.save();ctx.translate(boundary.label.x,boundary.label.y);ctx.rotate(boundary.label.angle);
       ctx.textAlign="center";ctx.textBaseline="middle";
-      this.text(ctx,name==="entry" ? "PIT ENTRY · 80" : "PIT EXIT",0,0,12,color);
+      this.text(ctx,name==="entry" ? `PIT ENTRY · ${Math.round(speedValue(80,this.speedUnit))}` : "PIT EXIT",0,0,12,color);
       ctx.restore();
     }
     ctx.restore();
     const pitLabel=samplePit(PIT_LANE.boxDistance);
-    this.text(ctx, "PIT LANE  /  80", pitLabel.x+90, pitLabel.y+6, 12, "#d8ddd3");
+    this.text(ctx, `PIT LANE  /  ${Math.round(speedValue(80,this.speedUnit))}`, pitLabel.x+90, pitLabel.y+6, 12, "#d8ddd3");
     const start = sample(0);
     ctx.save();
     ctx.translate(start.x, start.y);
@@ -377,8 +368,7 @@ export class Renderer {
       ctx.restore();
       ctx.save();ctx.globalAlpha=.65*view.alpha;ctx.strokeStyle="#d6fca1";ctx.lineWidth=2;ctx.setLineDash([7,7]);
       ctx.beginPath();ctx.arc(view.x,view.y,view.radius,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
-      ctx.globalAlpha=view.alpha;ctx.fillStyle="#102027e8";ctx.fillRect(view.x-52,view.y-view.radius-24,104,22);
-      ctx.textAlign="center";this.text(ctx,"UNDERPASS",view.x,view.y-view.radius-8,12,"#d6fca1");ctx.restore();
+      ctx.restore();
     }
   }
   buildings(ctx) {

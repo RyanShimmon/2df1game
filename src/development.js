@@ -1,3 +1,5 @@
+import {circuitById,circuitAnchors} from "./tracks.js";
+import {aeroGripMultiplier} from "./performance.js";
 import {careerRound,migrateCalendar} from "./calendar.js";
 import {sponsorMet,SPONSORS} from "./sponsors.js";
 export {sponsorMet} from "./sponsors.js";
@@ -19,15 +21,15 @@ export const UPGRADES={
 const packageSpec=(name,desc,corner,top)=>({name,desc,corner,top,drag:top**-1.3});
 export const AERO_PACKAGES={
  balanced:packageSpec("Balanced","An all-round package for mixed circuits.",1,1),
- downforce:packageSpec("High downforce","Faster cornering in exchange for lower straight-line speed.",1.10,.90),
- lowDrag:packageSpec("Low drag","Higher straight-line speed in exchange for slower cornering.",.90,1.10),
+ downforce:packageSpec("High downforce","More support as corner speed rises; lower straight-line speed. Little effect in slow bends.",1.10,.90),
+ lowDrag:packageSpec("Low drag","Stronger high-speed acceleration and a higher speed ceiling; less support in fast bends.",.90,1.10),
 };
 const percentage=value=>Math.abs(value).toFixed(1).replace(/\.0$/,"");
 export function aeroPackageSummary(spec){
  const pack=AERO_PACKAGES[spec] || AERO_PACKAGES.balanced;
  if(pack===AERO_PACKAGES.balanced)return "Even balance";
  const change=value=>(value>=1?"+":"−")+percentage((value-1)*100)+"%";
- return change(pack.corner)+" cornering speed · "+change(pack.top)+" top speed";
+ return "Up to "+change(pack.corner)+" cornering speed · "+change(pack.top)+" top speed";
 }
 export const emptyUpgrades=()=>Object.fromEntries(Object.keys(UPGRADES).map(k=>[k,0]));
 export const level=(upgrades,key)=>clamp(Number(upgrades?.[key])||0,0,UPGRADES[key]?.max || 0);
@@ -39,8 +41,7 @@ export const sponsorPayout=(upgrades,amount)=>Math.round(amount*sponsorMultiplie
 export const aeroUnlocked=upgrades=>level(upgrades,"aero")>=1;
 export function aeroPackage(upgrades,spec="balanced"){return aeroUnlocked(upgrades) && AERO_PACKAGES[spec] || AERO_PACKAGES.balanced;}
 export function aeroGrip(car){
- const speed=clamp(Math.abs(car.speed || 0)/280,0,1),support=.35+.65*speed*speed;
- return (1+level(car.upgrades,"aero")*.035*support)*aeroPackage(car.upgrades,car.aeroSpec).corner**2;
+ return aeroGripMultiplier(car.speed || 0,level(car.upgrades,"aero"),aeroPackage(car.upgrades,car.aeroSpec).corner);
 }
 export function setAeroPackage(career,spec){
  if(!aeroUnlocked(career.weekend?.setup?.playerUpgrades || career.upgrades) || career.weekend && career.weekend.phase!=="R" || !AERO_PACKAGES[spec])return false;
@@ -102,11 +103,30 @@ export function developTeams(career,seed=null){
  }
  return changed;
 }
+// A team's habitual preference and its weekend assessment are independent of
+// the player and of measured lap times. Layout clues are a mild prior, never
+// an oracle: even at the oval a team can arrive with an unsuitable package.
+export function chooseAIAero(upgrades,{seed=1,teamIndex=0,round=1,trackId="northline"}={}){
+ if(!aeroUnlocked(upgrades))return "balanced";
+ const track=circuitById(trackId),points=circuitAnchors(track);
+ const perimeter=points.reduce((sum,p,i)=>sum+Math.hypot(p[0]-points[(i+1)%points.length][0],p[1]-points[(i+1)%points.length][1]),0);
+ const straight=points[1][0]-points[0][0];
+ const speedHint=track.ovalRadius ? .8 : clamp((straight/perimeter-.16)*2,-.25,.25);
+ const choices=["balanced","downforce","lowDrag"],weights=[1.1,1-speedHint,1+speedHint];
+ const preference=Math.floor(randomFor(seed,teamIndex,0)()*3);weights[preference]*=1.45;
+ const hash=[...track.id].reduce((n,c)=>Math.imul(n,31)+c.charCodeAt(0)|0,0);
+ const random=randomFor(seed^hash,teamIndex,round);
+ let draw=Math.floor(random()*4294967296);
+ draw=Math.imul(draw^(draw>>>16),0x21f0aaad);draw=Math.imul(draw^(draw>>>15),0x735a2d97);
+ let pick=((draw^(draw>>>15))>>>0)/4294967296*weights.reduce((sum,w)=>sum+w,0);
+ for(let i=0;i<choices.length;i++){pick-=weights[i];if(pick<=0)return choices[i];}
+ return choices.at(-1);
+}
 export function developmentSnapshot(career,trackId){
- const fast=["velocity","sunset","dunes","canyon"].includes(trackId),technical=["harbour","riviera","forest","metro"].includes(trackId);
- return career.teams.map(t=>t.teamIndex===career.profile?.teamIndex
-  ? {teamIndex:t.teamIndex,upgrades:normalizeUpgrades(career.upgrades),aeroSpec:aeroUnlocked(career.upgrades) ? career.aeroSpec || "balanced" : "balanced"}
-  : {teamIndex:t.teamIndex,upgrades:normalizeUpgrades(t.upgrades),aeroSpec:level(t.upgrades,"aero") ? fast ? "lowDrag" : technical ? "downforce" : "balanced" : "balanced"});
+ return career.teams.map(t=>{
+  const upgrades=normalizeUpgrades(t.teamIndex===career.profile?.teamIndex ? career.upgrades : t.upgrades);
+  return {teamIndex:t.teamIndex,upgrades,aeroSpec:chooseAIAero(upgrades,{seed:career.developmentSeed ?? 1,teamIndex:t.teamIndex,round:careerRound(career),trackId})};
+ });
 }
 // Pick a plausible target before the race, using previous results rather than
 // knowing the next classification. The same contract conditions bind both sides.

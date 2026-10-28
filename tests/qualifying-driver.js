@@ -1,4 +1,4 @@
-import {TRACK, sample, clamp, angleDiff, targetSpeed} from '../src/core.js';
+import {TRACK, sample, clamp, angleDiff, targetSpeed, samplePit, wrap} from '../src/core.js';
 export function driveQualifyingOuting(q, seconds=60+TRACK.length*3/130, {pace=.8}={}) {
   q.autoPitLimiter=false; // This helper exercises manual outings and garage release.
   const starting=q.player.stops;
@@ -11,12 +11,9 @@ export function driveQualifyingOuting(q, seconds=60+TRACK.length*3/130, {pace=.8
       const remaining=p.pit.boxDistance-p.pit.distance;
       input=!p.pit.serviced && remaining<p.speed*p.speed/480+15 ? {brake:true} : {throttle:true};
     } else {
-      const goal=sample(p.s+clamp(p.speed*.55,35,100));
-      const approaching=q.pitRequested && p.s%TRACK.length>TRACK.pitEntry-400;
-      if(approaching) {
-        const offset=104*clamp((p.s%TRACK.length-TRACK.pitEntry+400)/240,0,1);
-        goal.x-=Math.sin(goal.angle)*offset;goal.y+=Math.cos(goal.angle)*offset;
-      }
+      const toEntry=wrap(TRACK.pitEntry-p.s,TRACK.length);
+      const approaching=q.pitRequested && toEntry<400;
+      const goal=approaching && toEntry<130 ? samplePit(90) : sample(p.s+clamp(p.speed*.55,35,100));
       const desired=Math.atan2(goal.y-p.y,goal.x-p.x), target=approaching ? 75 : targetSpeed(p)*pace;
       input={steer:clamp(angleDiff(desired,p.angle)*3.5,-1,1),throttle:p.speed<target,brake:p.speed>target+3};
     }

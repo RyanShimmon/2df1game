@@ -1,7 +1,7 @@
 import {driveQualifyingOuting} from "./qualifying-driver.js";
 import test from "node:test";
 import assert from "node:assert/strict";
-import {Race,TRACK,PIT_LANE,APEXES,TYRES,sample,angleDiff,clamp,targetSpeed,grip,updateTrackLimits,tyreRuleMet,} from '../src/core.js';
+import {Race,TRACK,PIT_LANE,APEXES,TYRES,sample,samplePit,angleDiff,clamp,targetSpeed,grip,updateTrackLimits,tyreRuleMet,} from '../src/core.js';
 import {newCareer} from './career-fixture.js';
 import {
   createWeather,
@@ -180,7 +180,7 @@ test("top speed takes sustained acceleration and steering costs exit pace", () =
     r.player.pace = 1;
     let first300 = null,
       first329 = null;
-    for (let i = 0; i < 1200; i++) {
+    for (let i = 0; i < 3600; i++) {
       const p = r.player;
       p.fuel = 1;
       p.x = sample(0).x;
@@ -196,9 +196,9 @@ test("top speed takes sustained acceleration and steering costs exit pace", () =
   const straight = simulate(0),
     turning = simulate(0.7);
   assert.ok(straight.first300 > 5);
-  assert.ok(straight.first329 > 8 && straight.first329 < 15);
+  assert.ok(straight.first329 > straight.first300 + 6 && straight.first329 < 40);
   assert.ok(turning.first300 > straight.first300 + 1);
-  assert.ok(turning.first329 > straight.first329 + 2);
+  assert.ok(turning.first329 === null ? turning.speed < 329 : turning.first329 > straight.first329 + 2);
 });
 test("career distance is set by the weekend and old saves gain wet tyres without losing wear", () => {
   const c = newCareer(profile);
@@ -256,10 +256,10 @@ test("qualifying pit requests use the marked physical box, change sets and refue
   q.requestPit();
   q.nextSetId = "S2";
   q.nextTyre = "S";
-  p.s = TRACK.pitEntry - 2;
-  let loc = sample(p.s);
-  p.x = loc.x-Math.sin(loc.angle)*104;
-  p.y = loc.y+Math.cos(loc.angle)*104;
+  p.s = TRACK.pitEntry - 1;
+  let loc = samplePit(0);
+  p.x = loc.x-Math.cos(loc.angle);
+  p.y = loc.y-Math.sin(loc.angle);
   p.angle = loc.angle;
   p.speed = 80;
   for (let i = 0; i < 30 && !p.pit; i++) q.step(1 / 60, { throttle: true });

@@ -48,16 +48,13 @@ for(const weather of ['dry','wetToDry'])test(`${weather}: skipped qualifying con
  const q=new QualifyingRun(b,null,{},profile,{aiOnly:true,driverIds:[0]}),c=q.cars[0];
  for(let i=0;i<60*600 && c.stops<2 && !q.done;i++)q.step(1/60);
  q.endRun();assert.equal(c.stops,2);
- // Completion integrates at 20 Hz; live play at 60 Hz. Preserve physical
- // stock exactly and require sub-0.1% wear agreement. Over multiple runs,
- // crossing a driver decision boundary can change a seeded pace/mistake roll;
- // bound that variation to 2%. Isolated first-lap accuracy is checked to 1%
- // in qualifying-fast-forward.test.js.
+ // Completion batches still integrate the same 60 Hz physics as live play.
+ // Preserve physical stock exactly and require sub-0.1% wear/distance agreement.
  for(const [i,fast] of a.inventories[0].entries()){
   const live=b.inventories[0][i];
   for(const key of ['id','compound','used','returned','reserved'])assert.equal(fast[key],live[key]);
   assert.ok(Math.abs(fast.wear-live.wear)<.001);
-  assert.ok(Math.abs(fast.distance-live.distance)<10);
+  assert.ok(Math.abs(fast.distance-live.distance)<Math.max(1,live.distance)*.001,`route distance ${fast.distance} vs ${live.distance}`);
   if(fast.wheelWear)fast.wheelWear.forEach((wear,wheel)=>assert.ok(Math.abs(wear-live.wheelWear[wheel])<.001));
  }
  assert.equal(a.results.length,b.results.length);

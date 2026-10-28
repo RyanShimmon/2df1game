@@ -4,7 +4,7 @@ import {level} from "./development.js";
 export const WHEELS = ['FL','FR','RL','RR'];
 export const THERMAL = {
   S:{low:82,high:110,heat:1.04}, M:{low:86,high:116,heat:1},
-  H:{low:90,high:124,heat:.92}, I:{low:62,high:90,heat:1}, W:{low:52,high:74,heat:1},
+  H:{low:90,high:124,heat:.92}, I:{low:62,high:90,heat:.98}, W:{low:52,high:74,heat:1},
 };
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const average=a=>a.reduce((s,v)=>s+v,0)/a.length;

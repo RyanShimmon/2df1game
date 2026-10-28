@@ -3,28 +3,33 @@ import assert from 'node:assert/strict';
 import {Race,selectTrack,sample,grip,cleanAirTopSpeed,maximumSpeed} from '../src/core.js';
 import {AERO_PACKAGES,aeroPackageSummary,emptyUpgrades,upgradeDetails} from '../src/development.js';
 import {brakingTarget} from '../src/racecraft.js';
+import {aeroGripMultiplier} from '../src/performance.js';
 const approx=(actual,expected)=>assert.ok(Math.abs(actual-expected)<1e-9,`${actual} ≠ ${expected}`);
 const car=(aeroSpec='balanced',extra={})=>({aeroSpec,upgrades:{...emptyUpgrades(),aero:3,engine:2},tyre:'M',wear:0,wheelWear:[0,0,0,0],speed:220,fuel:10,pace:.94,drive:'balanced',trackWetness:0,s:0,offset:0,tyreTemperatureEnabled:false,...extra});
 test.afterEach(()=>selectTrack('northline'));
 test('aero choices advertise equal and opposite cornering and top-speed changes',()=>{
  approx(AERO_PACKAGES.downforce.corner-1,1-AERO_PACKAGES.lowDrag.corner);
  approx(1-AERO_PACKAGES.downforce.top,AERO_PACKAGES.lowDrag.top-1);
- assert.equal(aeroPackageSummary('downforce'),'+10% cornering speed · −10% top speed');
- assert.equal(aeroPackageSummary('lowDrag'),'−10% cornering speed · +10% top speed');
+ assert.equal(aeroPackageSummary('downforce'),'Up to +10% cornering speed · −10% top speed');
+ assert.equal(aeroPackageSummary('lowDrag'),'Up to −10% cornering speed · +10% top speed');
  assert.equal(aeroPackageSummary('balanced'),'Even balance');
 });
-test('reference corner speeds change by ten percent across compounds, wear, water and speeds',()=>{
+test('package cornering support is symmetric and builds from mechanical grip to the full high-speed effect',()=>{
  for(const speed of [80,180,280,330])for(const [tyre,trackWetness,wear] of [['M',0,0],['S',0,.8],['W',1,.2],['I',.3,.4]]){
   const extra={speed,tyre,trackWetness,wear,wheelWear:Array(4).fill(wear)};
-  const reference=Math.sqrt(225*grip(car('balanced',extra))/.01);
-  approx(Math.sqrt(225*grip(car('downforce',extra))/.01)/reference,1.10);
-  approx(Math.sqrt(225*grip(car('lowDrag',extra))/.01)/reference,.90);
+  const gain=Math.sqrt(grip(car('downforce',extra))/grip(car('balanced',extra)))-1;
+  const loss=1-Math.sqrt(grip(car('lowDrag',extra))/grip(car('balanced',extra)));
+  approx(gain,loss);if(speed<=80)approx(gain,0);else if(speed>=280)approx(gain,.10);else assert.ok(gain>0&&gain<.10);
  }
 });
-test('AI corner planning uses the same mirrored limits as player lateral grip',()=>{
+test('AI braking resolves the target corner speed using the same aero curve as the player',()=>{
  const line={length:3000,step:30,points:Array.from({length:100},()=>({offset:0,angle:0,distanceScale:1,curvature:.01}))};
- const target=spec=>brakingTarget(line,100,grip(car(spec)),200,maximumSpeed(car(spec)));
- approx(target('downforce')/target('balanced'),1.10);approx(target('lowDrag')/target('balanced'),.90);
+ for(const spec of ['balanced','downforce','lowDrag'])for(const incoming of [100,220,330]){
+  const c=car(spec,{speed:incoming}),aero={level:3,corner:AERO_PACKAGES[spec].corner,gripScale:aeroGripMultiplier(incoming,3,AERO_PACKAGES[spec].corner)};
+  const target=brakingTarget(line,100,grip(c),200,maximumSpeed(c),1,0,maximumSpeed(c),aero);
+  const atCorner=car(spec,{speed:target});
+  assert.ok(Math.abs(target-Math.sqrt(225*grip(atCorner)/.01))<.08,'straight-line downforce must fall as the car slows');
+ }
 });
 test('package top-speed ratios remain symmetric with fuel, drive mode and engine development',()=>{
  for(const engine of [0,2,5])for(const fuel of [1,30])for(const drive of ['save','balanced','push']){

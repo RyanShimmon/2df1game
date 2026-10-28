@@ -4,7 +4,7 @@ import {Race,CIRCUITS,TRACK,TYRES,AI_LINE,PIT_MARKERS,sample,settleCareer,buyUpg
 import {newCareer} from './career-fixture.js';
 import {developTeams,upgradePrice,racePrize} from '../src/development.js';
 import {SPONSORS} from '../src/sponsors.js';
-import {createWeekend} from '../src/weekend.js';
+import {createWeekend,qualifyingStage,qualifyingWeatherDuration} from '../src/weekend.js';
 import {createWeather,raceForecast,tyreWetnessRange,tyreWeatherGrip} from '../src/weather.js';
 import {racingPoint} from '../src/racecraft.js';
 test.afterEach(()=>selectTrack('northline'));
@@ -23,9 +23,9 @@ test('qualifying preview uses the same seeded weather as the session, and Sprint
   const c=newCareer({driverName:'Weather',teamIndex:2});c.round=4;
   const w=createWeekend(c,{weatherSeed:seed,aiSeed:42,tyre:'M'});
   assert.equal(w.setup.laps,12);assert.equal(w.setup.weather,'dynamic');
-  const preview=createWeather('dynamic',{seed,duration:46*60});
+  const preview=createWeather('dynamic',{seed,duration:qualifyingWeatherDuration(w)});
   assert.deepEqual(w.weather,preview);const before=structuredClone(w.weather);
-  assert.deepEqual(raceForecast(preview,{duration:18*60}),raceForecast(w.weather,{duration:18*60}));
+  assert.deepEqual(raceForecast(preview,{duration:qualifyingStage(w).duration}),raceForecast(w.weather,{duration:qualifyingStage(w).duration}));
   assert.deepEqual(w.weather,before);scenarios.add(w.weather.scenario);
  }
  assert.ok(scenarios.size>=6);
