@@ -29,7 +29,7 @@ test('dry asphalt wears wets faster than intermediates and both faster than thei
  assert.ok(wear('W',0)>wear('W',1)*3.5);
  assert.ok(wear('I',0)>wear('I',.5)*2.3);
 });
-test('career calendar uses 32-lap Grands Prix and 12-lap Sprints and retains the sprint format',()=>{
- assert.equal(WEEKENDS.length,12);assert.equal(WEEKENDS.filter(w=>w.laps===32).length,11);
- assert.equal(WEEKENDS[0].laps,32);assert.equal(WEEKENDS[3].raceFormat,"sprint");
+test('career calendar uses 24-lap Grands Prix and 12-lap Sprints and retains the sprint format',()=>{
+ assert.equal(WEEKENDS.length,12);assert.equal(WEEKENDS.filter(w=>w.laps===24).length,11);
+ assert.equal(WEEKENDS[0].laps,24);assert.equal(WEEKENDS[3].raceFormat,"sprint");
 });

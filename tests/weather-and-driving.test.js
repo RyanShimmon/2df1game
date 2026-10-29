@@ -205,7 +205,7 @@ test("career distance is set by the weekend and old saves gain wet tyres without
   c.round = 3;
   const w = createWeekend(c, { laps: 8, fuel: 9.5, tyre: "M" });
   assert.equal(w.setup.laps, weekendSchedule(3).laps);
-  assert.equal(w.setup.laps, 32);
+  assert.equal(w.setup.laps, 24);
   w.inventories.forEach((inv) => inv.splice(13));
   w.inventories[21][3].wear = 0.42;
   delete w.weather;
@@ -216,7 +216,7 @@ test("career distance is set by the weekend and old saves gain wet tyres without
   finishRemainingQualifying(w, upgrades, profile);
   const r = make();
   prepareRace(r, w, "M1");
-  assert.equal(r.laps, 32);
+  assert.equal(r.laps, 24);
   assert.equal(r.weather, w.weather);
 });
 test("a soft set survives two complete dry qualifying outings with useful grip", () => {

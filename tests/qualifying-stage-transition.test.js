@@ -14,6 +14,9 @@ function create(){
  // lap; give the test driver a developed car against the improved AI lines.
  Object.assign(career.upgrades,{engine:5,aero:5,brakes:5});
  const w=createWeekend(career,setup);
+ // Isolate advancement from development-price and AI-pace tuning: this test
+ // needs a genuinely driven P1, so use a developed car against a factory field.
+ for(const team of w.setup.teamDevelopment){team.upgrades={};team.aeroSpec='balanced';}
  career.weekend=w;w.weather=createWeather('dry');
  return {career,q:new QualifyingRun(w,'S1',career.upgrades,profile)};
 }

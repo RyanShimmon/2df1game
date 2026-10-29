@@ -54,3 +54,12 @@ export function cornerAccelerationLimit(speed,curvature,grip){
  const force=225*Math.max(.001,grip),used=Math.min(1,speed*speed*Math.abs(curvature)/force);
  return force*Math.sqrt(Math.max(0,1-used*used));
 }
+
+// Net engine thrust used by live physics and the complete-lap line planner.
+export function engineAcceleration(speed,{basePower,power,drag,packageTop=1,top,cleanTop=top,tow=0}){
+ if(speed>cleanTop+.01 && tow<.02)return 0;
+ const resistance=basePower*.82*(Math.max(0,speed)/330)**1.3*drag;
+ const approach=clamp((speed/top-.60)/.40,0,1);
+ const reserve=1-.84*approach*approach*(3-2*approach);
+ return Math.max(0,power-resistance*(1-.16*tow)-4-speed*.012-Math.max(0,speed-330*packageTop)*.55)*reserve;
+}

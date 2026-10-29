@@ -127,7 +127,7 @@ test("player can accelerate, steer, brake and run out of fuel", () => {
 });
 test("career upgrades charge once, reject overspending and persist correctly", () => {
   const c = newCareer();
-  c.cash=10000;
+  c.cash=5500;
   assert.ok(buyUpgrade(c, "engine"));
   assert.equal(c.cash, 1000);
   assert.equal(c.upgrades.engine, 1);
@@ -187,7 +187,7 @@ test("clean sponsor checks collisions and pit penalties, season rolls over", () 
   assert.equal(c.round, 1);
   assert.equal(c.season, 2);
 });
-test("one-stop and two-stop strategies are competitive over a 32-lap career distance", () => {
+test("one-stop and two-stop strategies are competitive over a 32-lap Quick Race distance", () => {
   // Controlled driver, no traffic: isolate resource/pace tradeoffs from overtaking.
   function run(compounds, stints) {
     const r = new Race(

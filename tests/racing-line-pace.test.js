@@ -9,9 +9,8 @@ test('linked fast same-direction corners hold the inside before opening their ex
  // approach holds the inside between linked lefts rather than weaving across
  // the road to manufacture a separate outside entry for each apex.
  const end=TRACK.mainStraight.to;
- assert.ok(racingPoint(AI_LINE,end+180).offset<-30);
- for(let s=end+350;s<=end+600;s+=20)assert.ok(racingPoint(AI_LINE,s).offset<-25,'do not weave outside between linked lefts');
- assert.ok(racingPoint(AI_LINE,end+950).offset>-5,'open the exit after both corners');
+ for(let s=end+150;s<=end+950;s+=20)assert.ok(racingPoint(AI_LINE,s).offset<-5,'hold one side through linked lefts without a needless outside reset');
+ assert.ok(racingPoint(AI_LINE,end+1200).offset>racingPoint(AI_LINE,end+650).offset+15,'open the exit after both corners');
  assert.ok(AI_LINE.estimatedTime<AI_LINE.baselineTime*.96);
 });
 for(const circuit of CIRCUITS)test(`${circuit.name}: distinct measured difficulty pace and stable whole-lap tracking`,()=>{

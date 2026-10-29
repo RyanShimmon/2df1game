@@ -93,7 +93,7 @@ test('AI development is seeded, budgeted, charged at the same prices and purchas
  const a=newCareer(profile),b=newCareer(profile);assert.equal(developTeams(a,42),true);developTeams(b,42);assert.deepEqual(a.teams,b.teams);
  for(const t of a.teams.filter(t=>t.teamIndex!==profile.teamIndex)){
   const row=t.history[0],levels=emptyUpgrades();let spent=0;
-  for(const purchase of row.purchases){assert.equal(purchase.cost,Math.round(UPGRADES[purchase.key].cost*(1+levels[purchase.key]*.85)));levels[purchase.key]++;spent+=purchase.cost;}
+  for(const purchase of row.purchases){assert.equal(purchase.cost,Math.round(UPGRADES[purchase.key].cost*(1+levels[purchase.key]*.55)));levels[purchase.key]++;spent+=purchase.cost;}
   assert.equal(t.budget,7000-spent);assert.ok(t.budget>=0);assert.deepEqual(t.upgrades,levels);
  }
  const before=JSON.stringify(a);assert.equal(developTeams(a,42),false);assert.equal(JSON.stringify(a),before);

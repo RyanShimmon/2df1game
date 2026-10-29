@@ -1,6 +1,6 @@
-import {recordTiming,intervalSeconds} from "./timing.js";
+import {recordTiming,intervalSeconds,createTimingReference,timingCoordinate} from "./timing.js";
 import {planRaceStrategy,strategyWearLimit} from "./strategy.js";
-import {paceMode,fuelPerLap,applyThrottle,tyreWearFactor,stintLaps,cornerAccelerationLimit} from "./performance.js";
+import {engineAcceleration,paceMode,fuelPerLap,applyThrottle,tyreWearFactor,stintLaps,cornerAccelerationLimit} from "./performance.js";
 import {GRAND_PRIX_POINTS,racePoints,raceFormat,quickRaceFormat} from "./race-rules.js";
 import {SEASON_LENGTH,careerSchedule,shuffledSeasonOrder,ensureSeasonOrder} from "./calendar.js";
 import {SPONSORS,sponsorMet} from "./sponsors.js";
@@ -145,7 +145,7 @@ export function settleCareer(career, result) {
   const format=result.raceFormat ?? career.weekend?.setup?.raceFormat ?? careerSchedule(career).raceFormat;
   const points = legal ? racePoints(result.position,format) : 0;
   const difficulty=normalizeDifficulty(career.weekend?.setup?.difficulty ?? result.difficulty);
-  const basePrize=racePrize({...result,legal}).base;
+  const basePrize=racePrize({...result,legal,raceFormat:format}).base;
   const difficultyBonus=legal ? Math.round(basePrize*DIFFICULTIES[difficulty].prizeBonus) : 0;
   const prize=basePrize+difficultyBonus;
   const sponsor = SPONSORS.find((s) => s.id === career.sponsor);
@@ -154,7 +154,7 @@ export function settleCareer(career, result) {
   const sponsorBaseBonus=met ? sponsor.amount : 0;
   const bonus=met ? sponsorPayout(career.upgrades,sponsor.amount) : 0;
   const commercialBonus=bonus-sponsorBaseBonus;
-  fundTeams(career,result,SPONSORS,DIFFICULTIES[difficulty].prizeBonus);
+  fundTeams(career,{...result,raceFormat:format},SPONSORS,DIFFICULTIES[difficulty].prizeBonus);
   career.cash += prize + bonus;
   career.points += points;
   career.seasonPoints += points;
@@ -497,10 +497,9 @@ export function liveInterval(ahead,car) {
   if(car.dnf)return "DNF";
   const distance=Math.max(0,raceProgress(ahead)-raceProgress(car));
   const laps=Math.floor(distance/TRACK.length),seconds=intervalSeconds(ahead,car,raceProgress(car));
-  const base=car===ahead ? "LEAD" : laps ? `+${laps} LAP${laps>1 ? "S" : ""}` :
-    seconds===null ? "—" : "+"+seconds.toFixed(1);
-  // Unserved penalties affect final classification, never the physical gap.
-  return base+(car.penalty ? ` · +${car.penalty}s PEN` : "")+(car.pit ? " · PIT" : "");
+  const base=car===ahead ? "LEAD" : laps && !car.timing?.reference ? `+${laps} LAP${laps>1 ? "S" : ""}` :
+    seconds===null ? "—" : (seconds<-.05 ? "−" : "+")+Math.abs(seconds).toFixed(1);
+  return base+(car.pit ? " · PIT" : "");
 }
 export function cleanAirTopSpeed(car){
   const mode=paceMode(car).top;
@@ -513,22 +512,15 @@ export function estimatedPitLoss(car){
  return Math.max(8,PIT_LANE.length/PIT_SPEED-(TRACK.length-TRACK.pitEntry+TRACK.pitExit)/Math.max(160,straightSpeed)+service);
 }
 export function maximumSpeed(car){return cleanAirTopSpeed(car)+18*(car.slipstream?.carry || 0);}
-export function acceleration(car) {
+function engineModel(car){
   const basePower=90*(car.pace || 1)*(1-car.fuel*.002);
   const power=basePower*(1+level(car.upgrades,"engine")*.07)*paceMode(car).power;
   const pack=aeroPackage(car.upgrades,car.aeroSpec);
-  // Engine development adds thrust at every speed without increasing aerodynamic drag.
-  const drag=basePower*.82*(Math.max(0,car.speed)/MAX_SPEED)**1.3*pack.drag;
-  const tow=car.slipstream?.strength || 0;
-  // The aero package scales the clean-air ceiling; a tow reduces resistance.
-  // Once clear, the additional kinetic energy decays instead of a speed snap.
-  if(car.speed>cleanAirTopSpeed(car)+.01 && tow<.02)return 0;
-  // Keep corner exits responsive; use progressively less net thrust near the
-  // package ceiling. Engine power, Push and a tow still improve acceleration.
-  const approach=clamp((car.speed/maximumSpeed(car)-.60)/.40,0,1);
-  const reserve=1-.84*approach*approach*(3-2*approach);
-  return Math.max(0,power-drag*(1-.16*tow)-4-car.speed*.012-Math.max(0,car.speed-MAX_SPEED*pack.top)*.55)*reserve;
+  return {basePower,power,drag:pack.drag,packageTop:pack.top,
+    top:maximumSpeed(car),cleanTop:cleanAirTopSpeed(car),tow:car.slipstream?.strength || 0};
 }
+export function acceleration(car) {return engineAcceleration(car.speed,engineModel(car));}
+
 function overspeedDrag(car){return Math.max(0,car.speed-cleanAirTopSpeed(car))*.6*(1-(car.slipstream?.strength || 0));}
 // Passive loss from a held slide, shared by player and AI. Braking force is
 // still limited independently by the current front-tyre grip.
@@ -661,6 +653,7 @@ export function passingPerformance(car,difficulty="normal",contact=null) {
  const throttleSkill=car.player ? 1 : Math.min(1,skill.throttle+water*.10*style.wetSkill);
  return {grip:(contact?.all ?? grip(car))/bank,rearGrip:(contact?.rear ?? grip(car,"rear"))/bank,braking:(contact ? Math.min(300,240+level(car.upgrades,"brakes")*12)*contact.front : brakingDeceleration(car))*brakingSkill/bank,
   top:maximumSpeed(car),commitment,aero:{level:level(car.upgrades,"aero"),corner:aeroPackage(car.upgrades,car.aeroSpec).corner,gripScale:aeroGrip(car)},
+  engine:engineModel(car),throttle:clamp(accelerationGrip(car,contact?.rear),.25,1)*throttleSkill,
   acceleration:acceleration({...car,speed:clamp(car.speed,180,280)})*clamp(accelerationGrip(car,contact?.rear),.25,1)*throttleSkill};
 }
 export function targetSpeed(car, s = car.s) {
@@ -800,6 +793,10 @@ export class Race {
     this.cars = Array.from({ length: 22 }, (_, i) =>
       createCar(i, setup, upgrades, mode),
     );
+    this.timingReference=createTimingReference(TRACK.length,s=>{
+      const p=racingPoint(AI_LINE,s),i=Math.floor(wrap(s,TRACK.length)/AI_LINE.step);
+      return {...p,speed:AI_LINE.points[i].speed};
+    });
     this.setup.aiSeed=this.raceSeed;
     this.aiRandom=()=>{
       this.aiSeed=(Math.imul(this.aiSeed,1664525)+1013904223)>>>0;
@@ -882,6 +879,15 @@ export class Race {
       if (b.finished) return 1;
       if (a.dnf !== b.dnf) return a.dnf ? 1 : -1;
       return raceProgress(b)-raceProgress(a) || a.gridPosition-b.gridPosition;
+    });
+  }
+  timingOrder() {
+    const scores=new Map(this.cars.map(c=>[c,timingCoordinate(c,raceProgress(c),this.time)]));
+    return this.order().sort((a,b)=>{
+      if(a.dnf!==b.dnf)return a.dnf ? 1 : -1;
+      if(a.finished&&b.finished)return a.finishTime-b.finishTime;
+      const sa=scores.get(a),sb=scores.get(b);
+      return sa===null || sb===null ? 0 : sb-sa || a.gridPosition-b.gridPosition;
     });
   }
   classification() {
@@ -1053,6 +1059,7 @@ export class Race {
     if(car.player && this.autoPitLimiter) this.pitLimiter=true;
     if (p.stage === "service") {
       p.timer = Math.max(0,p.timer-dt);
+      p.penaltyRemaining=Math.max(0,(p.penaltyRemaining || 0)-dt);
       p.aeroRemaining=Math.min(p.aeroRemaining || 0,p.timer);
       car.speed = 0;
       if (p.timer <= 0) {
@@ -1158,7 +1165,8 @@ export class Race {
         p.serviceDuration=this.qualifying && p.nextSet===p.previousSet ? 2.3 : tyreServiceTime(car.upgrades.crew,this.pitRandom || (car.player ? Math.random : car.aiRandom));
         p.aeroRemaining=p.nextAeroSpec && p.nextAeroSpec!==car.aeroSpec ? 10 : 0;
         p.aeroServiceSeconds=p.aeroRemaining;
-        p.timer=p.serviceDuration+car.penalty+p.aeroRemaining;
+        p.penaltyRemaining=car.penalty;
+        p.timer=p.serviceDuration+p.penaltyRemaining+p.aeroRemaining;
         car.penalty = 0;
         if (car.player)
           this.say(
@@ -1216,7 +1224,7 @@ export class Race {
       return;
     }
     capturePoses(this.cars);
-    for(const car of this.cars)if(!car.finished&&!car.dnf)recordTiming(car,this.time,raceProgress(car),TRACK.length);
+    for(const car of this.cars)if(!car.finished&&!car.dnf)recordTiming(car,this.time,raceProgress(car),TRACK.length,this.timingReference);
     this.time += dt;
     advanceWeather(this.weather, dt);
     this.traffic = this.cars.map((c) => ({
@@ -1271,7 +1279,7 @@ export class Race {
       }
     }
     this.collisions();
-    for(const car of this.cars)if(!car.dnf)recordTiming(car,car.trackFinishTime ?? this.time,raceProgress(car),TRACK.length);
+    for(const car of this.cars)if(!car.dnf)recordTiming(car,car.trackFinishTime ?? this.time,raceProgress(car),TRACK.length,this.timingReference);
     this.updateEngineer();
     this.skids = this.skids.filter((s) => this.time - s.t < 16);
     if (

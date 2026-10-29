@@ -1,10 +1,46 @@
-// Time gaps are measured when cars reach the same distance around the lap.
-// World-space separation and the follower's current speed never enter the sum.
+// Passage traces remain available for measured splits. Live gaps use one
+// shared circuit clock: progress through each road section converted to racing
+// seconds. It stays continuous when a car stops in the pit or passes a flyover.
+export function createTimingReference(length,sample){
+ const count=Math.ceil(length/80),step=length/count;
+ const rates=Array.from({length:count},(_,i)=>{
+  const p=sample((i+.5)*step);return Math.max(.4,p.distanceScale || 1)/Math.max(30,p.speed);
+ });
+ return {length,step,rates,baseline:[...rates],revision:0,cachedRevision:-1,prefix:[]};
+}
+export function circuitTime(reference,progress){
+ if(reference.cachedRevision!==reference.revision){
+  const prefix=[0];for(const rate of reference.rates)prefix.push(prefix.at(-1)+reference.step*rate);
+  reference.prefix=prefix;reference.cachedRevision=reference.revision;
+ }
+ const lap=Math.floor(progress/reference.length),s=progress-lap*reference.length;
+ const index=Math.min(reference.rates.length-1,Math.floor(s/reference.step));
+ return lap*reference.prefix.at(-1)+reference.prefix[index]+(s-index*reference.step)*reference.rates[index];
+}
+export const outstandingPenalty=car=>(car.penalty || 0)+(car.pit?.penaltyRemaining || 0);
+export function timingCoordinate(car,progress,now=car.timing?.time || 0){
+ const reference=car.timing?.reference;
+ if(!reference)return null;
+ const finish=car.finished ? Math.max(0,now-(car.trackFinishTime ?? now)) : 0;
+ const penalty=car.finished && Number.isFinite(car.finishTime) && Number.isFinite(car.trackFinishTime) ? car.finishTime-car.trackFinishTime : outstandingPenalty(car);
+ return circuitTime(reference,progress)+finish-penalty;
+}
+function learnRacingPace(reference,car,from,to,dt){
+ // Pit speed, standing starts, spins and shortcuts must not redefine racing
+ // pace. Genuine slower racing in rain does update the local clock gradually.
+ if(!reference || car.pit || car.garage || car.finished || car.speed<70 || car.sliding>.5 || from<0 || to<=from || to-from>Math.max(40,car.speed*dt*2))return;
+ const rate=dt/(to-from),s=((from+to)/2%reference.length+reference.length)%reference.length;
+ const index=Math.min(reference.rates.length-1,Math.floor(s/reference.step));
+ const target=Math.max(reference.baseline[index]*.5,Math.min(reference.baseline[index]*4,rate));
+ reference.rates[index]+=(target-reference.rates[index])*(1-Math.exp(-dt/4));reference.revision++;
+}
 const SPACING=20;
-export function recordTiming(car,time,progress,lapLength){
+export function recordTiming(car,time,progress,lapLength,reference=null){
  let trace=car.timing;
- if(!trace){car.timing={time,progress,points:[{s:progress,t:time}],frontier:{s:progress,t:time},next:(Math.floor(progress/SPACING)+1)*SPACING};return;}
+ if(!trace){car.timing={reference,time,progress,points:[{s:progress,t:time}],frontier:{s:progress,t:time},next:(Math.floor(progress/SPACING)+1)*SPACING};return;}
+ if(reference)trace.reference=reference;
  const from=trace.progress,at=trace.time,delta=progress-from;
+ if(time>at)learnRacingPace(trace.reference,car,from,progress,time-at);
  if(delta>0 && time>at){
   // Ignore coordinate resets/recovery jumps instead of fabricating split times.
   if(delta<=Math.max(40,Math.abs(car.speed || 0)*(time-at)*3)){
@@ -36,7 +72,11 @@ export function passageTime(car,progress){
 }
 export function intervalSeconds(ahead,car,progress){
  if(ahead===car)return 0;
- if(ahead.finished&&car.finished)return Math.max(0,car.trackFinishTime-ahead.trackFinishTime);
+ if(ahead.finished&&car.finished)return (car.finishTime ?? car.trackFinishTime+outstandingPenalty(car))-(ahead.finishTime ?? ahead.trackFinishTime+outstandingPenalty(ahead));
+ if(ahead.timing?.reference && ahead.timing.reference===car.timing?.reference){
+  const now=Math.max(ahead.timing.time,car.timing.time);
+  return timingCoordinate(ahead,ahead.timing.progress,now)-timingCoordinate(car,progress,now);
+ }
  const passed=passageTime(ahead,progress);
- return passed===null || !car.timing ? null : Math.max(0,car.timing.time-passed);
+ return passed===null || !car.timing ? null : car.timing.time-passed+outstandingPenalty(car)-outstandingPenalty(ahead);
 }

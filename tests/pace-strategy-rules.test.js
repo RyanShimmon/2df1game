@@ -73,9 +73,9 @@ test('sprints finish legally without changing compound, award 8–1 and use a to
 });
 test('career weekends use their fixed GP or Sprint distance and saved qualifying migrates without losing its grid or tyres',()=>{
  const c=newCareer({driverName:'Test',teamIndex:2});
- for(let round=1;round<=12;round++){c.round=round;const w=createWeekend(c,{laps:8,fuel:9,tyre:'M',aiSeed:42});assert.equal(w.setup.laps,round===4?12:32);assert.ok(validWeekend(w,c));if(round===4)assert.equal(w.setup.raceFormat,'sprint');}
- const w=createWeekend(c,{tyre:'M',aiSeed:42});w.setup.laps=24;w.setup.fuel=28;delete w.distanceVersion;w.elapsed=80;w.inventories[21][0].wear=.4;
- const inventories=JSON.stringify(w.inventories);migrateWeekend(w);assert.equal(w.setup.laps,32);assert.equal(w.elapsed,80);assert.equal(JSON.stringify(w.inventories),inventories);
+ for(let round=1;round<=12;round++){c.round=round;const w=createWeekend(c,{laps:8,fuel:9,tyre:'M',aiSeed:42});assert.equal(w.setup.laps,round===4?12:24);assert.ok(validWeekend(w,c));if(round===4)assert.equal(w.setup.raceFormat,'sprint');}
+ const w=createWeekend(c,{tyre:'M',aiSeed:42});w.setup.laps=32;w.setup.fuel=37;w.distanceVersion=2;w.elapsed=80;w.inventories[21][0].wear=.4;
+ const inventories=JSON.stringify(w.inventories);migrateWeekend(w);assert.equal(w.setup.laps,24);assert.equal(w.setup.fuel,27.8);assert.equal(w.elapsed,80);assert.equal(JSON.stringify(w.inventories),inventories);
  const once=JSON.stringify(w);migrateWeekend(w);assert.equal(JSON.stringify(w),once);assert.deepEqual(QUICK_DISTANCES,[12,16,24,32,40]);
 });
 test('AI does not replace a worn set with a worse one or stop when its current tyres can finish',()=>{

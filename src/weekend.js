@@ -19,13 +19,13 @@ export {WEEKENDS,weekendSchedule,careerSchedule} from "./calendar.js";
 export function migrateWeekend(w) {
   if (!w) return;
   if(w.setup && !w.setup.track) w.setup.track="northline";
-  if(w.setup && w.distanceVersion!==2){
-    const ratio=Math.max(.85,Math.min(1.35,(w.setup.fuel || 0)/(w.setup.laps || 32)));
+  if(w.setup && w.distanceVersion!==3){
+    const ratio=Math.max(.85,Math.min(1.35,(w.setup.fuel || 0)/(w.setup.laps || 24)));
     const laps=weekendSchedule(w.round,w.seasonOrder).laps;
     w.setup.laps=laps;w.setup.fuel=+(laps*ratio).toFixed(1);
     w.setup.weatherDuration=raceWeatherDuration(w.setup.laps,makeTrack(circuitById(w.setup.track)).length);
     if(w.phase==="R")w.raceWeatherReady=false;
-    w.distanceVersion=2;
+    w.distanceVersion=3;
   }
   if(w.setup)w.setup.raceFormat=weekendSchedule(w.round,w.seasonOrder).raceFormat || "grandPrix";
   if(w.setup?.playerUpgrades && !aeroUnlocked(w.setup.playerUpgrades))w.setup.aeroSpec="balanced";
@@ -146,7 +146,7 @@ export function createWeekend(career, setup) {
   return {
     version: 1,
     qualifyingDurations:qualifyingDurations(schedule.track),
-    distanceVersion:2,
+    distanceVersion:3,
     tyreModelVersion: 2,
     allocationVersion: 3,
     softSetNumbering:1,

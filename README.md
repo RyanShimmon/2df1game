@@ -1,6 +1,6 @@
 # V10 — Grand Prix
 
-Version **1.8.0**.
+Version **1.9.0**.
 
 A local browser game with top-down V10 racing, 22 cars, five tyre types, dynamic weather, qualifying and a saved career. Requires Node.js 18 or newer; no dependency installation is needed.
 
@@ -63,18 +63,16 @@ AI commits to one target and side for an overtake, follows slower traffic when b
 
 ## Career and weekends
 
-Name your driver and choose one of 11 teams. Every team starts with £7,000 and a slower development car. Sign one sponsor per race, earn position money and upgrade your car. The top ten score 25/18/15/12/10/8/6/4/2/1. A 12-round season visits every circuit once and pays an additional £150 per season point.
+Name your driver and choose one of 11 teams. Every team starts with £7,000 and a slower development car. Sign one sponsor per race, earn position money and upgrade your car. The top ten score 25/18/15/12/10/8/6/4/2/1. A 12-round season visits every circuit once in a shuffled order. There is no additional season cash bonus.
 
 Career race distance is fixed by the weekend, not selected by the player:
 
-| Weekend | Circuit | Laps | Weather |
-| --- | --- | --- | --- |
-| Northline Opener | Northline Motor Park | 24 | Showers |
-| Velocity Trophy | Velocity International | 24 | Wet → dry |
-| Sunset Grand Prix | Sunset Speedway | 20 | Dry |
-| Harbour Sprint | Harbour Street Circuit | 14 | Late rain |
-| Crossover Challenge | Crossover Park | 24 | Showers |
-| Alpine Finale | Alpine Ridge | 24 | Late rain |
+| Format | Career laps | Tyre rule |
+| --- | --- | --- |
+| Grand Prix | 24 | Two dry compounds, unless Intermediates or Wets are used |
+| Harbour Sprint | 12 | No compulsory tyre change |
+
+Quick Race offers 12, 16, 24, 32 and 40 laps.
 
 The quick-race circuit selector offers all 12 circuits. Existing active weekends retain their saved track (older weekends remain at Northline). New career weekends use the varied calendar. Reset career clears identity, cash, upgrades, sponsor, points, history and the active weekend after confirmation.
 
@@ -90,19 +88,19 @@ Simulated AI qualifying outings use the same driving, pit, weather, temperature 
 
 ## Car and team development
 
-The garage has nine development paths. Each purchase opens a review with measured before/after estimates before charging the quoted price. Levels persist across seasons; prices rise by 60% of the base cost per existing level. Purchased development levels lock for the weekend at the start of Q1; aero packages can still be changed through pit service. Existing four-path careers migrate without losing purchases, money, identity, results or physical tyre condition.
+The garage has nine development paths. Each purchase opens a review with measured before/after estimates before charging the quoted price. Levels persist across seasons; prices rise by 55% of the base cost per existing level. Purchased development levels lock for the weekend at the start of Q1; aero packages can still be changed through pit service. Existing four-path careers migrate without losing purchases, money, identity, results or physical tyre condition.
 
 | Path | Base cost | Maximum | Effect |
 | --- | ---: | ---: | --- |
-| V10 development | £6,000 | 5 | 7% more engine power per level across the full speed range |
-| Fuel efficiency | £5,000 | 5 | 2% less fuel per level; qualifying receives a correspondingly lighter three-lap load |
-| Aerodynamics | £5,000 | 5 | More speed-dependent downforce with all packages |
-| Suspension & differential | £5,000 | 5 | Better traction and active countersteer recovery |
-| Brakes & balance | £4,500 | 5 | Better use of available tyre grip and steadier combined braking/cornering |
-| Tyre engineering | £4,500 | 5 | 7% less wear per level, gentler grip cliff and improved excess-heat dissipation |
-| Pit crew training | £3,500 | 4 | Lower maximum service time and warmer prepared replacement tyres |
-| Race engineer | £3,500 | 3 | Fuel/tyre estimates, then weather windows, then estimated pit rejoin traffic |
-| Commercial development | £4,500 | 3 | 10% more income per level on successfully completed sponsor contracts |
+| V10 development | £4,500 | 5 | 7% more engine power per level across the full speed range |
+| Fuel efficiency | £3,000 | 5 | 2% less fuel per level; qualifying receives a correspondingly lighter three-lap load |
+| Aerodynamics | £4,300 | 5 | More speed-dependent downforce with all packages |
+| Suspension & differential | £3,600 | 5 | Better traction and active countersteer recovery |
+| Brakes & balance | £3,200 | 5 | Better use of available tyre grip and steadier combined braking/cornering |
+| Tyre engineering | £4,300 | 5 | 7% less wear per level, gentler grip cliff and improved excess-heat dissipation |
+| Pit crew training | £2,200 | 4 | Lower maximum service time and warmer prepared replacement tyres |
+| Race engineer | £1,600 | 3 | Fuel/tyre estimates, then weather windows, then estimated pit rejoin traffic |
+| Commercial development | £1,800 | 3 | 10% more income per level on successfully completed sponsor contracts |
 
 Aerodynamics level 1 unlocks Balanced, High downforce and Low drag. Package cornering support is speed-dependent: neutral below 80 km/h, rising smoothly to the full mirrored ±10% reference cornering-speed effect at 280 km/h. High downforce reduces the top-speed ceiling by 10%; Low drag raises it by 10%. Power tapers progressively near the selected ceiling, preserving corner-exit response and engine/Push/slipstream advantages throughout acceleration. AI braking, passing projections and development previews use the same speed-dependent grip curve as the player.
 
@@ -110,7 +108,7 @@ Performance previews use a deterministic solo test car on the selected circuit, 
 
 Engineer advice appears through the race radio. The pause menu includes the full briefing, using your current pace, tyres, available stock, forecast, time penalties, teammate box occupancy and traffic. Weather crossover and rejoin positions are estimates. Commercial bonuses appear in sponsor offers, results and saved income, and never bypass contract conditions.
 
-AI teams use saved, seeded development preferences and their own budgets. Each starts with £7,000 per car and pays the same escalating upgrade costs as the player. Subsequent funding uses the average classification and earned contract income of the team's drivers at race end. They can buy up to two affordable parts before the next weekend and choose their aero package for the circuit. The garage's Team development view shows installed levels, budget, package and latest purchases. Hover or focus an installed upgrade to see its effects at that level; tap to open or dismiss the same popup on mobile. Escape dismisses the popup first, then closes the garage panel. Both cars share their team's parts; the player's teammate shares the player's development. Weekend snapshots keep purchased upgrade levels consistent across Q1, Q2, Q3 and the race; completed player aero changes update that driver’s package. Team development never changes the equal physical tyre allocation or wear rules.
+AI teams use saved, seeded development preferences and their own budgets. Each starts with £7,000 per car and pays the same escalating upgrade costs as the player. Subsequent funding uses the average classification and earned contract income of the team's drivers at race end. They can buy affordable parts before the next weekend and choose their aero package for the circuit. The garage's Team development view shows installed levels, budget, package and latest purchases. Hover or focus an installed upgrade to see its effects at that level; tap to open or dismiss the same popup on mobile. Escape dismisses the popup first, then closes the garage panel. Both cars share their team's parts; the player's teammate shares the player's development. Weekend snapshots keep purchased upgrade levels consistent across Q1, Q2, Q3 and the race; completed player aero changes update that driver’s package. Team development never changes the equal physical tyre allocation or wear rules.
 
 ## Verify
 
@@ -131,7 +129,7 @@ Six stable offers rotate each weekend from a pool of 12 sponsors: finishing, cle
 
 Off-track rolling resistance falls at low speed, allowing a fuelled car to accelerate and steer back onto the circuit even on wet slicks. Long excursions reacquire lap progress on rejoining. Player physics reads local surface water every step; grip limits lateral force without cancelling the skid threshold. Slicks slide heavily during fast wet cornering but retain low-speed control. Car poses interpolate between 60 Hz simulation steps, with a smoothed camera lookahead to prevent high-speed visual judder.
 
-Pit entry and exit markings now share the exact assisted-route endpoints, and the merge guide remains visible over the main road. Automatic limiting starts at the entry line and releases at the exit line. Completed laps are tracked independently of wrapped route coordinates: being passed by a lapped car does not change your race position. Live order remains on-track. Intervals show elapsed time since the car immediately ahead passed the same circuit position, using recorded passage times rather than current speed or world coordinates. Unserved penalties appear separately; final classification applies adjusted finishing times. Pit assistance only engages after a forward crossing of the marked entrance: side entrances, reverse crossings and dirt shortcuts cannot trigger service. AI moves to the pit side before the entrance, respects cars alongside, and yields at a blocked exit merge. Wet asphalt is drawn as one continuous road stroke, without sector rectangles or gaps.
+Pit entry and exit markings now share the exact assisted-route endpoints, and the merge guide remains visible over the main road. Automatic limiting starts at the entry line and releases at the exit line. Completed laps are tracked independently of wrapped route coordinates: being passed by a lapped car does not change your race position. The timing tower shows provisional positions and gaps including unserved penalties. Live gaps use distance along the circuit converted through a shared local racing-pace clock, which learns from moving cars outside the pits. These are continuously updated estimates, not stale passage timestamps: a stationary pit car can be caught through zero without an order-change jump. A penalty being served remains pending until its time has elapsed, avoiding double counting. Finished cars use their actual penalty-adjusted finish times. Physical track order is retained separately for racing logic. Pit assistance only engages after a forward crossing of the marked entrance: side entrances, reverse crossings and dirt shortcuts cannot trigger service. AI moves to the pit side before the entrance, respects cars alongside, and yields at a blocked exit merge. Wet asphalt is drawn as one continuous road stroke, without sector rectangles or gaps.
 
 Wet drifts now use a separate travel direction and body heading. Grip limits how quickly the velocity vector turns; sideways slip retains momentum and can be recovered with countersteering. Soft wear is increased by approximately 11% (nominal life 9 laps). Automatic pit mode now controls lane speed, brakes to the exact team box, holds for service and drives out without any pedal input. Qualifying auto stops refuel and automatically depart on an out lap, retaining the current set when selected. Disable Automatic pit stops in Settings to return to manual pedals, limiter and qualifying garage release.
 The full pit-road surface is drawn through both merge tails, with no main-road clipping hiding its start or end. Pit activation and painted boundaries coincide with these visible endpoints. Telemetry (speed, tyre condition, fuel and drive mode) is centred at the top, with track/weather information directly beneath; position, lap/session and time sit above live timing on the left. The driving-line renderer, shortcut and help have been removed. All compounds use the same lateral-force drift physics; worn tyres and wet-weather tyres on dry asphalt visibly slide when grip is insufficient.
@@ -225,7 +223,7 @@ Easy, Normal, Hard and Expert use separate corner commitment, braking margins an
 
 ### Steering, wet pace and compound checks
 
-The racing arc is interpolated in world coordinates with a continuous tangent. Its actual curvature is used for braking; interpolating offsets against a curved centreline previously introduced steering reversals at sample boundaries. Body heading follows travel plus held slip, rather than displaying countersteering corrections as a left/right flick. Wet drivers use more of the shared grip budget and can hold a small slide, with the normal heat, wear and momentum costs. Difficulty and individual wet skill still affect execution.
+The whole-lap planner scores a periodic cubic B-spline with continuous position, tangent and curvature. Its closed-lap speed envelope propagates braking backwards and grip-limited engine acceleration forwards, using the live thrust curve. The driver follows that same curve, rather than a sharper interpolation of the scored points. Its actual curvature is used for braking; interpolating offsets against a curved centreline previously introduced steering reversals at sample boundaries. Body heading follows travel plus held slip, rather than displaying countersteering corrections as a left/right flick. Wet drivers use more of the shared grip budget and can hold a small slide, with the normal heat, wear and momentum costs. Difficulty and individual wet skill still affect execution.
 
 Run `node scripts/benchmark-tyres.mjs` (or append a circuit ID) for reproducible fresh-lap and full-stint comparisons. The output records its controls: equal equipment, balanced Normal AI, fixed fuel, ideal temperature, dry surface and no traffic. Fresh dry grip is Soft 1.06, Medium 1.00 and Hard 0.98. Nominal wear life is 12/17/23 laps respectively; competitive stint estimates end earlier (about 9.8/14.6/20.7 balanced laps before upgrades). These are not guarantees of human lap times or an optimal race strategy; qualifying wear, traffic, heat, fuel and actual pit delays matter.
 
@@ -249,7 +247,7 @@ Grand Prix preparation includes a Weather forecast popup covering the expected r
 
 ### Pace and race strategy
 
-Career Grands Prix are fixed at 32 laps; Harbour Sprint runs 12 laps with dynamically varied weather. Quick Race offers 12 (Sprint), 16, 24, 32 and 40 laps. Sprints award 8–1 points to the first eight and do not require a compound change. Grand Prix points and dry-compound rules remain in force elsewhere. Saved weekends migrate to the fixed distance while preserving qualifying classification and physical tyre wear.
+Career Grands Prix are fixed at 24 laps; Harbour Sprint runs 12 laps with dynamically varied weather. Quick Race offers 12 (Sprint), 16, 24, 32 and 40 laps. Sprints award 8–1 points to the first eight and do not require a compound change. Grand Prix points and dry-compound rules remain in force elsewhere. Saved weekends migrate to the fixed distance while preserving qualifying classification and physical tyre wear.
 
 `performance.js` defines the shared power maps, fuel estimates and compound-specific wear curves. Save/Balanced/Push have power multipliers 0.88/1/1.08, speed ceilings 0.94/1/1.02, fuel multipliers 0.90/1/1.12 and base wear multipliers 0.82/1/1.20. Pace ceilings apply after the engine ceiling, before aero and drafting; upgrades cannot erase their differences. Smooth throttle ramps differ by mode, lifting is immediate, and heat comes from delivered power and driving loads. Temperature-off still preserves power, fuel and wear effects.
 
@@ -262,7 +260,7 @@ Run `node scripts/benchmark-tyres.mjs [circuit] [save|balanced|push]` for contro
 
 Every track has a long, straight pit/grid corridor. Grid rows are 60 world units apart, staggered by 24, with 56 between columns; the rear row clears the approach corner. The start line, car poses and painted slots share one layout. Inner circuit topology and flyovers remain intact, with approach bends adjusted and checked for road/kerb clearance.
 
-Position prizes range from £4,650 (P22) to £7,800 (P1), before the existing difficulty bonus. Sponsors pay £600–£3,000 before commercial upgrades. The player-only season cash bonus has been removed. Teams use the same per-car prize and sponsor rules, averaged across their drivers, and spend only earned cash at shared prices. Upgrade base costs are £4,000–£9,000; each installed level adds 85% of base price to the next. Team development shows last race income, sponsor income, spending and remaining cash. Existing saves are not erased; restart a career for progression from equal opening budgets.
+Position prizes range from £4,650 (P22) to £7,800 (P1), before the existing difficulty bonus. Sponsors pay £600–£3,000 before commercial upgrades. The player-only season cash bonus has been removed. Teams use the same per-car prize and sponsor rules, averaged across their drivers, and spend only earned cash at shared prices. Upgrade base costs are £1,600–£4,500; each installed level adds 55% of base price to the next. The full 40-level ladder costs £272,320. With £7,000 opening cash and no sponsorship, all wins take about 2.9 seasons, all podiums about 3.0, and P10 finishes about 3.5. Sprint prizes are 75% of the equivalent Grand Prix prize, for both player and AI. Team development shows last race income, sponsor income, spending and remaining cash. Existing saves are not erased; restart a career for progression from equal opening budgets.
 
 The pre-qualifying weather popup uses the same seed and saved timeline as the session. Tyre wetness bands are calculated from fresh grip with a 5% overlap at weather crossovers (Soft 0–5%, Medium 0–12%, Hard 0–20%, Intermediate 14–65%, Wet 60–100%). They are guidance, not a hard traction switch. Soft grip fades from dry conditions; Medium keeps near-dry grip through 5% water and Hard through 12%, then both fade progressively. Grip continues declining smoothly beyond each suggested range. These bands appear in the garage and tyre selector, with a live water marker in the selector; the driving HUD shows weather without crossover bands. Individual tyre-temperature wheels are visual indicators, not buttons.
 
@@ -276,7 +274,7 @@ AI passing uses the same compound, surface-water, axle wear and temperature limi
 
 ### Circuit aero balance and AI motion
 
-All twelve circuits use compact, explicit geometry at the original road width, targeting 25–50-second dry reference laps. Dunes has a long return straight parallel to the grid straight. Copper Canyon is inspired by the fast esses, back straight and stadium sequence described in [F1’s 2026 Austin circuit guide](https://www.formula1.com/en/racing/2026/united-states), adapted to arcade dimensions rather than copied at full scale. Riviera has a squared marina perimeter and dockside chicane; Alpine has an asymmetric ridge and summit loop. Velocity retains its triangle, Northline its flowing complex, and Sunset its wide banked oval. Grid spacing, the straight pit corridor and flyover topology are retained. Fuel and nominal wear remain per lap; temperature responds to elapsed driving loads. Race distances remain 32-lap Grands Prix and 12-lap Sprints.
+All twelve circuits use compact, explicit geometry at the original road width, targeting 25–50-second dry reference laps. Dunes has a long return straight parallel to the grid straight. Copper Canyon is inspired by the fast esses, back straight and stadium sequence described in [F1’s 2026 Austin circuit guide](https://www.formula1.com/en/racing/2026/united-states), adapted to arcade dimensions rather than copied at full scale. Riviera has a squared marina perimeter and dockside chicane; Alpine has an asymmetric ridge and summit loop. Velocity retains its triangle, Northline its flowing complex, and Sunset its wide banked oval. Grid spacing, the straight pit corridor and flyover topology are retained. Fuel and nominal wear remain per lap; temperature responds to elapsed driving loads. Race distances are 24-lap Grands Prix and 12-lap Sprints.
 
 Run `node scripts/benchmark-aero.mjs [track-id] [dry|wet|worn]` for a reproducible comparison. Leave the track argument empty (`''`) to measure all circuits. The benchmark uses equal equipment, seed 42, Normal AI, Balanced pace, fixed six-lap fuel load, ideal temperatures and no traffic. It measures the third flying lap, with fractional crossings across 24 distance sections. Dry uses fresh Mediums; wet uses fresh Wets on 80% surface water; worn uses Mediums at 65% wear. JSON includes all three packages, section times, speed, percentage of the lap within 2% of the speed ceiling, controls and track-limit counts. These are controlled comparisons, not promised human race times.
 
@@ -285,3 +283,7 @@ Setup parity is deliberately not a circuit-design requirement. Circuits can stro
 AI heading now follows the displacement actually applied after traffic constraints, with deliberate tyre slip applied separately. Previously the body could keep pointing along the unrestricted racing line while its lateral motion was blocked, producing visible crabbing. Collision and drafting velocities now use the same travel direction, and collision-induced sideways momentum decays independently of planned slip. Mutually abandoned overtakes give the leading car priority, with a deterministic tie-break when level, so both cars cannot brake each other to a standstill.
 
 Each new career and season shuffles all twelve events once and saves that calendar. Every circuit appears exactly once; race format, distance and weather preset travel with its event. Existing careers preserve completed rounds and any active weekend, shuffling only future rounds on migration.
+
+### Known stationary-player traffic case
+
+Leaving the player parked on the Northline grid can cause an AI queue as cars return to that section. This also reproduces on v1.8.0 (`aiSeed: 42`, 16 laps, dry, no player input, 90 simulated seconds). It is separate from whole-lap line optimisation and remains unresolved; changes that weakened lane reservations introduced unsafe racing-speed passes and were not retained.

@@ -1,6 +1,6 @@
 import {planRaceStrategy} from "./strategy.js";
-import {cornerAccelerationLimit,corneringSpeed,aeroGripMultiplier} from "./performance.js";
-import {optimizeRacingLine} from "./racing-line.js";
+import {engineAcceleration,cornerAccelerationLimit,corneringSpeed,aeroGripMultiplier} from "./performance.js";
+import {optimizeRacingLine,racingSplineCoefficients} from "./racing-line.js";
 import {tyreWeatherGrip, projectWeather, trackWater} from './weather.js';
 import {selectableSets} from './tyre-stock.js';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -45,10 +45,8 @@ export function racingPoint(line,s){
   // a nearly straight racing line (especially at corner exits).
   const before=line.points[wrap(i-1,line.points.length)],after=line.points[(i+2)%line.points.length];
   const component=key=>{
-    const m0=(b[key]-before[key])/2,m1=(after[key]-a[key])/2;
-    return {p:(2*t**3-3*t*t+1)*a[key]+(t**3-2*t*t+t)*m0+(-2*t**3+3*t*t)*b[key]+(t**3-t*t)*m1,
-      d:(6*t*t-6*t)*a[key]+(3*t*t-4*t+1)*m0+(-6*t*t+6*t)*b[key]+(3*t*t-2*t)*m1,
-      dd:(12*t-6)*a[key]+(6*t-4)*m0+(-12*t+6)*b[key]+(6*t-2)*m1};
+    const [a,b,c,d]=racingSplineCoefficients(before[key],line.points[i][key],line.points[(i+1)%line.points.length][key],after[key]);
+    return {p:a+t*(b+t*(c+t*d)),d:b+t*(2*c+3*t*d),dd:2*c+6*t*d};
   };
   const x=component('x'),y=component('y'),speed=Math.hypot(x.d,y.d);
   const pos=wrap(s,line.length),centers=line.centers;let lo=0,hi=centers.length-1;
@@ -149,6 +147,13 @@ export function planRacingLane(car,line,traffic,{time=0,allowPass=true,yieldOffs
   }
   const alongside=target&&Math.abs(target.spaceGap)<55;
   if(target && target.gap<(state.bestGap ?? Infinity)-5){state.bestGap=target.gap;state.progressAt=time;}
+  // Linked bends trade the inside advantage back and forth. Recovering ground
+  // after an outside corner is progress even before beating the best-ever gap;
+  // otherwise the driver aborts precisely as the next exit starts paying off.
+  if(target && time>=(state.sampleAt ?? 0)+1){
+   if(target.gap<(state.sampleGap ?? target.gap)-2)state.progressAt=time;
+   state.sampleGap=target.gap;state.sampleAt=time;
+  }
   // If an outside attempt stops making progress, keep its lane while dropping
   // behind. Only then merge and prepare a different exit or braking move.
   if(alongside && time-(state.progressAt ?? state.startedAt)>6+aggression*4)state.aborting=true;
@@ -184,7 +189,7 @@ export function planRacingLane(car,line,traffic,{time=0,allowPass=true,yieldOffs
    // around a wider arc even when a narrower, slower pass is also possible.
    const choices=evaluate(shifts).sort((a,b)=>(paceAdvantage ? b.gain-a.gain : a.cost-b.cost) || a.cost-b.cost || a.shift-b.shift);
    if(choices.length){state.phase="passing";state.targetId=leader.car.id;state.shift=choices[0].shift;state.aborting=false;
-    state.side=Math.sign(candidate(state.shift)-leader.car.offset);state.startedAt=time;state.progressAt=time;state.bestGap=leader.gap;state.minUntil=time+1.2+aggression*.7;}
+    state.side=Math.sign(candidate(state.shift)-leader.car.offset);state.startedAt=time;state.progressAt=time;state.bestGap=leader.gap;state.sampleAt=time;state.sampleGap=leader.gap;state.minUntil=time+1.2+aggression*.7;}
   }
  }
  const merging=car.ai.pitExitUntil>car.s;
@@ -244,10 +249,7 @@ function paceRoad(line){
  const points=line.points,n=points.length;
  road=points.map((a,i)=>{
   const before=points[(i+n-1)%n],b=points[(i+1)%n],after=points[(i+2)%n];
-  const polynomial=key=>{
-   const m0=(b[key]-before[key])/2,m1=(after[key]-a[key])/2;
-   return [a[key],m0,-3*a[key]-2*m0+3*b[key]-m1,2*a[key]+m0-2*b[key]+m1];
-  };
+  const polynomial=key=>racingSplineCoefficients(before[key],a[key],b[key],after[key]);
   return {x:polynomial('x'),y:polynomial('y')};
  });
  paceRoads.set(line,road);return road;
@@ -272,7 +274,7 @@ export function paceGeometry(line,s,shift=0){
 }
 export function projectedPaceAdvantage(line,s,speed,own,other,{ownShift=0,otherShift=0}={}){
  if(!own || !other)return 0;
- const distance=clamp(speed*3,600,1000),step=line.length/Math.ceil(line.length/10),origin=wrap(s,line.length);
+ const distance=clamp(speed*5,900,1600),step=line.length/Math.ceil(line.length/10),origin=wrap(s,line.length);
  const samples=[0];
  for(let d=step-(origin%step);d<distance;d+=step)samples.push(d);
  samples.push(distance);
@@ -283,7 +285,7 @@ export function projectedPaceAdvantage(line,s,speed,own,other,{ownShift=0,otherS
   for(let i=samples.length-2;i>=0;i--)limits[i]=Math.min(limits[i],Math.sqrt(limits[i+1]**2+2*profile.braking*lengths[i+1]));
   let v=Math.min(speed,limits[0]),time=0;
   for(let i=1;i<samples.length;i++){
-   const ds=lengths[i],accel=Math.min(profile.acceleration,cornerAccelerationLimit(v,road[i].curvature,(profile.rearGrip ?? profile.grip)*(profile.aero ? aeroGripMultiplier(v,profile.aero.level,profile.aero.corner)/profile.aero.gripScale : 1)));
+   const ds=lengths[i],accel=Math.min(profile.engine ? engineAcceleration(v,profile.engine)*profile.throttle : profile.acceleration,cornerAccelerationLimit(v,road[i].curvature,(profile.rearGrip ?? profile.grip)*(profile.aero ? aeroGripMultiplier(v,profile.aero.level,profile.aero.corner)/profile.aero.gripScale : 1)));
    const next=Math.min(limits[i],Math.sqrt(v*v+2*Math.max(0,accel)*ds));
    time+=2*ds/Math.max(20,v+next);v=next;
   }

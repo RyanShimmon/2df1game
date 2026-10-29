@@ -1,5 +1,5 @@
 import test from 'node:test';
-import {recordTiming} from '../src/timing.js';
+import {recordTiming,createTimingReference,outstandingPenalty} from '../src/timing.js';
 import assert from 'node:assert/strict';
 import {Race,TRACK,PIT_LANE,PIT_MARKERS,makePitLane,pitEntranceLocation,clamp,angleDiff,sample,samplePit,nearest,raceProgress,updateRaceLaps,liveInterval} from '../src/core.js';
 const setup={laps:12,fuel:14,tyre:'M'};
@@ -35,14 +35,14 @@ test('completed laps survive repeated coordinate wraps and crossing backwards do
  assert.equal(raceProgress(p),3*TRACK.length+5);
  const old=p.s;p.s=TRACK.length-5;assert.equal(updateRaceLaps(p,old),false);assert.equal(p.completedLaps,2);
 });
-test('live intervals use passage times and show penalties separately from the physical gap',()=>{
+test('live intervals use passage times and include penalties without a separate badge',()=>{
  const r=race(),p=r.player,other=r.cars[0];r.cars=[p,other];
  p.speed=200;recordTiming(p,0,0,TRACK.length);recordTiming(p,5,1000,TRACK.length);
  Object.assign(p,{s:1000,penalty:5});other.s=900;recordTiming(other,5,900,TRACK.length);
- assert.equal(r.order()[0],p);assert.equal(liveInterval(p,p),'LEAD · +5s PEN');
- other.speed=200;other.penalty=5;assert.equal(liveInterval(p,other),'+0.5 · +5s PEN');
- other.speed=0;assert.equal(liveInterval(p,other),'+0.5 · +5s PEN');
- p.s+=TRACK.length;assert.equal(liveInterval(p,other),'+1 LAP · +5s PEN');
+ assert.equal(r.order()[0],p);assert.equal(liveInterval(p,p),'LEAD');
+ other.speed=200;other.penalty=5;assert.equal(liveInterval(p,other),'+0.5');
+ other.speed=0;assert.equal(liveInterval(p,other),'+0.5');
+ p.s+=TRACK.length;assert.equal(liveInterval(p,other),'+1 LAP');
  other.penalty=0;assert.equal(liveInterval(p,other),'+1 LAP');
 });
 test('live finish order remains on-track while final classification applies time penalties',()=>{
@@ -138,4 +138,22 @@ test('steering from the racing surface into the entrance completes an automatic 
  assert.ok(entered);assert.equal(p.stops,1);
  for(let i=0;i<3000 && p.pit;i++)r.step(1/60,{});
  assert.equal(p.pit,null);assert.equal(r.pitLimiter,false);
+});
+
+test('the race tower orders penalty-adjusted gaps without changing physical race order',()=>{
+ const r=race(),p=r.player,b=r.cars[0];r.cars=[p,b];r.time=10;
+ const reference=createTimingReference(TRACK.length,()=>({speed:100,distanceScale:1}));
+ Object.assign(p,{s:1000,speed:100,penalty:5});Object.assign(b,{s:900,speed:100});
+ recordTiming(p,10,1000,TRACK.length,reference);recordTiming(b,10,900,TRACK.length,reference);
+ assert.equal(r.order()[0],p);assert.equal(r.timingOrder()[0],b);
+ assert.equal(liveInterval(b,p),'+4.0');assert.equal(liveInterval(b,b),'LEAD');
+});
+test('pit service consumes a pending penalty gradually rather than deleting it at entry',()=>{
+ const r=race(),p=r.player;r.cars=[p];p.s=TRACK.pitEntry;p.penalty=5;
+ Object.assign(p,{x:PIT_MARKERS.entry.x,y:PIT_MARKERS.entry.y,angle:PIT_MARKERS.entry.angle,speed:80});
+ r.enterPit(p);p.pit.distance=p.pit.boxDistance;p.speed=0;
+ r.stepPit(p,1/60,{});
+ assert.equal(p.pit.stage,'service');assert.equal(p.penalty,0);assert.equal(outstandingPenalty(p),5);
+ for(let i=0;i<60;i++)r.stepPit(p,1/60,{});
+ assert.ok(Math.abs(outstandingPenalty(p)-4)<1e-8);
 });

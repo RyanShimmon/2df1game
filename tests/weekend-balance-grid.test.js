@@ -79,7 +79,8 @@ test('sponsors are smaller than race prizes, and development rewards winning wit
   for(const team of c.teams.filter(t=>t.teamIndex!==10)){assert.ok(team.budget>=0);assert.equal(team.lastIncome.earned,team.lastIncome.prize+team.lastIncome.sponsor);}
  }
  const levels=u=>Object.values(u).reduce((a,b)=>a+b,0),own=levels(c.upgrades),rivals=c.teams.filter(t=>t.teamIndex!==10).map(t=>levels(t.upgrades));
- assert.ok(own>=Math.max(...rivals));assert.ok(own-Math.max(...rivals)<=4);assert.ok(own<20);
+ assert.ok(own>=Math.max(...rivals));assert.ok(own-Math.max(...rivals)<=4);const value=u=>Object.entries(UPGRADES).reduce((sum,[key])=>sum+Array.from({length:u[key]},(_,i)=>upgradePrice({[key]:i},key)).reduce((a,b)=>a+b,0),0);
+ assert.ok(value(c.upgrades)<value(Object.fromEntries(Object.entries(UPGRADES).map(([key,u])=>[key,u.max])))*.5,'one season of wins and maximum sponsor bonuses cannot buy half the complete development ladder');
 });
 function sprintStint(tyre){
  const r=new Race({track:'harbour',laps:1,tyre,fuel:6,weather:'dry',aiSeed:42,tyreTemperatureEnabled:false}),c=r.cars[0],p=sample(0),ref=racingPoint(AI_LINE,0);
