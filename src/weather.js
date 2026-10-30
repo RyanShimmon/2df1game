@@ -13,13 +13,23 @@ function randomFor(seed) {
   let value=seed>>>0;
   return ()=>{value=(value+0x6d2b79f5)>>>0;let n=value;n=Math.imul(n^(n>>>15),n|1);n^=n+Math.imul(n^(n>>>7),n|61);return ((n^(n>>>14))>>>0)/4294967296;};
 }
+const DRY_WEATHER_CHANCE=.25;
+// Career presets describe a circuit's weather tendency, not guaranteed rain.
+// Pick once for the weekend; quick-race explicit weather choices stay literal.
+export function careerWeatherPattern(pattern,seed) {
+  if(pattern==="dry"||pattern==="dynamic")return pattern;
+  return randomFor((seed^0x5bd1e995)>>>0)()<DRY_WEATHER_CHANCE ? "dry" : pattern;
+}
 export const raceWeatherDuration=(laps,length)=>Math.max(240,(laps || 16)*Math.max(25,(length || 5260)/170));
 
 // Generate once, then save the complete front sequence. Forecasting, reloading
 // and speeding up a session never roll the weather again.
 function buildFronts(pattern,seed,duration) {
   const random=randomFor(seed),between=(a,b)=>a+(b-a)*random();
-  const scenario=pattern==="dynamic" ? ["dry","intermediate","intermediate","sustainedRain","showers","showers","wetToDry","lateRain"][Math.floor(random()*8)] : pattern;
+  const roll=pattern==="dynamic" ? random() : null;
+  const wetScenarios=["intermediate","intermediate","sustainedRain","showers","showers","wetToDry","lateRain"];
+  const scenario=roll===null ? pattern : roll<DRY_WEATHER_CHANCE ? "dry" :
+    wetScenarios[Math.floor((roll-DRY_WEATHER_CHANCE)/(1-DRY_WEATHER_CHANCE)*wetScenarios.length)];
   const damp=()=>between(.32,.43),heavy=()=>between(.86,.99);
   let rain=scenario==="wetToDry" || scenario==="sustainedRain" ? heavy() : scenario==="intermediate" ? damp() : 0;
   const initialWater=rain>.6 ? between(.72,.86) : rain>.1 ? between(.35,.47) : 0;

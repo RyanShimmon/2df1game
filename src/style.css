@@ -818,12 +818,6 @@ input[type="range"] {
   font-size: 10px;
   margin-top: 10px;
 }
-.setup-summary {
-  font-size: 10px;
-  color: #c6d5c8;
-  margin-top: 12px;
-  line-height: 1.6;
-}
 @media (max-height: 850px) and (min-width: 800px) {
   .hero {
     margin-top: 10px;
@@ -1912,9 +1906,6 @@ body:not(.mobile-game) .standings-counters .race-chips { grid-template-columns:8
 body:not(.mobile-game) .standings-counters .race-chip { min-height:56px; padding:6px 8px; }
 body:not(.mobile-game) .race-chip > span { line-height:12px; }
 body:not(.mobile-game) .race-chip > b { line-height:26px; }
-body:not(.mobile-game) #clock.session-expired { display:flex; align-items:center; gap:5px; height:26px; }
-body:not(.mobile-game) #clock.session-expired svg { width:15px; height:17px; fill:none; stroke:currentColor; stroke-width:1.6; flex:none; }
-body:not(.mobile-game) #clock.session-expired span { font:600 11px/1 "DM Sans",sans-serif; letter-spacing:0; color:#e8eee8; white-space:nowrap; }
 body:not(.mobile-game) .lap-summary { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:8px 10px; border-bottom:1px solid var(--line); flex:none; }
 body:not(.mobile-game) .lap-summary p { display:flex; align-items:center; justify-content:space-between; gap:6px; margin:0 !important; }
 body:not(.mobile-game) .lap-summary span { color:var(--muted); font-size:8px; letter-spacing:.6px; }
@@ -1953,3 +1944,34 @@ body:not(.mobile-game) .engineer-radio.hidden { display:flex !important; visibil
 
 body:not(.mobile-game) .forecast-legend { height:16px; }
 body:not(.mobile-game) #weather-timebar { display:block; height:calc(100% - 16px); }
+
+/* Desktop qualifying: personal lap summary and immediate rivals only. */
+body:not(.mobile-game) .qualifying-tower { max-height:none; }
+body:not(.mobile-game) .qualifying-tower #timing { max-height:none; flex:none; overflow:visible; }
+body:not(.mobile-game) .compact-quali-row { grid-template-columns:19px 3px minmax(0,1fr) 60px; }
+body:not(.mobile-game) .compact-quali-row .gap { text-align:right; font-variant-numeric:tabular-nums; }
+body:not(.mobile-game) .quali-cutoff-line { display:flex; align-items:center; gap:7px; color:#ffd17e; padding:3px 10px; font-size:7px; letter-spacing:1px; }
+body:not(.mobile-game) .quali-cutoff-line::before,body:not(.mobile-game) .quali-cutoff-line::after { content:""; height:1px; flex:1; background:#ffd17e77; }
+
+/* Three persistent sector results; only the completed time briefly appears. */
+body:not(.mobile-game) .sector-strip { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; padding:7px 10px 9px; border-bottom:1px solid var(--line); flex:none; }
+body:not(.mobile-game) .sector-cell { display:grid; grid-template-columns:auto 1fr; gap:4px; align-items:center; color:var(--muted); font-size:8px; min-width:0; }
+body:not(.mobile-game) .sector-time { justify-self:end; font-size:10px; font-weight:600; height:12px; line-height:12px; font-variant-numeric:tabular-nums; }
+body:not(.mobile-game) .sector-bar { grid-column:1/-1; height:5px; border-radius:2px; background:var(--sector-colour,#3c5058); }
+body:not(.mobile-game) [data-colour="purple"] { --sector-colour:#bb4fe4; }
+body:not(.mobile-game) [data-colour="green"] { --sector-colour:#60de9a; }
+body:not(.mobile-game) [data-colour="yellow"] { --sector-colour:#f7cd62; }
+body:not(.mobile-game) [data-colour="invalid"] { --sector-colour:#596b72; }
+body:not(.mobile-game) .sector-time { color:var(--sector-colour,var(--muted)); }
+body:not(.mobile-game) .sector-cell.active > span { color:#e8eee8; }
+body:not(.mobile-game) .sector-cell.active .sector-bar { outline:1px solid #e8edf080; outline-offset:2px; }
+body:not(.mobile-game) .fastest-lap-badge { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; margin-left:5px; border-radius:3px; background:#aa31cc; color:#fff; vertical-align:middle; }
+body:not(.mobile-game) .fastest-lap-badge svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; }
+
+/* Qualifying deadline shares the timing header; the top chip stays a lap clock. */
+body:not(.mobile-game) .qualifying-clock { display:inline-flex; align-items:center; gap:6px; min-width:0; }
+body:not(.mobile-game) .qualifying-clock small { font-size:8px; letter-spacing:.4px; white-space:nowrap; }
+body:not(.mobile-game) .qualifying-clock b { color:#e8eee8; font-size:11px; letter-spacing:0; font-variant-numeric:tabular-nums; white-space:nowrap; }
+body:not(.mobile-game) .qualifying-clock.session-expired { gap:0; }
+body:not(.mobile-game) .qualifying-clock.session-expired b { display:inline-flex; align-items:center; gap:5px; font-size:10px; }
+body:not(.mobile-game) .qualifying-clock svg { width:12px; height:14px; fill:none; stroke:currentColor; stroke-width:1.6; }

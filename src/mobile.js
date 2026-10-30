@@ -42,6 +42,6 @@ export function mobileLessonText(text,steering='stick'){
   .replace(/with W \/ ↑/g,'with GAS').replace(/Press W \/ ↑/g,'Hold GAS').replace(/press W \/ ↑/g,'hold GAS')
   .replace(/W \/ ↑/g,'GAS').replace(/S \/ ↓/g,'BRAKE')
   .replace(/A\/D or ←\/→/g,'the steering controls').replace(/A\/D steers/g,steer).replace(/steer with A\/D/g,steer)
-  .replace(/Press P|press P/g,'Tap Limiter').replace(/Press B/g,'Tap Pit').replace(/pressing B/g,'tapping Pit')
+  .replace(/Press L|press L/g,'Tap Limiter').replace(/Press B/g,'Tap Pit').replace(/pressing B/g,'tapping Pit')
   .replace(/Or click Choose tyre set/g,'Tap Choose tyre set').replace(/click/gi,'tap');
 }

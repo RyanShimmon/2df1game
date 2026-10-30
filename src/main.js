@@ -1,3 +1,5 @@
+import {currentLapTime} from "./sectors.js";
+import {raceTimingWindow} from "./timing.js";
 import {speedValue,speedUnitLabel,formatSpeed,speedText} from "./units.js";
 import {choiceTrigger,bindChoicePicker} from "./choice-picker.js";
 import {PACE_MODES,paceMode,stepPaceMode,fuelPerLap,stintLaps} from "./performance.js";
@@ -44,6 +46,7 @@ import {
   qualifyingReady,
   getQualifyingFuel,
   qualifyingProgress,
+  qualifyingTimingWindow,
   qualifyingClassification,
   restoreQualifyingGrid,
   qualifyingStatus,
@@ -155,14 +158,14 @@ function wetnessBand(compound,water=null,name=true){
  const band=wetnessBands[compound],percent=water===null?null:Math.round(water*100);
  return `<div class="wetness-band" style="--tyre:${TYRES[compound].color}" aria-label="${TYRES[compound].name}: suggested ${band.min} to ${band.max}% track wetness${percent===null?"":", currently "+percent+"%"}"><span>${name ? TYRES[compound].name : "Suggested range"} <b>${band.min}–${band.max}% wet</b></span><div class="wetness-scale"><i style="left:${band.min}%;width:${band.max-band.min}%"></i>${percent===null?"":`<em style="left:${Math.min(99,percent)}%"></em>`}</div></div>`;
 }
-function wetnessGuide(water=null){return `<div class="wetness-guide"><div class="tyre-life-heading"><b>TRACK WETNESS RANGE</b><span>${water===null?"Dry 0% → standing water 100%":"Now "+Math.round(water*100)+"% wet"}</span></div>${Object.keys(TYRES).map(k=>wetnessBand(k,water)).join("")}<p class="hint">Suggested grip windows, not hard limits. Wear, temperature and a drying racing line can move the crossover.</p></div>`;}
+function wetnessGuide(water=null){return `<div class="wetness-guide"><div class="tyre-life-heading"><b>TRACK WETNESS RANGE</b><span>${water===null?"Dry 0% → standing water 100%":"Now "+Math.round(water*100)+"% wet"}</span></div>${Object.keys(TYRES).map(k=>wetnessBand(k,water)).join("")}</div>`;}
 function tyreLifeIndicator(selected={compound:setup.tyre,wear:0}) {
   const upgrades=screen==="career" ? career.upgrades : {};
   const remaining=estimatedTyreLife(selected.compound,{wear:selected.wear,upgrades});
-  return `<section class="tyre-life" aria-label="Estimated stint life"><div class="tyre-life-heading"><b>ESTIMATED STINT LIFE</b><span>Balanced pace · suitable conditions</span></div><div class="tyre-life-grid">${["S","M","H","I","W"].map(compound=>`<div style="--tyre:${TYRES[compound].color}"><i class="tyre-dot"></i><span>${TYRES[compound].name}</span><b>≈ ${estimatedTyreLife(compound,{upgrades}).toFixed(1).replace(/\.0$/,"")} laps</b></div>`).join("")}</div><p class="tyre-life-remaining">${selected.id ? selected.id+" · " : ""}${TYRES[selected.compound].name} selected <strong>≈ ${remaining.toFixed(1)} laps remaining</strong></p><p class="hint">Competitive stint estimate for this car. Save extends it; Push, heat and sliding shorten it.</p>${wetnessGuide(career.weekend && screen==="career" ? career.weekend.weather.wetness : null)}</section>`;
+  return `<section class="tyre-life" aria-label="Estimated stint life"><div class="tyre-life-heading"><b>ESTIMATED STINT LIFE</b><span>Balanced pace · suitable conditions</span></div><div class="tyre-life-grid">${["S","M","H","I","W"].map(compound=>`<div style="--tyre:${TYRES[compound].color}"><i class="tyre-dot"></i><span>${TYRES[compound].name}</span><b>≈ ${estimatedTyreLife(compound,{upgrades}).toFixed(1).replace(/\.0$/,"")} laps</b></div>`).join("")}</div><p class="tyre-life-remaining">${selected.id ? selected.id+" · " : ""}${TYRES[selected.compound].name} selected <strong>≈ ${remaining.toFixed(1)} laps remaining</strong></p>${wetnessGuide(career.weekend && screen==="career" ? career.weekend.weather.wetness : null)}</section>`;
 }
 function header() {
-  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.9.0</div></header>`;
+  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.10.0</div></header>`;
 }
 function tabs() {
   return `<div class="tabs"><button class="tab ${screen === "quick" ? "active" : ""}" data-screen="quick">Quick race</button><button class="tab ${screen === "career" ? "active" : ""}" data-screen="career">Career garage</button><button class="tab" data-action="school">Race School</button><button class="tab" data-action="help">How to drive ↗</button><button class="tab" data-action="settings">Settings</button></div>`;
@@ -212,7 +215,7 @@ function setupCard() {
     if (setup.fuel < setup.laps * 0.85 || setup.fuel > setup.laps * 1.35)
       setup.fuel = +(setup.laps * 1.15).toFixed(1);
   }
-  return `<section class="race-card"><div class="track-header"><h3>${TRACK.name}</h3><span class="badge">${scheduled ? scheduled.name : "DYNAMIC WEATHER"}</span></div><div class="specs"><span>GRID<b>22 cars</b></span><span>CHARACTER<b>${TRACK.character}</b></span><span>LAP LENGTH<b>${(TRACK.length/1000).toFixed(2)} km</b></span></div>${!scheduled ? `<div class="field weather-choice"><span class="field-label">Circuit</span><button class="circuit-picker-trigger" id="track-choice" aria-label="Choose circuit: ${TRACK.name}" aria-haspopup="dialog"><span><b>${TRACK.name}</b><small>Choose from 12 circuits</small></span><span aria-hidden="true">▦</span></button></div>` : ""}<div class="form-row"><div class="field">${scheduled ? `<span class="field-label">Race distance</span><div class="fixed-race-distance"><strong>${scheduled.laps} laps</strong><span>Weekend distance · ${DIFFICULTIES[settings.difficulty].name} AI</span></div>` : `<label for="laps">Race distance</label>${selector("laps","Race distance",setup.laps)}<label for="starting-position" class="starting-position-label">Starting position</label>${selector("starting-position","Starting position",setup.startingPosition ?? 22)}`}</div><div class="field"><label>Starting compound</label><div class="compound-row">${compounds(setup.tyre, "start-tyre")}</div></div></div>${!scheduled ? `<div class="field weather-choice"><label for="weather-choice">Weather</label>${selector("weather-choice","Weather",setup.weather,"weather-description")}<p class="hint" id="weather-description">${quickWeatherDescription()}</p></div>` : ""}${!scheduled ? startingAeroButton(setup.aeroSpec) : ""}${scheduled ? `<div class="fuel-row"><span>Qualifying fuel</span><b>${getQualifyingFuel(career.upgrades).toFixed(2)} laps · fixed</b></div><p class="hint">About three timed laps per session. Each outing has an out lap, a timed lap and an in lap; fuel is fixed for that outing.</p>` : `<div class="fuel-row"><span>Starting fuel <b id="fuel-value">${setup.fuel.toFixed(1)} laps</b></span><span id="fuel-risk"></span></div><input id="fuel" type="range" min="${setup.laps * 0.85}" max="${setup.laps * 1.35}" step="0.1" value="${setup.fuel}" aria-label="Starting fuel in laps"><p class="hint">Less fuel means less weight. Balanced driving uses ~1.10 fuel laps per lap; conserve to stretch it. No refuelling.</p>`}${tyreLifeIndicator()}${scheduled ? '<button class="ghost race-forecast-trigger" data-action="qualifying-forecast" aria-haspopup="dialog">Qualifying weather forecast ↗</button>' : ""}<button class="primary" data-action="start"><span>${screen === "career" ? `START QUALIFYING · ROUND ${career.round}` : "TAKE TO THE GRID"}</span><span>→</span></button><div class="setup-summary">${TYRES[setup.tyre].name} start · ${raceRuleText(scheduled?.raceFormat || quickRaceFormat(setup.laps))}.<br>Intermediates for damp tracks; wets for standing water.</div></section>`;
+  return `<section class="race-card"><div class="track-header"><h3>${TRACK.name}</h3><span class="badge">${scheduled ? scheduled.name : "DYNAMIC WEATHER"}</span></div><div class="specs"><span>GRID<b>22 cars</b></span><span>CHARACTER<b>${TRACK.character}</b></span><span>LAP LENGTH<b>${(TRACK.length/1000).toFixed(2)} km</b></span></div>${!scheduled ? `<div class="field weather-choice"><span class="field-label">Circuit</span><button class="circuit-picker-trigger" id="track-choice" aria-label="Choose circuit: ${TRACK.name}" aria-haspopup="dialog"><span><b>${TRACK.name}</b><small>Choose from 12 circuits</small></span><span aria-hidden="true">▦</span></button></div>` : ""}<div class="form-row"><div class="field">${scheduled ? `<span class="field-label">Race distance</span><div class="fixed-race-distance"><strong>${scheduled.laps} laps</strong><span>Weekend distance · ${DIFFICULTIES[settings.difficulty].name} AI</span></div>` : `<label for="laps">Race distance</label>${selector("laps","Race distance",setup.laps)}<label for="starting-position" class="starting-position-label">Starting position</label>${selector("starting-position","Starting position",setup.startingPosition ?? 22)}`}</div><div class="field"><label>Starting compound</label><div class="compound-row">${compounds(setup.tyre, "start-tyre")}</div></div></div>${!scheduled ? `<div class="field weather-choice"><label for="weather-choice">Weather</label>${selector("weather-choice","Weather",setup.weather,"weather-description")}<p class="hint" id="weather-description">${quickWeatherDescription()}</p></div>` : ""}${!scheduled ? startingAeroButton(setup.aeroSpec) : ""}${scheduled ? `<div class="fuel-row"><span>Qualifying fuel</span><b>${getQualifyingFuel(career.upgrades).toFixed(2)} laps · fixed</b></div><p class="hint">About three timed laps per session. Each outing has an out lap, a timed lap and an in lap; fuel is fixed for that outing.</p>` : `<div class="fuel-row"><span>Starting fuel <b id="fuel-value">${setup.fuel.toFixed(1)} laps</b></span><span id="fuel-risk"></span></div><input id="fuel" type="range" min="${setup.laps * 0.85}" max="${setup.laps * 1.35}" step="0.1" value="${setup.fuel}" aria-label="Starting fuel in laps"><p class="hint">Less fuel means less weight. Balanced driving uses ~1.10 fuel laps per lap; conserve to stretch it. No refuelling.</p>`}${tyreLifeIndicator()}${scheduled ? '<button class="ghost race-forecast-trigger" data-action="qualifying-forecast" aria-haspopup="dialog">Qualifying weather forecast ↗</button>' : ""}<button class="primary" data-action="start"><span>${screen === "career" ? `START QUALIFYING · ROUND ${career.round}` : "TAKE TO THE GRID"}</span><span>→</span></button></section>`;
 }
 function showTrackPicker() {
   if(el("track-picker-modal")) return;
@@ -243,7 +246,7 @@ function showTrackPicker() {
 }
 function footer() {
   if(mobileInput)return `<footer class="menu-footer"><span>GAS / BRAKE · ${settings.mobileSteering==="arrows" ? "Arrow steering" : "Thumbstick steering"} · Tap Pit or Choose tyre set</span><span class="muted">Race in landscape. Change controls in Settings.</span></footer>`;
-  return `<footer class="menu-footer"><div class="keycaps"><span><kbd>WASD</kbd> / <kbd>↑↓←→</kbd> Drive</span><span><kbd>B</kbd> Box</span><span><kbd>P</kbd> Limiter</span><span><kbd>T</kbd> / <kbd>1–5</kbd> Next tyre</span><span><kbd>F</kbd> Pace ←</span><span><kbd>G</kbd> Pace →</span><span><kbd>R</kbd> Reverse in pit</span><span><kbd>Esc</kbd> Pause</span></div><span class="muted">V10 power. Every decision counts.</span></footer>`;
+  return `<footer class="menu-footer"><div class="keycaps"><span><kbd>WASD</kbd> / <kbd>↑↓←→</kbd> Drive</span><span><kbd>B</kbd> Box</span><span><kbd>L</kbd> Limiter</span><span><kbd>T</kbd> / <kbd>1–5</kbd> Next tyre</span><span><kbd>F</kbd> Pace ←</span><span><kbd>G</kbd> Pace →</span><span><kbd>R</kbd> Reverse in pit</span><span><kbd>P</kbd> / <kbd>Esc</kbd> Pause</span></div><span class="muted">V10 power. Every decision counts.</span></footer>`;
 }
 function menu() {
   el("garage-section-modal")?.dispatchEvent(new Event("garage-dispose"));
@@ -271,7 +274,7 @@ function showSettings() {
   const previousPaused=paused;
   if(race) {paused=true;resetDrivingInput();}
   const modal=document.createElement("div");modal.className="modal-backdrop";modal.id="settings-modal";
-  modal.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div class="eyebrow">RACE SETTINGS</div><h2 id="settings-title">Settings</h2><div class="field"><label for="ai-difficulty">AI difficulty</label>${selector("ai-difficulty","AI difficulty",settings.difficulty)}</div><p class="hint" style="margin:10px 0 20px">Applies to your next quick race or career weekend. An existing weekend keeps its difficulty. Bonuses apply to legal finishes; commercial development increases earned sponsor payouts.</p><div class="field speed-units-field"><label for="speed-units">Speed units</label>${selector("speed-units","Speed units",settings.speedUnit)}</div><label class="setting-choice"><input type="checkbox" id="auto-pit-limiter" ${settings.autoPitLimiter ? "checked" : ""}> Automatic pit stops</label><p class="hint" id="auto-pit-description">Enabled by default: holds ${formatSpeed(80,settings.speedUnit)}, brakes into your box, completes service and drives to pit exit without throttle. Disable this for manual pedals and P limiter control.</p><label class="setting-choice"><input type="checkbox" id="tyre-temperature-setting" ${settings.tyreTemperature ? "checked" : ""}> Tyre temperature simulation</label><p class="hint">Turn off to hold all tyres at ideal temperature and hide the indicator. Wear and weather grip still apply. Applies to all drivers immediately.</p><div class="mobile-settings"><div class="field"><label for="mobile-steering">Mobile steering</label>${selector("mobile-steering","Mobile steering",settings.mobileSteering)}</div><div class="field sensitivity-field"><label for="steering-sensitivity">Thumbstick sensitivity</label><input id="steering-sensitivity" type="range" min=".6" max="1.5" step=".1" value="${settings.steeringSensitivity}"></div><button class="ghost home-screen-help" id="home-screen-help">Play from Home Screen</button></div><button class="primary" id="close-settings">BACK TO GAME</button></section>`;
+  modal.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div class="eyebrow">RACE SETTINGS</div><h2 id="settings-title">Settings</h2><div class="field"><label for="ai-difficulty">AI difficulty</label>${selector("ai-difficulty","AI difficulty",settings.difficulty)}</div><p class="hint" style="margin:10px 0 20px">Applies to your next quick race or career weekend. An existing weekend keeps its difficulty. Bonuses apply to legal finishes; commercial development increases earned sponsor payouts.</p><div class="field speed-units-field"><label for="speed-units">Speed units</label>${selector("speed-units","Speed units",settings.speedUnit)}</div><label class="setting-choice"><input type="checkbox" id="auto-pit-limiter" ${settings.autoPitLimiter ? "checked" : ""}> Automatic pit stops</label><p class="hint" id="auto-pit-description">Enabled by default: holds ${formatSpeed(80,settings.speedUnit)}, brakes into your box, completes service and drives to pit exit without throttle. Disable this for manual pedals and L limiter control.</p><label class="setting-choice"><input type="checkbox" id="tyre-temperature-setting" ${settings.tyreTemperature ? "checked" : ""}> Tyre temperature simulation</label><p class="hint">Turn off to hold all tyres at ideal temperature and hide the indicator. Wear and weather grip still apply. Applies to all drivers immediately.</p><div class="mobile-settings"><div class="field"><label for="mobile-steering">Mobile steering</label>${selector("mobile-steering","Mobile steering",settings.mobileSteering)}</div><div class="field sensitivity-field"><label for="steering-sensitivity">Thumbstick sensitivity</label><input id="steering-sensitivity" type="range" min=".6" max="1.5" step=".1" value="${settings.steeringSensitivity}"></div><button class="ghost home-screen-help" id="home-screen-help">Play from Home Screen</button></div><button class="primary" id="close-settings">BACK TO GAME</button></section>`;
   app.appendChild(modal);
   bindChoicePicker(el("ai-difficulty"),{title:"AI difficulty",eyebrow:"RACE SETTINGS",options:pickerOptions["ai-difficulty"],onChange:value=>{
     settings.difficulty=normalizeDifficulty(value);
@@ -280,7 +283,7 @@ function showSettings() {
   bindChoicePicker(el("speed-units"),{title:"Speed units",eyebrow:"RACE SETTINGS",options:pickerOptions["speed-units"],onChange:value=>{
     settings.speedUnit=value==="mph" ? "mph" : "kph";renderer.speedUnit=settings.speedUnit;
     try {localStorage.setItem("v10.settings",JSON.stringify(settings));} catch {}
-    el("auto-pit-description").textContent=`Enabled by default: holds ${formatSpeed(80,settings.speedUnit)}, brakes into your box, completes service and drives to pit exit without throttle. Disable this for manual pedals and P limiter control.`;
+    el("auto-pit-description").textContent=`Enabled by default: holds ${formatSpeed(80,settings.speedUnit)}, brakes into your box, completes service and drives to pit exit without throttle. Disable this for manual pedals and L limiter control.`;
     if(race)updateHUD();
   }});
   if(school)el("auto-pit-limiter").disabled=true;
@@ -573,7 +576,12 @@ function bindMenu() {
     (b) =>
       (b.onclick = () => {
         setup.tyre = b.dataset.startTyre;
-        menu();
+        const card=b.closest(".race-card");
+        card.querySelectorAll("[data-start-tyre]").forEach(button=>{
+          const selected=button.dataset.startTyre===setup.tyre;
+          button.classList.toggle("active",selected);button.setAttribute("aria-pressed",selected);
+        });
+        card.querySelector(".tyre-life").outerHTML=tyreLifeIndicator();
       }),
   );
   app.querySelectorAll("[data-sponsor]").forEach(
@@ -698,7 +706,7 @@ function raceUI() {
   ensureAudio();
   race.autoPitLimiter=school ? true : settings.autoPitLimiter;
   if(race.autoPitLimiter) race.pitLimiter=!!race.player.pit;
-  app.innerHTML = `<div class="race-top"><div class="brand">V10</div><div class="race-chips"><div class="race-chip"><span>POSITION</span><b id="position">22 / 22</b></div><div class="race-chip"><span>${race.qualifying ? "SESSION" : "LAP"}</span><b id="lap">1 / ${race.laps}</b></div><div class="race-chip"><span>${race.qualifying ? "TIME LEFT" : "RACE TIME"}</span><b id="clock">0:00.00</b></div></div><div class="race-actions"><button class="ghost" data-action="sound" aria-label="Toggle engine sound">${muted ? "Sound off" : "Sound on"}</button><button class="ghost" data-action="view">Map</button><button class="ghost" data-action="settings">Settings</button><button class="ghost" data-action="pause">Ⅱ</button></div></div><section class="tower ${race.qualifying ? "qualifying-tower" : ""}"><div class="tower-head"><span>${race.qualifying ? "QUALIFYING" : "LIVE TIMING"}</span><span>${race.qualifying ? "STATUS / BEST" : "INTERVAL"}</span></div><div id="qualifying-cutoff"></div><div id="timing"></div></section><div class="weather-hud" id="weather-hud"><b id="weather-now"></b><span id="weather-forecast"></span><span id="race-limits"></span></div><div class="engineer" id="engineer"><span>RACE ENGINEER</span><div id="message"></div></div><div class="race-bottom"><div class="dashboard"><div class="speed"><strong id="speed">0</strong><span>${speedUnitLabel(settings.speedUnit).toUpperCase()}</span></div><div class="telemetry"><div class="telemetry-header"><span id="tyre-name">MEDIUM</span><b id="wear">100%</b></div><div class="bar"><i id="wear-bar"></i></div><p id="tyre-state">Ready to race</p><div class="drive-modes" title="F: pace left toward Save · G: pace right toward Push" aria-label="Pace mode: F moves left, G moves right" aria-keyshortcuts="F G">${Object.entries(PACE_MODES).map(([id,m])=>`<button class="tab ${id===race.player.drive?"active":""}" data-drive="${id}" aria-pressed="${id===race.player.drive}" title="${m.description}" aria-label="${m.name}: ${m.description}">${m.name}</button>`).join("")}</div></div><div class="telemetry fuel-telemetry"><div class="telemetry-header"><span>FUEL</span><b id="fuel-left"></b></div><div class="bar"><i id="fuel-bar"></i></div><p id="fuel-status">On target</p><p id="last-lap" style="margin-top:12px">Last lap —</p></div></div><section class="pit-panel"><div class="eyebrow" id="pit-title">NEXT PIT STOP · T CYCLES</div><div class="compound-row">${race.qualifying ? `<button class="compound active current-tyre" data-pit-tyre="current" aria-pressed="true" style="--tyre:${TYRES[race.player.tyre].color}"><i class="tyre-dot"></i>Current</button>` : ""}${compounds(race.nextTyre, "pit-tyre")}</div><button class="primary" data-action="pit"><span id="pit-button">REQUEST PIT · B</span><span>↗</span></button><button class="ghost limiter" data-action="limiter" aria-pressed="false">LIMITER OFF · P</button><p id="pit-hint">${race.autoPitLimiter ? "Press B, then steer into the separate pit road. Speed, stopping, service and exit are automatic." : "Stop inside the highlighted box using S / ↓. R reverses. Service holds the car. P toggles the limiter."}</p><p id="race-set-note" class="hint"></p></section></div><div class="weather-timeline" role="img" aria-label="Scrolling six-minute weather forecast"><div class="forecast-legend"><b>WEATHER FORECAST</b><span><i class="rain-key"></i> Rain <i class="water-key"></i> Surface water</span></div><svg id="weather-timebar" viewBox="0 0 720 62" preserveAspectRatio="none"></svg></div><div class="countdown" id="countdown"><div class="lights">${"<i></i>".repeat(5)}</div><p>LIGHTS OUT. MAKE IT COUNT.</p></div><div class="touch-controls"><div><button data-touch="left" aria-label="Steer left">←</button><button data-touch="right" aria-label="Steer right">→</button></div><div><button class="pedal" data-touch="reverse">REV</button><button class="pedal" data-touch="brake">BRAKE</button><button class="pedal" data-touch="throttle">GAS</button></div></div>`;
+  app.innerHTML = `<div class="race-top"><div class="brand">V10</div><div class="race-chips"><div class="race-chip"><span>POSITION</span><b id="position">22 / 22</b></div><div class="race-chip"><span>${race.qualifying ? "SESSION" : "LAP"}</span><b id="lap">1 / ${race.laps}</b></div><div class="race-chip"><span>${race.qualifying ? "TIME LEFT" : "RACE TIME"}</span><b id="clock">0:00.00</b></div></div><div class="race-actions"><button class="ghost" data-action="sound" aria-label="Toggle engine sound">${muted ? "Sound off" : "Sound on"}</button><button class="ghost" data-action="view">Map</button><button class="ghost" data-action="settings">Settings</button><button class="ghost" data-action="pause">Ⅱ</button></div></div><section class="tower ${race.qualifying ? "qualifying-tower" : ""}"><div class="tower-head"><span>${race.qualifying ? "QUALIFYING" : "LIVE TIMING"}</span><span>${race.qualifying ? "STATUS / BEST" : "INTERVAL"}</span></div><div id="qualifying-cutoff"></div><div id="timing"></div></section><div class="weather-hud" id="weather-hud"><b id="weather-now"></b><span id="weather-forecast"></span><span id="race-limits"></span></div><div class="engineer" id="engineer"><span>RACE ENGINEER</span><div id="message"></div></div><div class="race-bottom"><div class="dashboard"><div class="speed"><strong id="speed">0</strong><span>${speedUnitLabel(settings.speedUnit).toUpperCase()}</span></div><div class="telemetry"><div class="telemetry-header"><span id="tyre-name">MEDIUM</span><b id="wear">100%</b></div><div class="bar"><i id="wear-bar"></i></div><p id="tyre-state">Ready to race</p><div class="drive-modes" title="F: pace left toward Save · G: pace right toward Push" aria-label="Pace mode: F moves left, G moves right" aria-keyshortcuts="F G">${Object.entries(PACE_MODES).map(([id,m])=>`<button class="tab ${id===race.player.drive?"active":""}" data-drive="${id}" aria-pressed="${id===race.player.drive}" title="${m.description}" aria-label="${m.name}: ${m.description}">${m.name}</button>`).join("")}</div></div><div class="telemetry fuel-telemetry"><div class="telemetry-header"><span>FUEL</span><b id="fuel-left"></b></div><div class="bar"><i id="fuel-bar"></i></div><p id="fuel-status">On target</p><p id="last-lap" style="margin-top:12px">Last lap —</p></div></div><section class="pit-panel"><div class="eyebrow" id="pit-title">NEXT PIT STOP · T CYCLES</div><div class="compound-row">${race.qualifying ? `<button class="compound active current-tyre" data-pit-tyre="current" aria-pressed="true" style="--tyre:${TYRES[race.player.tyre].color}"><i class="tyre-dot"></i>Current</button>` : ""}${compounds(race.nextTyre, "pit-tyre")}</div><button class="primary" data-action="pit"><span id="pit-button">REQUEST PIT · B</span><span>↗</span></button><button class="ghost limiter" data-action="limiter" aria-pressed="false">LIMITER OFF · L</button><p id="pit-hint">${race.autoPitLimiter ? "Press B, then steer into the separate pit road. Speed, stopping, service and exit are automatic." : "Stop inside the highlighted box using S / ↓. R reverses. Service holds the car. L toggles the limiter."}</p><p id="race-set-note" class="hint"></p></section></div><div class="weather-timeline" role="img" aria-label="Scrolling six-minute weather forecast"><div class="forecast-legend"><b>WEATHER FORECAST</b><span><i class="rain-key"></i> Rain <i class="water-key"></i> Surface water</span></div><svg id="weather-timebar" viewBox="0 0 720 62" preserveAspectRatio="none"></svg></div><div class="countdown" id="countdown"><div class="lights">${"<i></i>".repeat(5)}</div><p>LIGHTS OUT. MAKE IT COUNT.</p></div><div class="touch-controls"><div><button data-touch="left" aria-label="Steer left">←</button><button data-touch="right" aria-label="Steer right">→</button></div><div><button class="pedal" data-touch="reverse">REV</button><button class="pedal" data-touch="brake">BRAKE</button><button class="pedal" data-touch="throttle">GAS</button></div></div>`;
   const counters=document.createElement("div");counters.className="standings-counters";
   counters.appendChild(app.querySelector(".race-chips"));
   app.querySelector(".tower").before(counters);
@@ -717,14 +725,17 @@ function raceUI() {
     };
     controls.append(modes,conditions);dashboard.appendChild(controls);
     refreshPaceControl();
+    el("clock").previousElementSibling.textContent="LAP TIME";
+    if(race.qualifying)app.querySelector(".tower-head").innerHTML='<span>QUALIFYING</span><span id="qualifying-clock" class="qualifying-clock"><small>TIME LEFT</small><b id="qualifying-time-left" role="timer"></b></span>';
     const lapSummary=document.createElement("div");lapSummary.className="lap-summary";
     lapSummary.appendChild(el("last-lap"));
     lapSummary.insertAdjacentHTML("beforeend",'<p id="best-lap"></p>');
     el("timing").before(lapSummary);
+    lapSummary.insertAdjacentHTML("afterend",`<div id="sector-strip" class="sector-strip" role="group" aria-label="Your sector times">${[1,2,3].map(n=>`<div class="sector-cell" data-sector="${n-1}"><span>S${n}</span><b class="sector-time"></b><i class="sector-bar"></i></div>`).join("")}</div>`);
   }
   app.querySelector("[data-action=settings]").onclick=showSettings;
   app.querySelector("[data-action=pit]").onclick = () => {
-    if(race.qualifying && race.player.garage && race.player.pit?.serviced){race.player.qNeedsRelease=false;race.launch(race.player);}
+    if(race.qualifying && race.player.garage && race.player.pit?.serviced)race.requestGarageExit();
     else race.requestPit();
     updateHUD();
   };
@@ -861,8 +872,14 @@ function showRacePreparation() {
   resetDrivingInput();accumulator=0;paused=true;
   const box=document.createElement("div");box.className="modal-backdrop";box.id="race-preparation";
   box.innerHTML=`<section class="modal tyre-picker-modal" role="dialog" aria-modal="true" aria-label="Race preparation">${weekendCard()}</section>`;
+  box.querySelector('[data-action="weekend-race"]').insertAdjacentHTML("afterend",'<button class="ghost garage-back" data-action="preparation-garage">GO TO GARAGE</button>');
+  const goToGarage=()=>{
+    save();resetDrivingInput();accumulator=0;screen="career";menu();
+    const heading=app.querySelector("h1,h2");if(heading){heading.tabIndex=-1;heading.focus();}
+  };
+  box.querySelector('[data-action="preparation-garage"]').onclick=goToGarage;
   app.appendChild(box);bindWeekend();const title=box.querySelector("h3");title.tabIndex=-1;title.focus();
-  box.addEventListener("keydown",event=>garageDialogKeys(event,box,()=>{}));
+  box.addEventListener("keydown",event=>garageDialogKeys(event,box,goToGarage));
 }
 function showQualifyingRecovery(run) {
   el("qualifying-recovery")?.remove();el("qualifying-results")?.remove();paused=true;resetDrivingInput();
@@ -914,7 +931,7 @@ function refreshHUDIcons(){
   hudIcon(actions.querySelector('[data-action=sound]'),muted ? "muted" : "sound",muted ? "Enable engine sound" : "Mute engine sound");
   hudIcon(actions.querySelector('[data-action=view]'),"map",overview ? "Close circuit map" : "Show circuit map",overview);
   hudIcon(actions.querySelector('[data-action=settings]'),"settings","Settings");
-  hudIcon(actions.querySelector('[data-action=pause]'),"pause","Pause race");
+  hudIcon(actions.querySelector('[data-action=pause]'),"pause","Pause race (P / Esc)");
   if(el("mobile-timing")){const open=app.querySelector(".tower").classList.contains("mobile-open");hudIcon(el("mobile-timing"),open ? "close" : "timing",open ? "Close timing" : "Show timing board",open);}
   if(el("mobile-fullscreen"))hudIcon(el("mobile-fullscreen"),"fullscreen",document.fullscreenElement ? "Exit fullscreen" : "Fullscreen options");
 }
@@ -1137,6 +1154,31 @@ function updateWeatherTimeline() {
   for(let t=Math.ceil(Math.max(0,start)/60)*60;t<=now+360;t+=60) ticks+=`<line x1="${x(t)}" x2="${x(t)}" y1="9" y2="45" stroke="#526c78" opacity=".45"/><text x="${x(t)}" y="58" text-anchor="middle">${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,"0")}</text>`;
   svg.innerHTML=`${ticks}<path d="${rain} L720,43 L0,43 Z" fill="#76baff" opacity=".13"/><path d="${rain}" fill="none" stroke="#76baff" stroke-width="2"/><path d="${water}" fill="none" stroke="#6ee4b4" stroke-width="2"/><line x1="${x(now)}" x2="${x(now)}" y1="7" y2="47" stroke="#f3e5b2"/><text x="${x(now)+5}" y="${mobileInput ? 17 : 9}" fill="#f3e5b2">NOW</text>`;
 }
+function fastestLapBadge(lap) {
+  return `<span class="fastest-lap-badge" role="img" aria-label="Fastest race lap ${time(lap)}" title="Fastest race lap · ${time(lap)}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="14" r="8"/><path d="M9 2h6m-3 0v4m6 2 2-2m-8 8 3-4"/></svg></span>`;
+}
+let sectorHUDRace=null,sectorHUDEvent=null,sectorHUDUntil=0;
+function updateSectorHUD() {
+  const strip=el("sector-strip"),state=race.player.sectorTiming;
+  if(!strip||!state)return;
+  if(sectorHUDRace!==race){sectorHUDRace=race;sectorHUDEvent=null;sectorHUDUntil=0;}
+  if(state.event && sectorHUDEvent!==state.event){
+    sectorHUDEvent=state.event;sectorHUDUntil=performance.now()+2200;
+  }
+  const timed=!race.qualifying||race.player.qState==="timed";
+  const colours={purple:"Session best",green:"Personal best",yellow:"Slower than personal best",invalid:"Invalid sector"};
+  strip.querySelectorAll(".sector-cell").forEach((cell,i)=>{
+    const result=timed ? state.bars[i] : null,active=timed&&!race.player.finished&&!race.player.dnf&&state.active===i;
+    const popup=state.event?.sector===i&&performance.now()<sectorHUDUntil ? state.event : null;
+    cell.dataset.colour=result?.colour || "neutral";
+    cell.classList.toggle("active",active);
+    const label=`Sector ${i+1}${active ? " · current sector" : ""}${result ? " · "+colours[result.colour]+" · "+result.time.toFixed(3)+" seconds" : " · untimed"}`;
+    cell.title=label;cell.setAttribute("aria-label",label);
+    const text=cell.querySelector(".sector-time");
+    text.textContent=popup ? popup.time.toFixed(3) : "";
+    text.dataset.colour=popup?.colour || "neutral";
+  });
+}
 function updateHUD() {
   if (!race || !el("position")) return;
   if(school && el("school-guide")) updateSchoolGuide();
@@ -1150,7 +1192,7 @@ function updateHUD() {
     Math.min(race.laps, Math.max(1, Math.floor(raceProgress(p) / TRACK.length) + 1)) +
     " / " +
     race.laps;
-  el("clock").textContent = time(race.time);
+  el("clock").textContent = time(mobileInput ? race.time : currentLapTime(race) ?? Infinity);
   el("speed").textContent = Math.round(speedValue(Math.abs(p.speed),settings.speedUnit));
   const drafting=(p.slipstream?.strength || 0)>.12;
   el("speed").classList.toggle("drafting",drafting);
@@ -1196,6 +1238,7 @@ function updateHUD() {
   if(!mobileInput){
     el("last-lap").innerHTML=`<span>LAST</span><b>${time(p.lastLap || Infinity)}</b>`;
     el("best-lap").innerHTML=`<span>BEST</span><b>${time(p.bestLap || Infinity)}</b>`;
+    updateSectorHUD();
     el("fuel-left").classList.toggle("fuel-low",!race.qualifying && p.fuel<remaining*fuelPerLap(p.drive,p.upgrades));
   }
   const conditions=el("weather-hud"),wetness=Math.round(race.weather.wetness*100),warnings=p.trackLimits%4;
@@ -1224,7 +1267,7 @@ function updateHUD() {
   el("engineer").title=announcement;
   el("engineer").classList.toggle("hidden", !!school || race.time > race.messageUntil);
   const limiter = app.querySelector("[data-action=limiter]");
-  limiter.textContent=(race.pitLimiter ? `LIMITER ON · ${Math.round(speedValue(80,settings.speedUnit))}` : "LIMITER OFF") + (race.autoPitLimiter ? " · AUTO" : " · P");
+  limiter.textContent=(race.pitLimiter ? `LIMITER ON · ${Math.round(speedValue(80,settings.speedUnit))}` : "LIMITER OFF") + (race.autoPitLimiter ? " · AUTO" : " · L");
   limiter.disabled=race.autoPitLimiter;
   limiter.setAttribute("aria-pressed", race.pitLimiter);
   limiter.classList.toggle("active", race.pitLimiter);
@@ -1252,20 +1295,17 @@ function updateHUD() {
       p.pit.stage === "service"
         ? `SERVICE HOLD · ${Math.max(0,p.pit.timer).toFixed(1)}s remaining. Controls locked.`
         : p.pit.serviced
-          ? race.autoPitLimiter ? "Automatic exit. No throttle needed; control returns at the pit exit line." : "Service complete. Accelerate to pit exit; release P after the lane."
+          ? race.autoPitLimiter ? "Automatic exit. No throttle needed; control returns at the pit exit line." : "Service complete. Accelerate to pit exit; release L after the lane."
           : race.autoPitLimiter ? `Automatic pit stop · box in ${Math.round(Math.max(0,p.pit.boxDistance-p.pit.distance))}m. Pedals handled by the crew.` : `Box ${Math.round(p.pit.boxDistance - p.pit.distance)}m · brake to stop in the outline. R reverses.`;
-  let visible = order.slice(0, 5);
-  if (position > 5)
-    visible = [
-      ...visible,
-      ...order.slice(Math.max(5, position - 2), Math.min(22, position + 1)),
-    ];
-  else visible = order.slice(0, 8);
+  let visible = raceTimingWindow(order,p);
+  if(mobileInput)visible=position>5
+    ? [...order.slice(0,5),...order.slice(Math.max(5,position-2),Math.min(22,position+1))]
+    : order.slice(0,8);
   el("timing").innerHTML = visible
     .map((c) => {
       const rank = order.indexOf(c) + 1,
         gap = liveInterval(order[Math.max(0,rank-2)],c);
-      return `<div class="timing-row ${c.player ? "me" : ""}" style="--team:${c.team.color};--tyre:${TYRES[c.tyre].color}"><span class="rank">${rank}</span><i class="stripe"></i><span class="name" title="${escapeHTML(c.name)}">${escapeHTML(c.name)}</span><span class="gap">${gap}</span><span class="compound-label">${c.tyre}</span></div>`;
+      return `<div class="timing-row ${c.player ? "me" : ""}" style="--team:${c.team.color};--tyre:${TYRES[c.tyre].color}"><span class="rank">${rank}</span><i class="stripe"></i><span class="name" title="${escapeHTML(c.name)}">${escapeHTML(c.name)}${!mobileInput && !race.qualifying && race.sectors.fastestLap?.driverId===c.id ? fastestLapBadge(race.sectors.fastestLap.time) : ""}</span><span class="gap">${gap}</span><span class="compound-label">${c.tyre}</span></div>`;
     })
     .join("");
   if (race.qualifying) {
@@ -1285,15 +1325,17 @@ function updateHUD() {
     el("fuel-status").style.color = "";
     const stateLabel=p.qState==="timed" && p.qInvalid ? "INVALID" : ({garage:"PITS",out:"OUT LAP",timed:"TIMED",in:"IN LAP",stranded:"NO FUEL"})[p.qState] || "PIT";
     el("lap").innerHTML=mobileInput ? race.stage.name+" · "+stateLabel : `<span class="session-name">${race.stage.name}</span><small>${stateLabel}</small>`;
-    el("clock").textContent = school ? time(race.time) : time(
-      Math.max(0, race.stage.duration - race.weekend.elapsed),
-    );
-    if(!mobileInput && !school){
-      const expired=race.weekend.elapsed>=race.stage.duration;
+    if(mobileInput)el("clock").textContent=school ? time(race.time) : time(Math.max(0,race.stage.duration-race.weekend.elapsed));
+    else {
+      const expired=!school && race.weekend.elapsed>=race.stage.duration;
       const finishing=expired && !p.garage && !p.pit && !p.dnf && p.qState==="timed" && Number.isFinite(p.qStart) && race.stageStart+p.qStart<race.stage.duration;
-      const clock=el("clock");clock.classList.toggle("session-expired",expired);
-      clock.previousElementSibling.textContent=expired ? "CHEQUERED FLAG" : "TIME LEFT";
+      const clock=el("qualifying-time-left"),container=el("qualifying-clock");
+      container.classList.toggle("session-expired",expired);
+      container.querySelector("small").textContent=school ? "PRACTICE" : expired ? "" : "TIME LEFT";
+      const seconds=Math.ceil(school ? race.time : Math.max(0,race.stage.duration-race.weekend.elapsed));
+      clock.textContent=`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,"0")}`;
       if(expired)clock.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 22V3m0 1h15v12H5"/><path d="M5 4h5v4H5Zm10 0h5v4h-5ZM10 8h5v4h-5ZM5 12h5v4H5Zm10 0h5v4h-5Z" fill="currentColor" stroke="none"/></svg><span>${finishing ? "Finish lap" : "Session over"}</span>`;
+      container.setAttribute("aria-label",expired ? (finishing ? "Chequered flag. Finish your timed lap." : "Qualifying session over") : `${school ? "Practice time" : "Qualifying time remaining"}: ${clock.textContent}`);
     }
     el("tyre-state").textContent = p.pit?.stage==="service" ? "Service hold · waiting for crew" : p.garage ? "Ready · press W / ↑ to leave" :
       p.qState === "in" ? "In lap · return to pits; extra laps untimed" :
@@ -1310,6 +1352,15 @@ function updateHUD() {
     if (!p.pit)
       el("pit-title").textContent = p.tyreSet?.id + " · " + race.stage.name;
 
+    if(!mobileInput){
+      el("qualifying-cutoff").replaceChildren();
+      const divider='<div class="quali-cutoff-line" role="separator" aria-label="Qualifying cutoff"><span>CUTOFF</span></div>';
+      el("timing").innerHTML=qualifyingTimingWindow(race.weekend,p.id,race.stage.name).map(row=>{
+        const c=order.find(car=>car.id===row.id);
+        if(!c)return "";
+        return `${row.cutoffBefore ? divider : ""}<div class="timing-row quali-row compact-quali-row ${c.player ? "me" : ""}" style="--team:${c.team.color}"><span class="rank">${row.rank}</span><i class="stripe"></i><span class="name" title="${escapeHTML(c.name)}">${escapeHTML(c.name)}</span><span class="gap">${row.time===null ? "—" : time(row.time)}</span></div>${row.cutoffAfter ? divider : ""}`;
+      }).join("");
+    }else{
     const progress=qualifyingProgress(race.weekend,21,race.stage.name), cutoffCar=order.find(c=>c.id===progress.cutoffId);
     const margin=progress.margin;
     let status=progress.final ? (progress.playerTime===null ? "Q3 · bank a valid lap" : progress.margin===null ? "Q3 · fight for pole" : progress.rank===1 ? "PROVISIONAL POLE" : `${progress.margin.toFixed(3)}s behind pole`) : progress.playerTime===null ? "No time set · bank a valid lap" :
@@ -1322,6 +1373,7 @@ function updateHUD() {
       const cutoff=!progress.final && i===progress.keep-1;
       return `<div class="timing-row quali-row ${c.player ? "me" : ""} ${cutoff ? "cutoff-row" : ""}" style="--team:${c.team.color}"><span class="rank">${i+1}</span><i class="stripe"></i><span class="name" title="${escapeHTML(c.name)}">${escapeHTML(c.name)}</span><span class="q-status">${qualifyingStatus(c)}</span><span class="gap">${lap ? time(lap.time) : "—"}</span></div>${cutoff ? '<div class="cutoff-divider">↑ THROUGH · ELIMINATED ↓</div>' : ''}`;
     }).join("");
+    }
 
   }
   if (race.weekend) {
@@ -1370,13 +1422,13 @@ function updateHUD() {
     if(compact)compact.textContent=race.qualifying && p.garage
       ? `GARAGE · ${p.tyreSet.id} · ${TYRES[p.tyre].name}`
       : el("pit-title").textContent+" · "+(race.player.tyreInventory && race.nextSetId ? race.nextSetId+" " : "")+TYRES[race.nextTyre].name;
-    limiter.textContent=limiter.textContent.replace(" · P","");
+    limiter.textContent=limiter.textContent.replace(" · L","");
     el("pit-hint").textContent=mobileLessonText(el("pit-hint").textContent,settings.mobileSteering);
   }
   if(!mobileInput){
     const request=app.querySelector("[data-action=pit]");
     request.title=el("pit-button").textContent;
-    el("pit-button").textContent=p.garage && p.pit?.serviced ? "Leave box" : p.pit?.stage==="service" ? `Service ${p.pit.timer.toFixed(1)}s` : p.pit ? "In pit lane" : race.pitRequested ? "Cancel pit" : "Request pit";
+    el("pit-button").textContent=p.garage && p.pit?.serviced ? p.qExitRequested ? "Waiting for gap" : "Leave box" : p.pit?.stage==="service" ? `Service ${p.pit.timer.toFixed(1)}s` : p.pit ? "In pit lane" : race.pitRequested ? "Cancel pit" : "Request pit";
   }
   el("countdown").classList.toggle("hidden", race.countdown <= 0);
   el("countdown")
@@ -1384,7 +1436,7 @@ function updateHUD() {
     .forEach((l, i) => l.classList.toggle("on", race.countdown < 4 - i * 0.6));
 }
 function pauseRace() {
-  if (!race || race.done) return;
+  if (!race || race.done || app.querySelector(".modal-backdrop:not(#pause-modal)")) return;
   if(mobileInput && app.querySelector(".tower.mobile-open"))el("mobile-timing").click();
   paused = !paused;
   keys.clear();
@@ -1393,7 +1445,7 @@ function pauseRace() {
     const b = document.createElement("div");
     b.className = "modal-backdrop";
     b.id = "pause-modal";
-    b.innerHTML = `<section class="modal"><div class="eyebrow">TAKE A BREATHER</div><h2>Race paused</h2><div class="pause-controls"><p><b>Driving</b><span>W / ↑ Accelerate · S / ↓ Brake, then reverse<br>A / D or ← / → Steer</span></p><p><b>Pit stops</b><span>B Request a stop, then steer into the pit road<br>${race.autoPitLimiter ? "Automatic speed, stop, service and exit" : "P Toggle limiter · R Reverse in the pit lane"}</span></p><p><b>Strategy</b><span>F Pace ← · G Pace → (Save / Balanced / Push)<br>T Cycle next tyres · 1–5 Select S / M / H / I / W<br>6 High downforce · 7 Balanced · 8 Low drag · +10s pit service</span></p><p><b>View & pause</b><span>M Change map view · Esc Resume</span></p></div>${engineerBriefHTML(race)}<button class="primary" id="resume">BACK TO THE RACE →</button><button class="ghost" id="retire" style="width:100%;margin-top:12px">Retire race</button><p class="hint">Career retirement records a DNF. No sponsor bonus.</p></section>`;
+    b.innerHTML = `<section class="modal"><div class="eyebrow">TAKE A BREATHER</div><h2>Race paused</h2><div class="pause-controls"><p><b>Driving</b><span>W / ↑ Accelerate · S / ↓ Brake, then reverse<br>A / D or ← / → Steer</span></p><p><b>Pit stops</b><span>B Request a stop, then steer into the pit road<br>${race.autoPitLimiter ? "Automatic speed, stop, service and exit" : "L Toggle limiter · R Reverse in the pit lane"}</span></p><p><b>Strategy</b><span>F Pace ← · G Pace → (Save / Balanced / Push)<br>T Cycle next tyres · 1–5 Select S / M / H / I / W<br>6 High downforce · 7 Balanced · 8 Low drag · +10s pit service</span></p><p><b>View & pause</b><span>M Change map view · P / Esc Resume</span></p></div>${engineerBriefHTML(race)}<button class="primary" id="resume">BACK TO THE RACE →</button><button class="ghost" id="retire" style="width:100%;margin-top:12px">Retire race</button><p class="hint">Career retirement records a DNF. No sponsor bonus.</p></section>`;
     if(mobileInput)b.querySelector(".pause-controls").innerHTML=`<p><b>Drive</b><span>Hold GAS · BRAKE slows then reverses.<br>${settings.mobileSteering==="arrows" ? "Use left/right arrows." : "Drag the steering pad; release to centre."}</span></p><p><b>Strategy</b><span>Tap a pace mode or Choose tyre set.<br>Tap Pit, then steer into the separate pit entrance.</span></p><p><b>Display</b><span>Timing opens the full board. Map shows the circuit.<br>Settings changes steering and tyre temperature.</span></p>`;
     app.appendChild(b);
     el("resume").onclick = pauseRace;
@@ -1515,7 +1567,7 @@ function startSchoolLesson(practice=false){
   ]);
 }
 function mountSchoolGuide(){
-  if(race.qualifying){el("finish-qualifying-run").hidden=true;el("clock").previousElementSibling.textContent="PRACTICE TIME";}
+  if(race.qualifying){el("finish-qualifying-run").hidden=true;if(mobileInput)el("clock").previousElementSibling.textContent="PRACTICE TIME";}
   const guide=document.createElement("section");guide.id="school-guide";guide.className="school-guide";
   guide.innerHTML=`<div class="eyebrow" id="school-progress"></div><h3 id="school-goal"></h3><div id="school-instruction"></div><div class="school-guide-actions"><button class="primary school-weather-continue" id="school-weather-continue" hidden>GOT IT · READY TO DRIVE →</button><div class="school-guide-actions" id="school-normal-actions"><button class="ghost" id="school-weather">WEATHER FORECAST</button><button class="ghost" id="school-explain">EXPLAIN AGAIN</button><button class="ghost" id="school-recover">RECOVER CAR</button>${race.qualifying ? '<button class="ghost" id="school-reset">RESET OUTING</button>' : ""}<button class="ghost" id="school-leave">LEAVE SCHOOL</button></div></div>`;
   app.appendChild(guide);if(mobileInput)el("school-explain").textContent="LESSON HELP";
@@ -1564,7 +1616,7 @@ function showHelp() {
   const b = document.createElement("div");
   b.className = "modal-backdrop";
   b.id = "help";
-  b.innerHTML = `<section class="modal"><div class="eyebrow">DRIVER BRIEFING</div><h2>Find your rhythm.</h2><div class="help-grid"><div><h3>Drive</h3><p>W / ↑ accelerates, S / ↓ brakes then reverses once stopped. A/D or ←/→ steer. Brake before the turn, ease off through it, accelerate on exit. Touch controls appear on mobile.</p></div><div><h3>Strategy</h3><p>Softs give more grip but wear quickly. Mediums balance pace and life. Hards run longer. Grand Prix races require two different dry compounds unless you use Intermediates or Wets. Sprints have no compulsory tyre change and award 8–1 points to the first eight. Career Grands Prix are 24 laps and Sprints 12 laps; Quick Race offers 12–40 laps.</p><h3>Slipstream</h3><p>Tuck in behind a car on a straight to reduce drag. A strong tow allows a little extra top speed, which fades over a few seconds after pulling out. Your speed readout turns lime while receiving a tow.</p></div><div><h3>Pit stops</h3><p>Press B to request a stop, then steer off the track into the separate pit road alongside the main straight. Automatic pit stops handle lane speed, the box stop, service and exit without pedals. Disable this in Settings to use manual pedals and P limiter control. Manual speeding adds 5 seconds. The wide lane has smooth merges and assisted steering; gas/brake still control speed. Release the limiter with P after exit. 1/2/3/4/5 selects S/M/H/I/W. Stop in the marked box with S; R reverses if you overshoot. Service holds the car. Three track-limit warnings precede a 5-second penalty.</p></div><div><h3>Pace & strategy</h3><p>Save gives gentler power to extend stints and recover hot tyres. Balanced is sustainable race pace. Push adds acceleration and top speed, using more fuel and tyre life. F moves left toward Save; G moves right toward Push. No refuelling, no battery. Fuel runs out? Coast to a stop and retire.</p></div><div><h3>Career</h3><p>Name your driver and choose any team. Complete Q1, Q2 and Q3 knockouts before each race. The weekend tyre pool is shared: choose individual sets and save fresh tyres for the race. Start in a slower development car. Reset your career from the garage to start again. Sign one sponsor per race, earn position money and upgrade power, grip, tyre life or pit service. All 12 circuits form a season.</p></div><div><h3>Your controls</h3><p>Esc pauses. M toggles map view. Engine sound starts automatically; toggle it with Sound on / off. Your browser saves career progress automatically; quick races do not affect it.</p></div></div><button class="primary" id="close-help">READY TO RACE →</button></section>`;
+  b.innerHTML = `<section class="modal"><div class="eyebrow">DRIVER BRIEFING</div><h2>Find your rhythm.</h2><div class="help-grid"><div><h3>Drive</h3><p>W / ↑ accelerates, S / ↓ brakes then reverses once stopped. A/D or ←/→ steer. Brake before the turn, ease off through it, accelerate on exit. Touch controls appear on mobile.</p></div><div><h3>Strategy</h3><p>Softs give more grip but wear quickly. Mediums balance pace and life. Hards run longer. Grand Prix races require two different dry compounds unless you use Intermediates or Wets. Sprints have no compulsory tyre change and award 8–1 points to the first eight. Career Grands Prix are 24 laps and Sprints 12 laps; Quick Race offers 12–40 laps.</p><h3>Slipstream</h3><p>Tuck in behind a car on a straight to reduce drag. A strong tow allows a little extra top speed, which fades over a few seconds after pulling out. Your speed readout turns lime while receiving a tow.</p></div><div><h3>Pit stops</h3><p>Press B to request a stop, then steer off the track into the separate pit road alongside the main straight. Automatic pit stops handle lane speed, the box stop, service and exit without pedals. Disable this in Settings to use manual pedals and L limiter control. Manual speeding adds 5 seconds. The wide lane has smooth merges and assisted steering; gas/brake still control speed. Release the limiter with L after exit. 1/2/3/4/5 selects S/M/H/I/W. Stop in the marked box with S; R reverses if you overshoot. Service holds the car. Three track-limit warnings precede a 5-second penalty.</p></div><div><h3>Pace & strategy</h3><p>Save gives gentler power to extend stints and recover hot tyres. Balanced is sustainable race pace. Push adds acceleration and top speed, using more fuel and tyre life. F moves left toward Save; G moves right toward Push. No refuelling, no battery. Fuel runs out? Coast to a stop and retire.</p></div><div><h3>Career</h3><p>Name your driver and choose any team. Complete Q1, Q2 and Q3 knockouts before each race. The weekend tyre pool is shared: choose individual sets and save fresh tyres for the race. Start in a slower development car. Reset your career from the garage to start again. Sign one sponsor per race, earn position money and upgrade power, grip, tyre life or pit service. All 12 circuits form a season.</p></div><div><h3>Your controls</h3><p>P or Esc pauses and resumes. M toggles map view. Engine sound starts automatically; toggle it with Sound on / off. Your browser saves career progress automatically; quick races do not affect it.</p></div></div><button class="primary" id="close-help">READY TO RACE →</button></section>`;
   if(mobileInput)b.querySelectorAll("p").forEach(p=>p.textContent=mobileLessonText(p.textContent,settings.mobileSteering));
   app.appendChild(b);
   el("close-help").onclick = () => {
@@ -1598,10 +1650,13 @@ window.addEventListener("keydown", (e) => {
     race
   )
     e.preventDefault();
-  if (e.target.matches("input,select")) return;
+  if (e.target.matches("input,select,textarea") || e.target.isContentEditable) return;
   const k = e.key.toLowerCase();
   keys.add(k);
   if (e.repeat) return;
+  if (k === "p") {
+    e.preventDefault();pauseRace();return;
+  }
   if (k === "escape") {
     if(el("school-dialog")){e.preventDefault();return;}
     if(el("aero-picker")){el("aero-picker").querySelector("[data-close-aero]").click();return;}
@@ -1620,9 +1675,9 @@ window.addEventListener("keydown", (e) => {
   if (!race || paused || landscapeGate.blocked || race.done) return;
   // Driving shortcuts return focus to the game instead of leaving a selected
   // toolbar button outlined (or ready to react to an unrelated Space/Enter).
-  if(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright","b","p","r","t","f","g","1","2","3","4","5","6","7","8"].includes(k) && e.target.closest("button"))e.target.closest("button").blur();
+  if(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright","b","l","r","t","f","g","1","2","3","4","5","6","7","8"].includes(k) && e.target.closest("button"))e.target.closest("button").blur();
   if (k === "b") {e.preventDefault();race.requestPit();updateHUD();}
-  if (k === "p") race.togglePitLimiter();
+  if (k === "l") {e.preventDefault();race.togglePitLimiter();updateHUD();}
   if (!mobileInput && ["1", "2", "3", "4", "5"].includes(k))
     setPitTyre(["S", "M", "H", "I", "W"][+k - 1]);
   if (!mobileInput && ["6","7","8"].includes(k)){race.selectAero({6:"downforce",7:"balanced",8:"lowDrag"}[k]);updateHUD();}

@@ -306,7 +306,7 @@ test("pit lane stays wide and smooth with forward-facing edge connections", () =
     previous = p.angle;
   }
 });
-test("P limiter state caps road and pit speed; disabling it allows acceleration", () => {
+test("Manual limiter state caps road and pit speed; disabling it allows acceleration", () => {
   const r = new Race(setup, { engine: 0, aero: 0, tyres: 0, crew: 0 });
   r.cars = [r.player];
   r.countdown = 0;

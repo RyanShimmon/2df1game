@@ -1,6 +1,10 @@
 # V10 — Grand Prix
 
-Version **1.9.0**.
+Version **1.10.0**.
+
+This release adds three persistent sector bars, session-specific sector/lap records and a fastest-lap indicator. The HUD shows current lap time with a separate qualifying countdown; race timing follows five nearby drivers, while qualifying keeps the compact neighbouring-driver view.
+
+Dunes has a revised sweeping layout with its parallel straights retained. Qualifying pit departures queue safely after aero service, race preparation offers a return to the career garage, and out/in-lap track-limit excursions receive warnings rather than lap-deletion messages. Varied weather is more likely to stay dry. P or Escape pauses, L controls the manual limiter, and starting-compound changes keep the page still. Race School explains qualifying traffic etiquette.
 
 A local browser game with top-down V10 racing, 22 cars, five tyre types, dynamic weather, qualifying and a saved career. Requires Node.js 18 or newer; no dependency installation is needed.
 
@@ -18,14 +22,14 @@ Open http://127.0.0.1:5173. Use `PORT=5174 npm run dev` for a separate preview/s
 | S / Down              | Brake                                                    |
 | A / D or Left / Right | Steer                                                    |
 | B                     | Request/cancel a pit stop, including in qualifying       |
-| P                     | In manual limiter mode, toggle the 80 km/h limiter                               |
+| L                     | In manual limiter mode, toggle the 80 km/h limiter                               |
 | R                     | Reverse in the pit lane if you overshoot the box         |
 | 1 / 2 / 3 / 4 / 5     | Next compound: soft / medium / hard / intermediate / wet |
 | F                     | Pace left: Push → Balanced → Save (stops at Save)         |
 | G                     | Pace right: Save → Balanced → Push (stops at Push)        |
 | M                     | Toggle circuit overview                                  |
 | T                     | Cycle next pit compound (S/M/H/I/W)                       |
-| Escape                | Pause / resume                                           |
+| P / Escape            | Pause / resume                                           |
 
 Touch pedals, steering and reverse are available on touch devices. Sound is opt-in. Switching away from the browser pauses the game.
 
@@ -53,7 +57,7 @@ Request a stop before crossing the pit-entry point. A late request waits for the
 
 The highlighted outline marks your team's pit box. Brake to a full stop inside it to begin service. Passing over the box at speed does **not** start the stop. If you miss it, brake and hold R to reverse. You cannot exit the lane without service, and throttle/reverse are ignored until the tyre change finishes. Team boxes are spaced along the lane, with cars moving into an outside bay to stop. A busy teammate's box delays service.
 
-P enables the 80 km/h limiter. Speeding incurs five seconds, served during the stop. Tyre service is random between 2.3 and 5.5 seconds. Each crew upgrade lowers the maximum by 0.5 seconds, to 3.5 seconds at level four; the minimum stays 2.3 seconds. Penalty service is additional. Pit loss includes lane travel, your braking and service. Race stops mount an actual available tyre set without refreshing its wear. Qualifying stops also refuel to a new outing load.
+L enables the 80 km/h limiter. Speeding incurs five seconds, served during the stop. Tyre service is random between 2.3 and 5.5 seconds. Each crew upgrade lowers the maximum by 0.5 seconds, to 3.5 seconds at level four; the minimum stays 2.3 seconds. Penalty service is additional. Pit loss includes lane travel, your braking and service. Race stops mount an actual available tyre set without refreshing its wear. Qualifying stops also refuel to a new outing load.
 
 ## Track limits and contact
 

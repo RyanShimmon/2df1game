@@ -1,3 +1,4 @@
+import {createSectorSession,startSectorLap,stopSectorLap,advanceSectors,recordSessionLap} from "./sectors.js";
 import {fuelPerLap} from "./performance.js";
 import {aeroUnlocked,developTeams,developmentSnapshot,fuelMultiplier,normalizeUpgrades} from "./development.js";
 import {seededRandom,driverSeed} from "./racecraft.js";
@@ -6,6 +7,7 @@ export {tyreAllocation,selectableSets,WEEKEND_SET_IDS} from "./tyre-stock.js";
 import {prepareTyres,updateTyreTemperatures,coolStoredSets} from "./tyre-temperature.js";
 import {
   createWeather,
+  careerWeatherPattern,
   migrateWeather,
   raceWeatherDuration,
   advanceWeather,
@@ -142,6 +144,7 @@ export function createWeekend(career, setup) {
   developTeams(career,setup.aiSeed);
   const aiSeed=setup.aiSeed ?? Math.floor(Math.random()*2147483646)+1;
   const weatherSeed=setup.weatherSeed ?? (aiSeed^0x9e3779b9)>>>0;
+  const weatherPattern=careerWeatherPattern(schedule.weather,weatherSeed);
   const weatherDuration=raceWeatherDuration(schedule.laps,makeTrack(circuitById(schedule.track)).length);
   return {
     version: 1,
@@ -161,13 +164,13 @@ export function createWeekend(career, setup) {
       laps: schedule.laps,
       raceFormat:schedule.raceFormat || "grandPrix",
       fuel: +(schedule.laps * 1.15*fuelMultiplier(career.upgrades)).toFixed(1),
-      weather: schedule.weather,
+      weather: weatherPattern,
       aeroSpec:aeroUnlocked(career.upgrades) ? career.aeroSpec || "balanced" : "balanced",
       playerUpgrades:normalizeUpgrades(career.upgrades),
       teamDevelopment:developmentSnapshot(career,schedule.track),
     },
     eventName: schedule.name,
-    weather: createWeather(schedule.weather,{seed:weatherSeed,duration:qualifyingWeatherDuration({setup:{track:schedule.track}})}),
+    weather: createWeather(weatherPattern,{seed:weatherSeed,duration:qualifyingWeatherDuration({setup:{track:schedule.track}})}),
     conditions: { weather: "Dry", temperature: 24 },
     phase: "Q1",
     active: Array.from({ length: 22 }, (_, i) => i),
@@ -429,6 +432,8 @@ export class QualifyingRun extends Race {
     this.weather = w.weather;
     this.weekend = w;
     this.stage = qualifyingStage(w);
+    w.sectorSessions ||= {};
+    this.sectors=w.sectorSessions[this.stage.name] ||= createSectorSession(this.stage.name);
     this.countdown = 0;
     this.pitLimiter = true;
     this.stageStart = w.elapsed;
@@ -446,6 +451,8 @@ export class QualifyingRun extends Race {
       else {c.tyreSet=null;c.wear=1.12;}
       c.qUnavailable=!set;
       c.qualifyingRun = true;
+      stopSectorLap(c);
+      c.bestLap=this.sectors.drivers[c.id]?.bestLap ?? w.results.find(r=>r.id===c.id)?.time ?? Infinity;
       c.fuel = getQualifyingFuel(c.upgrades);
       c.qLaps = 0;
       c.qStart = null;
@@ -474,13 +481,24 @@ export class QualifyingRun extends Race {
     // Individual, varied departure times; another delay follows each serviced run.
     return (c.stops ? 6 : 4) + c.aiRandom()*(c.stops ? 12 : 24) + c.ai.strategy.reaction*1.5;
   }
+  canLeaveGarage(c) {
+    return c.qState==="garage" && !!c.pit?.serviced && c.pit.stage!=="service" &&
+      this.weekend.elapsed<this.stage.duration && !(this.finishingSession && c.player);
+  }
+  requestGarageExit() {
+    const c=this.player;
+    if(!this.canLeaveGarage(c))return false;
+    c.qNeedsRelease=false;c.qExitRequested=true;
+    if(!this.launch(c))this.say("Waiting for a clear pit lane. Departure queued.");
+    return true;
+  }
   launch(c) {
-    if (c.qState !== "garage" || !c.pit || !c.pit.serviced || this.weekend.elapsed >= this.stage.duration) return false;
-    if (this.finishingSession && c.player) return false;
+    if(!this.canLeaveGarage(c))return false;
     const blocked = this.cars.some(other => other !== c && !other.garage && other.pit &&
       Math.abs(other.pit.distance-c.pit.distance)<65);
     if (blocked) return false;
     c.garage = false;
+    c.qExitRequested = false;
     c.qState = "out";
     c.qStart = null;
     c.qInvalid = false;
@@ -503,6 +521,7 @@ export class QualifyingRun extends Race {
     const set=selectableSets(c.tyreInventory,this.weekend.phase).find(t=>t.id===id);
     if (!set) return false;
     this.nextSetId=set.id;this.nextTyre=set.compound;
+    c.qExitRequested=false;
     if (p.nextSet===set) return true;
     p.previousSet=c.tyreSet;p.nextSet=set;p.nextTyre=set.compound;
     p.serviced=false;p.stage="service";c.speed=0;
@@ -573,11 +592,12 @@ export class QualifyingRun extends Race {
     return this.cars.some(c=>!c.garage && !c.pit && !c.dnf && c.qState==="timed" &&
       Number.isFinite(c.qStart) && this.stageStart+c.qStart<this.stage.duration);
   }
-  crossLine(c,at=this.time) {
+  crossLine(c,at=this.time,line=Math.round(c.s/TRACK.length)*TRACK.length) {
     if (c.qState === "out") {
       c.qState = this.stageStart+at < this.stage.duration ? "timed" : "in";
       c.qStart = c.qState === "timed" ? at : null;
       c.qInvalid = false;
+      if(c.qState==="timed")startSectorLap(c,at,line);
       if(c.player && c.qState === "in") {
         this.pitRequested=true;
         this.say("Chequered flag. Return to the pits; this out lap cannot start a timed lap.");
@@ -589,12 +609,14 @@ export class QualifyingRun extends Race {
       if (!c.qInvalid && Number.isFinite(c.qStart) && this.stageStart+c.qStart<this.stage.duration) {
         c.bestLap = Math.min(c.bestLap,lap);
         recordLap(this.weekend,c.id,lap,this.stageStart+at);
+        recordSessionLap(this.sectors,c.id,lap);
       } else {
         this.weekend.attempts ||= {};this.weekend.attempts[c.id]=(this.weekend.attempts[c.id] || 0)+1;
         if(c.player) this.say("Lap deleted: track limits. Complete your in lap.");
       }
       c.qState = "in";
       c.qStart = null;
+      stopSectorLap(c);
       if(c.player) { this.pitRequested = true; this.say("Timed lap complete. In lap: return to the box. Extra laps will not count."); }
     }
     // In laps and every extra lap are untimed until a complete pit service.
@@ -622,10 +644,12 @@ export class QualifyingRun extends Race {
       if(c.garage && c.pit?.stage!=="service") {
         updateTyreTemperatures(c,dt);
         if(c.qNeedsRelease && !input.throttle) c.qNeedsRelease=false;
-        if(c.player ? input.throttle && !c.qNeedsRelease : this.time>=c.qReleaseAt) this.launch(c);
+        // A Leave box click is a departure request, not a one-frame attempt.
+        // Keep it while traffic passes; keyboard throttle still releases directly.
+        if(c.player ? c.qExitRequested || input.throttle && !c.qNeedsRelease : this.time>=c.qReleaseAt) this.launch(c);
         continue;
       }
-      const old=c.s, oldStops=c.stops;
+      const old=c.s, oldStops=c.stops,wasInPit=!!c.pit;
       c.trackWetness=trackWater(this.weather,c.s,TRACK.length,c.offset);
       c.contactCooldown=Math.max(0,c.contactCooldown-dt);
       if(c.pit) {
@@ -653,15 +677,17 @@ export class QualifyingRun extends Race {
       else {
         super.stepAI(c,dt);
       }
+      if(c.player && c.qState==="timed") {
+        const p=sample(c.s);
+        if(Math.hypot(c.x-p.x,c.y-p.y)>TRACK.width/2+8)c.qInvalid=true;
+      }
+      advanceSectors(this.sectors,c,old,c.s,this.time-dt,this.time,TRACK.length,{invalid:c.qInvalid,pit:wasInPit||!!c.pit,repeat:false});
+      if(c.qState!=="timed")stopSectorLap(c);
       if(!c.pit && Math.floor(c.s/TRACK.length)>Math.floor(old/TRACK.length)) {
         // The crossing can precede zero even when this physics step ends after it.
         const line=(Math.floor(old/TRACK.length)+1)*TRACK.length;
         const crossedAt=this.time-dt+dt*(line-old)/(c.s-old);
-        this.crossLine(c,crossedAt);
-      }
-      if(c.player && c.qState==="timed") {
-        const p=sample(c.s);
-        if(Math.hypot(c.x-p.x,c.y-p.y)>TRACK.width/2+8) c.qInvalid=true;
+        this.crossLine(c,crossedAt,line);
       }
       if(!c.pit && c.fuel<=0 && c.speed<4) {
         c.garage=true;
@@ -687,6 +713,21 @@ export function qualifyingProgress(w, playerId=21, stageName=w.phase) {
     playerTime:player?.time??null,through:!!player && rank<=stage.keep,
     margin:player && rival ? player.time-rival.time : null,
     final:stageName==='Q3'};
+}
+// Keep the on-track tower centred on the player. A cutoff at either edge of
+// this three-driver window remains visible without adding the whole field.
+export function qualifyingTimingWindow(w,playerId=21,stageName=w.phase) {
+  const stage=qualifyingStage(w,stageName);
+  if(!stage)return [];
+  const {order,results}=qualifyingClassification(w,stageName),index=order.indexOf(playerId);
+  if(index<0)return [];
+  const start=Math.max(0,index-1),end=Math.min(order.length,index+2);
+  return order.slice(start,end).map((id,i)=>{
+    const rank=start+i+1;
+    return {id,rank,time:results.find(row=>row.id===id)?.time ?? null,
+      cutoffBefore:stageName!=="Q3" && i===0 && rank===stage.keep+1,
+      cutoffAfter:stageName!=="Q3" && rank===stage.keep};
+  });
 }
 export function qualifyingStatus(car) {
   if(car.garage || car.pit) return 'PITS';

@@ -80,3 +80,11 @@ export function intervalSeconds(ahead,car,progress){
  const passed=passageTime(ahead,progress);
  return passed===null || !car.timing ? null : car.timing.time-passed+outstandingPenalty(car)-outstandingPenalty(ahead);
 }
+
+// A fixed window centred on the player, shifted at either end of the field.
+// Keep the original car references so ranks and intervals use the full order.
+export function raceTimingWindow(order,player){
+ const count=Math.min(5,order.length),index=Math.max(0,order.indexOf(player));
+ const start=Math.max(0,Math.min(index-2,order.length-count));
+ return order.slice(start,start+count);
+}

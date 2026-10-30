@@ -1,3 +1,4 @@
+import {createSectorSession,startSectorLap,advanceSectors,stopSectorLap} from "./sectors.js";
 import {recordTiming,intervalSeconds,createTimingReference,timingCoordinate} from "./timing.js";
 import {planRaceStrategy,strategyWearLimit} from "./strategy.js";
 import {engineAcceleration,paceMode,fuelPerLap,applyThrottle,tyreWearFactor,stintLaps,cornerAccelerationLimit} from "./performance.js";
@@ -534,14 +535,17 @@ export function tyreRuleMet(car) {
   );
 }
 export function updateTrackLimits(car, dt, distance) {
+  const qualifying=car.qualifyingRun || car.qStart!==undefined;
+  const timed=qualifying && car.qState==="timed" && Number.isFinite(car.qStart);
   if (distance > TRACK.width / 2 + 8) {
     car.limitOutside = (car.limitOutside || 0) + dt;
     car.limitInside = 0;
-    if (car.qStart !== undefined) car.qInvalid = true;
+    if (timed) car.qInvalid = true;
+    if (car.sectorTiming?.lap) car.sectorTiming.lap.valid=false;
     if (car.limitOutside > 0.08 && !car.limitExcursion) {
       car.limitExcursion = true;
       car.trackLimits = (car.trackLimits || 0) + 1;
-      if (car.qStart !== undefined) return "Lap deleted: track limits";
+      if (qualifying) return timed ? "Lap deleted: track limits" : "Track limits warning: stay within the white lines.";
       if (car.trackLimits % 4 === 0) {
         car.penalty += 5;
         car.penalties++;
@@ -793,6 +797,8 @@ export class Race {
     this.cars = Array.from({ length: 22 }, (_, i) =>
       createCar(i, setup, upgrades, mode),
     );
+    this.sectors=createSectorSession();
+    for(const car of this.cars)startSectorLap(car,0);
     this.timingReference=createTimingReference(TRACK.length,s=>{
       const p=racingPoint(AI_LINE,s),i=Math.floor(wrap(s,TRACK.length)/AI_LINE.step);
       return {...p,speed:AI_LINE.points[i].speed};
@@ -912,11 +918,11 @@ export class Race {
     this.say(this.autoPitLimiter ? "Box this lap. Steer into the separate pit road; assistance starts at its entrance." : "Box this lap. Steer into the pit road and slow to 80 km/h before its entrance.");
   }
   togglePitLimiter() {
-    if(this.autoPitLimiter) { this.say("Pit limiter is automatic. Choose manual control in Settings to use P."); return; }
+    if(this.autoPitLimiter) { this.say("Pit limiter is automatic. Choose manual control in Settings to use L."); return; }
     this.pitLimiter = !this.pitLimiter;
     this.say(
       this.pitLimiter
-        ? "Pit limiter ON · 80 km/h. P to release."
+        ? "Pit limiter ON · 80 km/h. L to release."
         : "Pit limiter OFF. Watch the 80 km/h pit limit.",
     );
   }
@@ -937,6 +943,7 @@ export class Race {
   selectAero(spec) {
     if(!this.canSelectAero() || !AERO_PACKAGES[spec])return false;
     const c=this.player,p=c.pit;
+    c.qExitRequested=false;
     this.nextAeroSpec=spec;
     if(p && !p.serviced && p.stage!=="service")p.nextAeroSpec=spec;
     if(p && (p.stage==="service" || c.garage)) {
@@ -1037,7 +1044,7 @@ export class Race {
       this.say(
         this.autoPitLimiter ? "Automatic pit stop engaged. Speed, box stop and exit are handled for you." : this.pitLimiter
           ? "Box confirmed. Limiter ON · crew ready."
-          : "In pit lane. Press P for the 80 km/h limiter.",
+          : "In pit lane. Press L for the 80 km/h limiter.",
       );
     }
     if(car.player && this.autoPitLimiter) { this.pitLimiter=true; car.speed=Math.min(car.speed,PIT_SPEED); }
@@ -1090,7 +1097,7 @@ export class Race {
           this.say(
             (this.qualifying && p.nextSet === p.previousSet ? "Fitted tyres retained. Limiter " : "Tyres fitted. Limiter ") +
               (this.pitLimiter
-                ? this.autoPitLimiter ? "ON — releases automatically at exit." : "ON — release with P after exit."
+                ? this.autoPitLimiter ? "ON — releases automatically at exit." : "ON — release with L after exit."
                 : "OFF — keep below 80 in the lane."),
           );
       }
@@ -1210,7 +1217,7 @@ export class Race {
       if (car.player)
         this.say(
           this.pitLimiter
-            ? "Pit exit clear. Press P to release the limiter."
+            ? "Pit exit clear. Press L to release the limiter."
             : this.tyreTemperatureEnabled===false ? "Pit exit clear. Rejoin safely." : "Pit exit clear. Build grip on the cold tyres.",
         );
     }
@@ -1245,7 +1252,7 @@ export class Race {
     for (const car of this.cars) {
       if (car.finished || car.dnf) continue;
       coolStoredSets(car,dt);
-      const oldS = car.s;
+      const oldS = car.s,oldProgress=raceProgress(car);
       car.trackWetness = trackWater(
         this.weather,
         car.s,
@@ -1257,16 +1264,19 @@ export class Race {
       else if (car.player) this.stepPlayer(car, dt, input);
       else this.stepAI(car, dt);
       const crossedLine=updateRaceLaps(car,oldS), newLap=Math.floor(Math.max(0,raceProgress(car))/TRACK.length);
+      const sectorLap=advanceSectors(this.sectors,car,oldProgress,raceProgress(car),this.time-dt,this.time,TRACK.length);
       if (crossedLine) {
-        const lapTime = this.time - car.lapStart;
+        const crossedAt=sectorLap?.at ?? this.time;
+        const lapTime = crossedAt - car.lapStart;
         car.lastLap = lapTime;
-        car.bestLap = Math.min(car.bestLap, lapTime);
-        car.lapStart = this.time;
+        if(sectorLap?.valid)car.bestLap = Math.min(car.bestLap, lapTime);
+        car.lapStart = crossedAt;
         if (car.player && !tyreRuleMet(car) && newLap >= this.laps - 2)
           this.say("Use a second dry compound before the finish.");
       }
       if (raceProgress(car) >= this.laps * TRACK.length) {
         car.finished = true;
+        stopSectorLap(car);
         car.trackFinishTime=this.time;
         car.finishTime = this.time + car.penalty + (!tyreRuleMet(car) ? 60 : 0);
         car.speed = 0;

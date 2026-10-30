@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {Race,acceleration,cleanAirTopSpeed,maximumSpeed,selectTrack} from '../src/core.js';
 import {newCareer} from './career-fixture.js';
 import {createWeekend,QualifyingRun,nextQualifyingSession,recordLap,finishQualifyingStage,prepareRace} from '../src/weekend.js';
+import {createWeather} from '../src/weather.js';
+import {driveQualifyingOuting} from './qualifying-driver.js';
 import {developmentBench} from '../src/development-preview.js';
 const profile={driverName:'Pit tester',teamIndex:2};
 const setup={track:'northline',laps:24,fuel:28,tyre:'S',weather:'dry',aiSeed:42,tyreTemperatureEnabled:false};
@@ -98,4 +100,45 @@ test('returning from either aero package to Balanced restores neutral performanc
   wait(r,12.28);assert.equal(c.aeroSpec,spec);wait(r,.03);
   assert.equal(c.aeroSpec,'balanced');approx(cleanAirTopSpeed(c),neutral);assert.equal(c.history.at(-1).aeroSeconds,10);
  }
+});
+
+
+test('one Leave box request survives pit traffic after qualifying aero service',()=>{
+ const career=newCareer(profile);career.upgrades.aero=1;
+ const w=createWeekend(career,setup),q=new QualifyingRun(w,'S1',career.upgrades,profile),p=q.player;
+ const passing=q.cars.find(c=>!c.player);q.cars=[p];
+ q.selectAero('lowDrag');for(let i=0;i<610;i++)q.step(1/60,{});
+ assert.equal(p.pit.serviced,true);assert.equal(p.aeroSpec,'lowDrag');
+ Object.assign(passing,{garage:false,qState:'out',speed:80});
+ Object.assign(passing.pit,{distance:p.pit.distance-10,stage:'exit',serviced:true});
+ q.cars=[p,passing];
+ assert.equal(q.launch(p),false,'a passing car still prevents an unsafe release');
+ assert.equal(q.requestGarageExit(),true);assert.equal(p.qExitRequested,true);assert.equal(p.garage,true);
+ for(let i=0;i<300&&p.garage;i++)q.step(1/60,{});
+ assert.equal(p.garage,false,'the original click releases at the next gap');
+ assert.equal(p.qExitRequested,false);assert.equal(p.qState,'out');
+});
+test('new pit work cancels queued departure and expiry still forbids a fresh outing',()=>{
+ for(const selection of ['aero','tyres']){
+  const q=qualifying(),p=q.player;p.qExitRequested=true;
+  if(selection==='aero')q.selectAero('downforce');else q.selectGarageSet('M1');
+  assert.equal(p.qExitRequested,false);assert.equal(q.requestGarageExit(),false);
+  for(let i=0;i<800;i++)q.step(1/60,{});
+  assert.equal(p.garage,true,'completing new work does not launch automatically');
+  q.weekend.elapsed=q.stage.duration;
+  assert.equal(q.requestGarageExit(),false);assert.equal(q.launch(p),false);
+ }
+});
+test('Aurora: a full-field outing, aero change and one departure click clear the pit lane',()=>{
+ const career=newCareer(profile);career.round=12;career.upgrades.aero=1;career.developmentSeed=42;
+ const w=createWeekend(career,{...setup,track:'aurora'});w.weather=createWeather('dry');
+ const q=new QualifyingRun(w,'S1',career.upgrades,profile),p=q.player;
+ driveQualifyingOuting(q);assert.equal(p.garage,true);assert.equal(p.stops,1);
+ q.autoPitLimiter=true;const set=p.tyreSet,wear=p.wear;
+ assert.equal(q.selectAero('downforce'),true);
+ for(let i=0;i<610;i++)q.step(1/60,{});
+ assert.equal(p.pit.serviced,true);assert.equal(p.aeroSpec,'downforce');assert.equal(p.tyreSet,set);approx(p.wear,wear);
+ assert.equal(q.requestGarageExit(),true);
+ for(let i=0;i<1800&&p.pit;i++)q.step(1/60,{});
+ assert.equal(p.garage,false);assert.equal(p.pit,null);assert.equal(p.qState,'out');
 });

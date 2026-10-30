@@ -96,3 +96,31 @@ test('forecast describes holding light rain and warns when it will strengthen',(
  w.points=[[0,.4],[120,.4],[180,.9],[700,.9]];assert.match(forecast(w),/Heavier rain in 3 min/);
  const p=projectWeather(w,180);assert.match(forecast(p),/Heavy rain/);
 });
+
+test('varied forecasts give roughly one in four sessions completely dry weather, while retaining every wet scenario',()=>{
+ let dry=0;const wet=new Set();
+ for(let seed=1;seed<=2000;seed++){
+  const w=createWeather('dynamic',{seed,duration:1500});
+  if(w.scenario==='dry'){
+   dry++;assert.equal(w.wetness,0);assert.ok(w.points.every(([,rain])=>rain===0));
+  }else wet.add(w.scenario);
+ }
+ assert.ok(dry>440&&dry<560,`${dry}/2000 dry forecasts`);
+ assert.equal(wet.size,5);
+});
+test('wet-biased career events can have a dry weekend; that choice persists into the race and across reloads',()=>{
+ const profile={driverName:'Weather test',teamIndex:2};let dry=0,wet=0;
+ for(let seed=1;seed<=200;seed++){
+  const career=newCareer(profile);career.round=career.seasonOrder.indexOf('alpine')+1;
+  const w=createWeekend(career,{aiSeed:42,weatherSeed:seed});
+  if(w.setup.weather==='dry'){
+   dry++;assert.equal(w.weather.scenario,'dry');
+   const saved=JSON.parse(JSON.stringify(w));startRaceWeather(saved);
+   assert.equal(saved.weather.scenario,'dry');assert.equal(saved.weather.wetness,0);
+   assert.ok(saved.weather.points.every(([,rain])=>rain===0));
+  }else{wet++;assert.equal(w.setup.weather,'sustainedRain');}
+ }
+ assert.ok(dry>30&&dry<70,`${dry}/200 dry Alpine weekends`);assert.ok(wet>0);
+ for(const pattern of ['intermediate','sustainedRain','wetToDry','showers','lateRain'])
+  for(let seed=1;seed<=20;seed++)assert.equal(createWeather(pattern,{seed}).scenario,pattern);
+});
