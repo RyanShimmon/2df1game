@@ -1855,8 +1855,8 @@ body:not(.mobile-racing) .race-actions { max-width:max(100px,calc((100vw - 560px
 body:not(.mobile-game) .race-forecast-trigger + .primary { margin-top:14px; }
 body:not(.mobile-game) .top-dashboard {
  display:grid; grid-template-columns:70px minmax(0,1fr) minmax(0,1fr) 50px;
- grid-template-rows:24px 28px; column-gap:12px; row-gap:8px;
- width:560px; min-width:0; padding:12px 14px;
+ grid-template-rows:24px 24px 8px; column-gap:12px; row-gap:6px;
+ width:560px; min-width:0; padding:10px 14px;
 }
 body:not(.mobile-game) .top-dashboard.temperatures-disabled { grid-template-columns:70px minmax(0,1fr) minmax(0,1fr); }
 body:not(.mobile-game) .top-dashboard .telemetry { min-width:0; grid-row:1; }
@@ -1934,16 +1934,31 @@ body:not(.mobile-game) .pit-actions > button { width:100%; min-width:0; min-heig
 body:not(.mobile-game) .pit-actions [data-action=pit] > span:last-child:not(#pit-button) { display:none; }
 body:not(.mobile-game) .pit-actions [hidden] { display:none; }
 body:not(.mobile-game) .aero-picker-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
-body:not(.mobile-game) .forecast-legend { align-items:center; gap:18px; }
-body:not(.mobile-game) .forecast-legend > b,body:not(.mobile-game) .forecast-legend > span { flex:none; }
-body:not(.mobile-game) .engineer-radio { position:static; transform:none; flex:1; width:auto; min-width:0; max-width:none; display:flex; align-items:center; gap:5px; margin:0; padding:0; border:0; border-radius:0; background:none; font-size:10px; line-height:13px; letter-spacing:0; pointer-events:auto; }
+/* Engineer feedback follows the telemetry panel, below its integrated sector strip. */
+body:not(.mobile-game) .race-feedback { position:absolute; top:calc(100% + 10px); left:50%; transform:translateX(-50%); width:400px; display:flex; flex-direction:column; align-items:center; gap:8px; pointer-events:none; }
+body:not(.mobile-game) .engineer-radio { position:static; transform:none; width:100%; max-width:none; display:flex; align-items:center; gap:10px; margin:0; padding:10px 14px; border:1px solid #b9d2cb25; border-left:3px solid var(--lime); border-radius:8px; background:#102129ed; box-shadow:0 4px 16px #0003; font-size:14px; line-height:19px; letter-spacing:0; text-align:left; pointer-events:none; }
 body:not(.mobile-game) .engineer-radio > span { display:flex; flex:none; margin:0; color:var(--lime); }
-body:not(.mobile-game) .engineer-radio svg { width:12px; height:12px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
-body:not(.mobile-game) .engineer-radio #message { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; min-width:0; }
-body:not(.mobile-game) .engineer-radio.hidden { display:flex !important; visibility:hidden; }
+body:not(.mobile-game) .engineer-radio svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+body:not(.mobile-game) .engineer-radio #message { min-width:0; font-weight:500; }
+body:not(.mobile-game) .engineer-radio.hidden { display:none !important; }
 
-body:not(.mobile-game) .forecast-legend { height:16px; }
-body:not(.mobile-game) #weather-timebar { display:block; height:calc(100% - 16px); }
+
+body:not(.mobile-game) .forecast-chart { height:112px; padding:8px 12px 6px; }
+body:not(.mobile-game) .race-bottom { bottom:124px; }
+body:not(.mobile-game) .forecast-heading { display:flex; align-items:center; gap:16px; height:14px; line-height:14px; font-size:9px; color:#b7ccc6; }
+body:not(.mobile-game) .forecast-heading > b { letter-spacing:1.2px; }
+body:not(.mobile-game) .forecast-heading > strong { color:#e5eeea; font-size:11px; font-weight:600; }
+body:not(.mobile-game) .forecast-heading > span { margin-left:auto; letter-spacing:1px; }
+body:not(.mobile-game) .forecast-weather-icons { display:flex; justify-content:space-between; margin:4px 8px 2px 38px; height:16px; color:#b7ccc6; }
+body:not(.mobile-game) .forecast-weather-icons > span { display:flex; align-items:center; gap:5px; font-size:10px; }
+body:not(.mobile-game) .forecast-weather-icons svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+body:not(.mobile-game) #weather-timebar { display:block; width:100%; height:60px; overflow:visible; }
+body:not(.mobile-game) #weather-timebar text { font:9px "DM Sans",sans-serif; fill:#a6bdb3; }
+body:not(.mobile-game) .forecast-gridline { stroke:#30484b; stroke-width:1; }
+body:not(.mobile-game) .forecast-water-line { stroke:#6ee4b4; stroke-width:2; fill:none; }
+body:not(.mobile-game) .forecast-fill { fill:#6ee4b4; opacity:.12; }
+body:not(.mobile-game) .forecast-water-dot { fill:#6ee4b4; }
+body:not(.mobile-game) .forecast-now-line { stroke:#e5eeea; stroke-width:1; }
 
 /* Desktop qualifying: personal lap summary and immediate rivals only. */
 body:not(.mobile-game) .qualifying-tower { max-height:none; }
@@ -1954,16 +1969,16 @@ body:not(.mobile-game) .quali-cutoff-line { display:flex; align-items:center; ga
 body:not(.mobile-game) .quali-cutoff-line::before,body:not(.mobile-game) .quali-cutoff-line::after { content:""; height:1px; flex:1; background:#ffd17e77; }
 
 /* Three persistent sector results; only the completed time briefly appears. */
-body:not(.mobile-game) .sector-strip { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; padding:7px 10px 9px; border-bottom:1px solid var(--line); flex:none; }
-body:not(.mobile-game) .sector-cell { display:grid; grid-template-columns:auto 1fr; gap:4px; align-items:center; color:var(--muted); font-size:8px; min-width:0; }
-body:not(.mobile-game) .sector-time { justify-self:end; font-size:10px; font-weight:600; height:12px; line-height:12px; font-variant-numeric:tabular-nums; }
-body:not(.mobile-game) .sector-bar { grid-column:1/-1; height:5px; border-radius:2px; background:var(--sector-colour,#3c5058); }
+body:not(.mobile-game) .sector-strip { grid-column:1/-1; grid-row:3; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; width:100%; }
+body:not(.mobile-game) .sector-cell { position:relative; min-width:0; height:8px; }
+body:not(.mobile-game) .sector-time { position:absolute; z-index:1; left:50%; top:50%; transform:translate(-50%,-50%); padding:1px 7px; border:1px solid var(--sector-colour,#3c5058); border-radius:4px; background:#102029; text-align:center; font-size:12px; font-weight:700; line-height:16px; font-variant-numeric:tabular-nums; }
+body:not(.mobile-game) .sector-time:empty { display:none; }
+body:not(.mobile-game) .sector-bar { display:block; height:8px; border-radius:2px; background:var(--sector-colour,#3c5058); }
 body:not(.mobile-game) [data-colour="purple"] { --sector-colour:#bb4fe4; }
 body:not(.mobile-game) [data-colour="green"] { --sector-colour:#60de9a; }
 body:not(.mobile-game) [data-colour="yellow"] { --sector-colour:#f7cd62; }
 body:not(.mobile-game) [data-colour="invalid"] { --sector-colour:#596b72; }
 body:not(.mobile-game) .sector-time { color:var(--sector-colour,var(--muted)); }
-body:not(.mobile-game) .sector-cell.active > span { color:#e8eee8; }
 body:not(.mobile-game) .sector-cell.active .sector-bar { outline:1px solid #e8edf080; outline-offset:2px; }
 body:not(.mobile-game) .fastest-lap-badge { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; margin-left:5px; border-radius:3px; background:#aa31cc; color:#fff; vertical-align:middle; }
 body:not(.mobile-game) .fastest-lap-badge svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; }

@@ -13,11 +13,14 @@ function randomFor(seed) {
   let value=seed>>>0;
   return ()=>{value=(value+0x6d2b79f5)>>>0;let n=value;n=Math.imul(n^(n>>>15),n|1);n^=n+Math.imul(n^(n>>>7),n|61);return ((n^(n>>>14))>>>0)/4294967296;};
 }
-const DRY_WEATHER_CHANCE=.25;
+const DRY_WEATHER_CHANCE=.65;
 // Career presets describe a circuit's weather tendency, not guaranteed rain.
 // Pick once for the weekend; quick-race explicit weather choices stay literal.
 export function careerWeatherPattern(pattern,seed) {
-  if(pattern==="dry"||pattern==="dynamic")return pattern;
+  if(pattern==="dry")return pattern;
+  // Commit a dry dynamic weekend once, so a second roll for the race cannot
+  // turn a dry qualifying plan into another chance of rain.
+  if(pattern==="dynamic")return randomFor(seed)()<DRY_WEATHER_CHANCE ? "dry" : pattern;
   return randomFor((seed^0x5bd1e995)>>>0)()<DRY_WEATHER_CHANCE ? "dry" : pattern;
 }
 export const raceWeatherDuration=(laps,length)=>Math.max(240,(laps || 16)*Math.max(25,(length || 5260)/170));

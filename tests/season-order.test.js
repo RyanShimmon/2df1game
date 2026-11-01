@@ -14,7 +14,7 @@ test('new careers receive independent twelve-event orders, each retained across 
   saved.round=round;assert.equal(careerSchedule(saved).track,a.seasonOrder[round-1]);
   const w=createWeekend(saved,{tyre:'M',aiSeed:42});migrateWeekend(w);
   const event=WEEKENDS.find(e=>e.track===a.seasonOrder[round-1]);
-  assert.equal(w.setup.track,event.track);assert.equal(w.setup.laps,event.laps);assert.equal(w.setup.raceFormat,event.raceFormat || 'grandPrix');assert.equal(w.setup.weather,event.weather);
+  assert.equal(w.setup.track,event.track);assert.equal(w.setup.laps,event.laps);assert.equal(w.setup.raceFormat,event.raceFormat || 'grandPrix');assert.ok(['dry',event.weather].includes(w.setup.weather));
  }
 });
 test('a season rollover reshuffles once, with no duplicate or missing circuits',t=>{

@@ -4,7 +4,7 @@ import {Race,TRACK,selectTrack,sample,brakingDeceleration,maximumSpeed,slidingRe
 import {newCareer} from './career-fixture.js';
 import {createWeather} from '../src/weather.js';
 import {availableAISets,brakingTarget} from '../src/racecraft.js';
-import {WEEKEND_QUOTA} from '../src/tyre-stock.js';
+import {WEEKEND_QUOTA,isQualifyingSet} from '../src/tyre-stock.js';
 import {createWeekend,migrateWeekend,selectableSets,QualifyingRun,simulateAIQualifying,prepareRace} from '../src/weekend.js';
 const profile={driverName:'Test',teamIndex:2},setup={track:'northline',tyre:'S',laps:24,fuel:28,weather:'dry',aiSeed:42,tyreTemperatureEnabled:false};
 const weekend=()=>{const w=createWeekend(newCareer(profile),setup);w.weather=createWeather('dry');return w;};
@@ -22,12 +22,13 @@ test('all 22 drivers receive identical independent stock and the exact same elig
 });
 test('legacy spare sets cannot leave AI or player with a larger usable compound allowance',()=>{
  const w=weekend();w.allocationVersion=2;delete w.softSetNumbering;
+ for(const inv of w.inventories)for(const t of inv)delete t.qualifyingOnly;
  for(const inv of w.inventories)for(const t of inv)if(t.compound==='S')t.reserved=t.id==='S4';
  for(const inv of w.inventories)for(const t of inv){t.returned=false;t.used=true;t.wear=.1+Number(t.id.slice(1))*.03;t.distance=5000;}
  const selected=w.inventories[21].find(t=>t.id==='S3');w.selectedSetId='S3';const before=w.inventories.map(inv=>inv.map(t=>t.wear));migrateWeekend(w);
  for(const inv of w.inventories){
-  for(const [compound,quota] of Object.entries(WEEKEND_QUOTA))assert.equal(inv.filter(t=>!t.returned&&!t.reserved&&t.compound===compound).length,quota);
-  assert.equal(inv.filter(t=>!t.returned&&t.reserved).length,1);
+  for(const [compound,quota] of Object.entries(WEEKEND_QUOTA))assert.equal(inv.filter(t=>!t.returned&&!isQualifyingSet(t)&&t.compound===compound).length,quota);
+  assert.equal(inv.filter(t=>!t.returned&&isQualifyingSet(t)).length,5);
  }
  assert.equal(selected.returned,false);assert.equal(w.selectedSetId,selected.id);
  assert.deepEqual(w.inventories.map(inv=>inv.map(t=>t.wear)),before);

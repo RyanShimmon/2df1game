@@ -1,8 +1,8 @@
-import {createSectorSession,startSectorLap,stopSectorLap,advanceSectors,recordSessionLap} from "./sectors.js";
+import {createSectorSession,startSectorLap,stopSectorLap,advanceSectors,recordSessionLap,restoreSectorDisplay,invalidateSector} from "./sectors.js";
 import {fuelPerLap} from "./performance.js";
 import {aeroUnlocked,developTeams,developmentSnapshot,fuelMultiplier,normalizeUpgrades} from "./development.js";
 import {seededRandom,driverSeed} from "./racecraft.js";
-import {tyreAllocation,selectableSets,limitWeekendStock,numberSoftSets} from "./tyre-stock.js";
+import {tyreAllocation,selectableSets,limitWeekendStock,numberSoftSets,addQualifyingSets,isQualifyingSet} from "./tyre-stock.js";
 export {tyreAllocation,selectableSets,WEEKEND_SET_IDS} from "./tyre-stock.js";
 import {prepareTyres,updateTyreTemperatures,coolStoredSets} from "./tyre-temperature.js";
 import {
@@ -82,7 +82,10 @@ export function migrateWeekend(w) {
     }
     w.softSetNumbering=1;
   }
-  w.allocationVersion=3;
+  if(w.allocationVersion!==4){
+    for(const inv of w.inventories || [])addQualifyingSets(inv);
+    w.allocationVersion=4;
+  }
   if(!w.qualifyingDurations){
     w.qualifyingDurations=qualifyingDurations(w.setup.track);
     // An old save may already exceed the new clock. Leave one final outing
@@ -134,7 +137,7 @@ export function qualifyingWeatherDuration(w) {
 // same on-track garage. Honour the compound chosen before the weekend opens.
 export function beginQualifying(w,upgrades,profile,{setId,compound=w.setup.tyre}={}) {
   const sets=selectableSets(w.inventories[21],w.phase);
-  const selected=sets.find(t=>t.id===setId) || sets.filter(t=>t.compound===compound).sort((a,b)=>a.wear-b.wear)[0] || sets[0];
+  const selected=sets.find(t=>t.id===setId) || sets.filter(t=>t.compound===compound).sort((a,b)=>a.wear-b.wear || Number(isQualifyingSet(b))-Number(isQualifyingSet(a)))[0] || sets[0];
   if(!selected)throw Error("No qualifying tyre sets available");
   w.selectedSetId=selected.id;w.selectedPhase=w.phase;
   return new QualifyingRun(w,selected.id,upgrades,profile);
@@ -151,7 +154,7 @@ export function createWeekend(career, setup) {
     qualifyingDurations:qualifyingDurations(schedule.track),
     distanceVersion:3,
     tyreModelVersion: 2,
-    allocationVersion: 3,
+    allocationVersion: 4,
     softSetNumbering:1,
     season: career.season,
     round: career.round,
@@ -323,10 +326,8 @@ function* finishQualifyingStageSteps(w, upgrades, profile, options={}) {
   w.sessions.push(session);
   if (w.phase === "Q3") {
     w.grid = [...order, ...w.grid];
-    for (const id of w.active) {
-      const reserved = w.inventories[id].find((t) => t.reserved);
-      if (reserved) reserved.returned = true;
-    }
+    for (const inventory of w.inventories)
+      for(const set of inventory)if(isQualifyingSet(set))set.returned=true;
     w.phase = "R";
     restoreQualifyingGrid(w);
     startRaceWeather(w);
@@ -451,7 +452,7 @@ export class QualifyingRun extends Race {
       else {c.tyreSet=null;c.wear=1.12;}
       c.qUnavailable=!set;
       c.qualifyingRun = true;
-      stopSectorLap(c);
+      restoreSectorDisplay(this.sectors,c);
       c.bestLap=this.sectors.drivers[c.id]?.bestLap ?? w.results.find(r=>r.id===c.id)?.time ?? Infinity;
       c.fuel = getQualifyingFuel(c.upgrades);
       c.qLaps = 0;
@@ -679,9 +680,9 @@ export class QualifyingRun extends Race {
       }
       if(c.player && c.qState==="timed") {
         const p=sample(c.s);
-        if(Math.hypot(c.x-p.x,c.y-p.y)>TRACK.width/2+8)c.qInvalid=true;
+        if(Math.hypot(c.x-p.x,c.y-p.y)>TRACK.width/2+8){c.qInvalid=true;invalidateSector(c);}
       }
-      advanceSectors(this.sectors,c,old,c.s,this.time-dt,this.time,TRACK.length,{invalid:c.qInvalid,pit:wasInPit||!!c.pit,repeat:false});
+      advanceSectors(this.sectors,c,old,c.s,this.time-dt,this.time,TRACK.length,{lapInvalid:c.qInvalid,pit:wasInPit||!!c.pit,repeat:false});
       if(c.qState!=="timed")stopSectorLap(c);
       if(!c.pit && Math.floor(c.s/TRACK.length)>Math.floor(old/TRACK.length)) {
         // The crossing can precede zero even when this physics step ends after it.
@@ -715,13 +716,13 @@ export function qualifyingProgress(w, playerId=21, stageName=w.phase) {
     final:stageName==='Q3'};
 }
 // Keep the on-track tower centred on the player. A cutoff at either edge of
-// this three-driver window remains visible without adding the whole field.
+// this five-driver window remains visible without adding the whole field.
 export function qualifyingTimingWindow(w,playerId=21,stageName=w.phase) {
   const stage=qualifyingStage(w,stageName);
   if(!stage)return [];
   const {order,results}=qualifyingClassification(w,stageName),index=order.indexOf(playerId);
   if(index<0)return [];
-  const start=Math.max(0,index-1),end=Math.min(order.length,index+2);
+  const count=Math.min(5,order.length),start=Math.max(0,Math.min(index-2,order.length-count)),end=start+count;
   return order.slice(start,end).map((id,i)=>{
     const rank=start+i+1;
     return {id,rank,time:results.find(row=>row.id===id)?.time ?? null,

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createWeather} from '../src/weather.js';
 import {loadCareer} from '../src/core.js';
 import {newCareer} from './career-fixture.js';
 import {createWeekend,QualifyingRun,recordLap,stageOrder} from '../src/weekend.js';
@@ -7,6 +8,7 @@ const profile={driverName:'Velocity replay',teamIndex:2};
 for(const saved of [false,true])test(`Velocity Q1: a leading 32.80 lap survives early completion (${saved?'saved garage':'live session'})`,async()=>{
  let c=newCareer(profile);c.round=2;
  let w=c.weekend=createWeekend(c,{tyre:'W',difficulty:'easy',aiSeed:42});
+ w.setup.weather='wetToDry';w.weather=createWeather('wetToDry',{seed:w.setup.weatherSeed,duration:w.weather.duration});
  let q=new QualifyingRun(w,'W1',c.upgrades,profile);
  // Replay the user's banked lap while every opponent completes its physical
  // first run on the wet second career circuit. No fabricated AI lap times.
@@ -31,6 +33,7 @@ for(const saved of [false,true])test(`Velocity Q1: a leading 32.80 lap survives 
 });
 test('the weather continues evolving when the player stays in the live session',()=>{
  const c=newCareer(profile);c.round=2;const w=createWeekend(c,{tyre:'W',difficulty:'normal',aiSeed:42});
+ w.setup.weather='wetToDry';w.weather=createWeather('wetToDry',{seed:w.setup.weatherSeed,duration:w.weather.duration});
  const q=new QualifyingRun(w,'W1',c.upgrades,profile),before=w.weather.wetness;
  for(let i=0;i<20*200;i++)q.step(.05,{});
  assert.ok(w.weather.elapsed>199);assert.notEqual(w.weather.wetness,before);

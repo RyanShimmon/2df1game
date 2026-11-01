@@ -5,8 +5,17 @@ export function createSectorSession(name="Race") {
 }
 export function startSectorLap(car,at,from=0) {
   car.sectorTiming ||= {bars:[null,null,null],event:null,sequence:0,active:null,lap:null};
-  car.sectorTiming.lap={from,start:at,lastAt:at,next:0,valid:true,times:[]};
+  car.sectorTiming.lap={from,start:at,lastAt:at,next:0,valid:true,sectorValid:true,times:[]};
   car.sectorTiming.active=0;
+}
+export function restoreSectorDisplay(session,car){
+  const saved=session.drivers[car.id]?.lastSectors;
+  car.sectorTiming={bars:saved ? saved.map(result=>result && {...result}) : [null,null,null],
+    event:null,sequence:0,active:null,lap:null};
+}
+export function invalidateSector(car) {
+  const lap=car.sectorTiming?.lap;
+  if(lap){lap.valid=false;lap.sectorValid=false;}
 }
 export function stopSectorLap(car) {
   if(car.sectorTiming){car.sectorTiming.lap=null;car.sectorTiming.active=null;}
@@ -21,20 +30,22 @@ export function recordSessionLap(session,id,time) {
   // Equal laps retain the first driver to set the time.
   if(!session.fastestLap||time<session.fastestLap.time-1e-9)session.fastestLap={driverId:id,time};
 }
-export function advanceSectors(session,car,from,to,before,after,length,{invalid=false,pit=false,repeat=true}={}) {
+export function advanceSectors(session,car,from,to,before,after,length,{invalid=false,lapInvalid=false,pit=false,repeat=true}={}) {
   const state=car.sectorTiming;
   if(!state?.lap)return null;
-  if(invalid||pit)state.lap.valid=false;
+  if(lapInvalid)state.lap.valid=false;
+  if(invalid||pit)invalidateSector(car);
   if(to<=from||after<=before)return null;
   // Recovery/branch jumps cannot manufacture a sector or fastest lap.
-  if(to-from>length/4)state.lap.valid=false;
+  const jumped=to-from>length/4;
+  if(jumped)invalidateSector(car);
   let completed=null;
   while(state.lap){
     const lap=state.lap,index=lap.next,boundary=lap.from+(index===2 ? length : (index+1)*length/3);
     if(boundary>to)break;
-    if(boundary<from-1e-6)lap.valid=false;
+    if(jumped||boundary<from-1e-6)invalidateSector(car);
     const at=before+(after-before)*Math.max(0,Math.min(1,(boundary-from)/(to-from)));
-    const time=at-lap.lastAt,valid=lap.valid&&time>0;
+    const time=at-lap.lastAt,valid=lap.sectorValid&&time>0;
     const driver=driverRecord(session,car.id),overall=session.bestSectors[index],personal=driver.sectors[index];
     const colour=!valid ? "invalid" : overall===null||time<overall.time-1e-9 ? "purple" :
       personal===null||time<personal-1e-9 ? "green" : "yellow";
@@ -43,8 +54,12 @@ export function advanceSectors(session,car,from,to,before,after,length,{invalid=
       if(overall===null||time<overall.time-1e-9)session.bestSectors[index]={driverId:car.id,time};
     }
     state.bars[index]={time,colour};
+    driver.lastSectors=state.bars.map(result=>result && {...result});
     state.event={sector:index,time,colour,sequence:++state.sequence};
     lap.times[index]=time;lap.lastAt=at;lap.next++;
+    // A deleted lap stays ineligible, but a later clean sector still has a
+    // useful personal/session comparison. Only the affected sector is grey.
+    lap.sectorValid=true;
     if(index===2){
       completed={time:at-lap.start,at,valid:lap.valid&&lap.times.every(t=>t>0)};
       if(completed.valid)recordSessionLap(session,car.id,completed.time);

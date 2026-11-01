@@ -1,3 +1,5 @@
+import {forecastHUD} from "./forecast-hud.js";
+import {isQualifyingSet} from "./tyre-stock.js";
 import {currentLapTime} from "./sectors.js";
 import {raceTimingWindow} from "./timing.js";
 import {speedValue,speedUnitLabel,formatSpeed,speedText} from "./units.js";
@@ -165,7 +167,7 @@ function tyreLifeIndicator(selected={compound:setup.tyre,wear:0}) {
   return `<section class="tyre-life" aria-label="Estimated stint life"><div class="tyre-life-heading"><b>ESTIMATED STINT LIFE</b><span>Balanced pace · suitable conditions</span></div><div class="tyre-life-grid">${["S","M","H","I","W"].map(compound=>`<div style="--tyre:${TYRES[compound].color}"><i class="tyre-dot"></i><span>${TYRES[compound].name}</span><b>≈ ${estimatedTyreLife(compound,{upgrades}).toFixed(1).replace(/\.0$/,"")} laps</b></div>`).join("")}</div><p class="tyre-life-remaining">${selected.id ? selected.id+" · " : ""}${TYRES[selected.compound].name} selected <strong>≈ ${remaining.toFixed(1)} laps remaining</strong></p>${wetnessGuide(career.weekend && screen==="career" ? career.weekend.weather.wetness : null)}</section>`;
 }
 function header() {
-  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.10.0</div></header>`;
+  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.11.0</div></header>`;
 }
 function tabs() {
   return `<div class="tabs"><button class="tab ${screen === "quick" ? "active" : ""}" data-screen="quick">Quick race</button><button class="tab ${screen === "career" ? "active" : ""}" data-screen="career">Career garage</button><button class="tab" data-action="school">Race School</button><button class="tab" data-action="help">How to drive ↗</button><button class="tab" data-action="settings">Settings</button></div>`;
@@ -453,7 +455,7 @@ function engineerBriefHTML(running){
  return report.level ? `<section class="engineer-brief"><h3>Engineer briefing · Level ${report.level}</h3><ul>${report.items.map(item=>`<li>${escapeHTML(item)}</li>`).join("")}</ul><p class="hint">Estimates update with your driving, conditions and traffic.</p></section>` : "";
 }
 function tyreSetLabel(t) {
-  return `${t.id} · ${TYRES[t.compound].name} · ${Math.round(Math.max(0, 1 - t.wear) * 100)}% · ${t.used ? "used" : "fresh"}`;
+  return `${t.id} · ${TYRES[t.compound].name} · ${Math.round(Math.max(0, 1 - t.wear) * 100)}% · ${t.used ? "used" : "fresh"}${isQualifyingSet(t) ? " · qualifying only" : ""}`;
 }
 function weekendCard() {
   const w = career.weekend;
@@ -479,7 +481,7 @@ function weekendCard() {
                 ? "M"
                 : "S"),
         )
-        .sort((a, b) => a.wear - b.wear)[0]?.id ||
+        .sort((a, b) => a.wear - b.wear || Number(isQualifyingSet(b))-Number(isQualifyingSet(a)))[0]?.id ||
       sets[0]?.id;
     w.selectedPhase = phase;
     w.selectedSetId = selectedWeekendSet;
@@ -731,7 +733,7 @@ function raceUI() {
     lapSummary.appendChild(el("last-lap"));
     lapSummary.insertAdjacentHTML("beforeend",'<p id="best-lap"></p>');
     el("timing").before(lapSummary);
-    lapSummary.insertAdjacentHTML("afterend",`<div id="sector-strip" class="sector-strip" role="group" aria-label="Your sector times">${[1,2,3].map(n=>`<div class="sector-cell" data-sector="${n-1}"><span>S${n}</span><b class="sector-time"></b><i class="sector-bar"></i></div>`).join("")}</div>`);
+    dashboard.insertAdjacentHTML("beforeend",`<div id="sector-strip" class="sector-strip" role="group" aria-label="Your sector times">${[0,1,2].map(n=>`<div class="sector-cell" data-sector="${n}"><b class="sector-time"></b><i class="sector-bar"></i></div>`).join("")}</div>`);
   }
   app.querySelector("[data-action=settings]").onclick=showSettings;
   app.querySelector("[data-action=pit]").onclick = () => {
@@ -785,12 +787,14 @@ function raceUI() {
     const advance=el("finish-qualifying-run");if(advance)actions.appendChild(advance);
     el("browse-race-tyres").textContent="Choose tyres";
     const timeline=app.querySelector(".weather-timeline");timeline.setAttribute("role","group");timeline.setAttribute("aria-label","Weather forecast");
-    el("weather-timebar").setAttribute("role","img");el("weather-timebar").setAttribute("aria-label","Scrolling six-minute weather forecast");
+    timeline.classList.add("forecast-chart");
+    timeline.innerHTML='<div class="forecast-heading"><b>WEATHER FORECAST</b><strong id="forecast-current"></strong><span>NEXT 6 MIN</span></div><div class="forecast-weather-icons" id="forecast-weather-icons" aria-hidden="true"></div><svg id="weather-timebar" role="img" aria-label="Track wetness forecast"></svg>';
     const engineer=el("engineer");
     engineer.classList.add("engineer-radio");engineer.setAttribute("role","status");
     engineer.firstElementChild.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13v-1a8 8 0 0 1 16 0v5a4 4 0 0 1-4 4h-3M4 12h3v7H4a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2Zm16 0h-3v7h3a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2Z"/></svg>';
     engineer.firstElementChild.setAttribute("aria-label","Race engineer");
-    dashboard.querySelector(".dashboard-conditions").before(engineer);
+    const feedback=document.createElement("div");feedback.className="race-feedback";
+    feedback.appendChild(engineer);dashboard.appendChild(feedback);
   }
   refreshHUDIcons();
   updateHUD();
@@ -942,7 +946,7 @@ function mountMobileControls(){
   const dashboard=app.querySelector(".top-dashboard"), modes=dashboard?.querySelector(".drive-modes");
   if(modes){if(mobileInput)dashboard.appendChild(modes);else (dashboard.querySelector(".dashboard-controls") || dashboard.querySelector(".telemetry")).prepend(modes);}
   const engineer=el("engineer");
-  if(engineer){if(mobileInput)app.querySelector(".race-bottom").prepend(engineer);else if(engineer.classList.contains("engineer-radio"))dashboard.querySelector(".dashboard-conditions").before(engineer);else app.appendChild(engineer);}
+  if(engineer){if(mobileInput)app.querySelector(".race-bottom").prepend(engineer);else if(engineer.classList.contains("engineer-radio"))app.querySelector(".race-feedback")?.appendChild(engineer);else app.appendChild(engineer);}
   const controls=app.querySelector(".touch-controls");if(!controls)return;
   controls.innerHTML=`<div class="steering-controls">${mobileInput && settings.mobileSteering==="stick" ? '<div class="steering-stick" role="group" aria-label="Steering thumbstick"><span class="stick-knob"></span><span class="stick-label">STEER</span></div>' : '<button data-touch="left" aria-label="Steer left">←</button><button data-touch="right" aria-label="Steer right">→</button>'}</div><div class="pedal-controls"><button class="pedal" data-touch="brake" aria-label="Brake then reverse">BRAKE</button><button class="pedal" data-touch="throttle" aria-label="Accelerate">GAS</button></div>`;
   const sync=()=>{touch=mobileControls.state();};
@@ -1072,9 +1076,9 @@ function showTyreSetPicker(quickStart=false) {
   const available=selectableSets(inventory,phase,running && !running.qualifying ? currentId : null),selected=running ? running.nextSetId || "quick-"+running.nextTyre : quickStart ? "start-"+setup.tyre : selectedWeekendSet;
   let draftSet=available.find(t=>t.id===selected && (!mediumLesson || t.compound==="M"))?.id;
   const backdrop=document.createElement("div");backdrop.className="modal-backdrop";backdrop.id="tyre-set-picker";
-  backdrop.innerHTML=`<section class="modal tyre-picker-modal" role="dialog" aria-modal="true" aria-labelledby="tyre-picker-title"><div class="track-picker-heading"><div><div class="eyebrow">${quickStart ? "STARTING TYRES" : running && !running.player.tyreInventory ? "RACE TYRE OPTIONS" : "WEEKEND TYRE ALLOCATION"}</div><h2 id="tyre-picker-title">Choose your tyre set</h2></div><button class="ghost" data-close-tyres aria-label="Close tyre selector">×</button></div><p class="hint">Fresh or used — each physical set keeps its condition across outings and qualifying sessions. ${!mobileInput && running ? "The compound buttons remain available for quick choices." : ""}</p><p class="hint">${running || w ? `Now ${Math.round((running?.weather.wetness ?? w.weather.wetness)*100)}% wet · white marker = current water. ` : ""}Bands show suggested grip ranges on a 0–100% wetness scale.</p>${["S","M","H","I","W"].map(compound=>`<div class="tyre-set-group"><h3 style="color:${TYRES[compound].color}">${TYRES[compound].name}</h3>${wetnessBand(compound,running?.weather.wetness ?? w?.weather.wetness ?? null,false)}<div class="tyre-set-grid">${inventory.filter(t=>t.compound===compound&&!t.returned).sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true})).map(t=>{
+  backdrop.innerHTML=`<section class="modal tyre-picker-modal" role="dialog" aria-modal="true" aria-labelledby="tyre-picker-title"><div class="track-picker-heading"><div><div class="eyebrow">${quickStart ? "STARTING TYRES" : running && !running.player.tyreInventory ? "RACE TYRE OPTIONS" : "WEEKEND TYRE ALLOCATION"}</div><h2 id="tyre-picker-title">Choose your tyre set</h2></div><button class="ghost" data-close-tyres aria-label="Close tyre selector">×</button></div><p class="hint">Fresh or used — each physical set keeps its condition across outings and qualifying sessions. ${!mobileInput && running ? "The compound buttons remain available for quick choices." : ""}</p><p class="hint">${running || w ? `Now ${Math.round((running?.weather.wetness ?? w.weather.wetness)*100)}% wet · white marker = current water. ` : ""}Bands show suggested grip ranges on a 0–100% wetness scale.</p>${["S","M","H","I","W"].map(compound=>`<div class="tyre-set-group"><h3 style="color:${TYRES[compound].color}">${TYRES[compound].name}</h3>${wetnessBand(compound,running?.weather.wetness ?? w?.weather.wetness ?? null,false)}<div class="tyre-set-grid">${inventory.filter(t=>t.compound===compound&&!t.returned&&(phase!=="R"||!isQualifyingSet(t))).sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true})).map(t=>{
     const enabled=available.some(a=>a.id===t.id) && (!mediumLesson || t.compound==="M"),condition=Math.round(Math.max(0,1-t.wear)*100),fitted=!!running && currentId===t.id;
-    return `<button class="tyre-set-card ${t.id===selected ? "selected" : ""}" data-choose-set="${t.id}" ${enabled ? "" : "disabled"} aria-pressed="${t.id===selected}" style="--tyre:${TYRES[compound].color}"><b><i class="tyre-dot"></i>${t.label || t.id}<span>${condition}%</span></b><div class="bar"><i style="width:${condition}%;background:var(--tyre)"></i></div><small>${fitted ? "Currently fitted" : !enabled ? mediumLesson && t.compound!=="M" ? "Use Mediums for outing 2" : t.reserved ? "Reserved for Q3" : "Worn out" : t.used ? "Used · reusable" : "Fresh"}</small></button>`;
+    return `<button class="tyre-set-card ${t.id===selected ? "selected" : ""}" data-choose-set="${t.id}" ${enabled ? "" : "disabled"} aria-pressed="${t.id===selected}" style="--tyre:${TYRES[compound].color}"><b><i class="tyre-dot"></i>${t.label || t.id}<span>${condition}%</span></b><div class="bar"><i style="width:${condition}%;background:var(--tyre)"></i></div><small>${fitted ? "Currently fitted" : !enabled ? mediumLesson && t.compound!=="M" ? "Use Mediums for outing 2" : "Worn out" : t.used ? "Used · reusable" : "Fresh"}${isQualifyingSet(t) ? " · Qualifying only" : ""}</small></button>`;
   }).join("")}</div></div>`).join("")}<div class="picker-confirm"><p class="hint">${running ? "Session paused. Confirm your choice to resume." : "Select a set, then confirm."}</p><button class="primary" id="confirm-tyre-set" ${draftSet ? "" : "disabled"}>CONFIRM TYRE SET →</button></div></section>`;
   const close=openStrategyPicker(backdrop,running,running ? el("browse-race-tyres") : app.querySelector("[data-action=browse-weekend-tyres]"));
   backdrop.querySelector("[data-close-tyres]").onclick=close;backdrop.onclick=e=>{if(e.target===backdrop)close();};
@@ -1129,7 +1133,7 @@ function setPitTyre(tyre) {
       race.qualifying ? null : race.player.tyreSet?.id,
     )
       .filter((t) => t.compound === tyre && t.id !== race.player.tyreSet?.id)
-      .sort((a, b) => a.wear - b.wear);
+      .sort((a, b) => a.wear - b.wear || Number(isQualifyingSet(b))-Number(isQualifyingSet(a)));
     if (!available.length) return;
     race.nextSetId = available[0].id;
   }
@@ -1144,8 +1148,18 @@ function updateWeatherTimeline() {
   const svg=el("weather-timebar");
   if(!svg) return;
   const now=race.weather.elapsed, bucket=Math.floor(now);
-  if(svg.dataset.second===String(bucket)) return;
-  svg.dataset.second=String(bucket);
+  const key=mobileInput ? String(bucket) : `${bucket}:${window.innerWidth}`;
+  if(svg.dataset.second===key) return;
+  svg.dataset.second=key;
+  if(!mobileInput){
+    const width=Math.max(280,svg.clientWidth),view=forecastHUD(race.weather,width);
+    svg.setAttribute("viewBox",`0 0 ${width} 60`);
+    svg.setAttribute("aria-label",view.description);
+    svg.innerHTML=view.chart;
+    el("forecast-current").textContent=view.summary;
+    el("forecast-weather-icons").innerHTML=view.icons;
+    return;
+  }
   const start=now-30, x=t=>(t-start)/390*720, y=v=>43-v*29;
   const points=weatherTimeline(race.weather);
   const water=points.map((p,i)=>`${i ? "L" : "M"}${x(p.time).toFixed(1)},${y(p.water).toFixed(1)}`).join(" ");
@@ -1163,12 +1177,12 @@ function updateSectorHUD() {
   if(!strip||!state)return;
   if(sectorHUDRace!==race){sectorHUDRace=race;sectorHUDEvent=null;sectorHUDUntil=0;}
   if(state.event && sectorHUDEvent!==state.event){
-    sectorHUDEvent=state.event;sectorHUDUntil=performance.now()+2200;
+    sectorHUDEvent=state.event;sectorHUDUntil=performance.now()+3500;
   }
   const timed=!race.qualifying||race.player.qState==="timed";
   const colours={purple:"Session best",green:"Personal best",yellow:"Slower than personal best",invalid:"Invalid sector"};
   strip.querySelectorAll(".sector-cell").forEach((cell,i)=>{
-    const result=timed ? state.bars[i] : null,active=timed&&!race.player.finished&&!race.player.dnf&&state.active===i;
+    const result=state.bars[i],active=timed&&!race.player.finished&&!race.player.dnf&&state.active===i;
     const popup=state.event?.sector===i&&performance.now()<sectorHUDUntil ? state.event : null;
     cell.dataset.colour=result?.colour || "neutral";
     cell.classList.toggle("active",active);

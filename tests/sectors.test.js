@@ -55,8 +55,10 @@ test('untimed pit, invalid and recovery laps cannot set the fastest lap',()=>{
  for(const option of [{pit:true},{invalid:true}]){
   const s=createSectorSession(),c=driver();
   runSector(s,c,0,8,option);runSector(s,c,1,16);runSector(s,c,2,24);
-  assert.equal(s.fastestLap,null);assert.ok(s.bestSectors.every(v=>v===null));
-  assert.ok(c.sectorTiming.bars.every(b=>b.colour==='invalid'));
+  assert.equal(s.fastestLap,null);assert.equal(s.bestSectors[0],null);
+  assert.equal(c.sectorTiming.bars[0].colour,'invalid');
+  assert.ok(c.sectorTiming.bars.slice(1).every(b=>b.colour==='purple'));
+  assert.ok(s.bestSectors.slice(1).every(b=>b.time===8));
  }
  const s=createSectorSession(),c=driver();advanceSectors(s,c,0,300,0,1,300);
  assert.equal(s.fastestLap,null);
@@ -81,4 +83,25 @@ test('Q1, Q2, Q3 and race records are isolated and survive JSON storage',()=>{
  runSector(sessions[0],driver(),0,10);recordSessionLap(sessions[0],21,30);
  assert.deepEqual(JSON.parse(JSON.stringify(sessions[0])),sessions[0]);
  for(const s of sessions.slice(1)){assert.equal(s.fastestLap,null);assert.ok(s.bestSectors.every(v=>v===null));}
+});
+
+// One invalid sector must not suppress useful comparisons for the rest of a
+// timed lap. Qualifying keeps its qInvalid flag until the finish.
+for(const sessionName of ['Race','Q1'])test(`${sessionName}: clean sectors after a cut retain green/yellow/purple comparisons`,()=>{
+ const s=createSectorSession(sessionName),leader=driver(0),c=driver();
+ for(let i=0;i<3;i++)runSector(s,leader,i,(i+1)*10);
+ for(let i=0;i<3;i++)runSector(s,c,i,(i+1)*12);
+ assert.ok(c.sectorTiming.bars.every(b=>b.colour==='green'));
+ runSector(s,c,3,47,{invalid:true});
+ assert.equal(c.sectorTiming.bars[0].colour,'invalid');
+ runSector(s,c,4,58,{lapInvalid:true});
+ assert.equal(c.sectorTiming.bars[1].colour,'green');
+ const invalidLap=runSector(s,c,5,71,{lapInvalid:true});
+ assert.equal(c.sectorTiming.bars[2].colour,'yellow');
+ assert.equal(invalidLap.valid,false);
+ assert.equal(s.drivers[c.id].bestLap,36);
+ assert.equal(s.fastestLap.driverId,leader.id);
+ runSector(s,c,6,80);
+ assert.equal(c.sectorTiming.bars[0].colour,'purple');
+ assert.equal(s.bestSectors[0].driverId,c.id);
 });

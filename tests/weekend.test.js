@@ -21,17 +21,17 @@ const setup = { laps: 8, fuel: 9.5, tyre: "M" },
   profile = { driverName: "Alex", teamIndex: 2 },
   upgrades = { engine: 0, aero: 0, tyres: 0, crew: 0 };
 const create = () => createWeekend(newCareer(profile), setup);
-test("limited weekend stock shares four general-use dry sets and a reserved Q3 Soft", () => {
+test("limited weekend stock shares four general-use dry sets and one dedicated qualifying set per compound", () => {
   const inv = tyreAllocation();
   assert.equal(inv.length, 20);
   assert.equal(
     inv.filter((t) => ["S", "M", "H"].includes(t.compound)).length,
     13,
   );
-  assert.equal(inv.filter((t) => t.returned).length, 12);
-  assert.deepEqual(selectableSets(inv, "Q1").map(t=>t.id), ["H1","M1","S1","S2","I1","I2","W1"]);
-  assert.equal(selectableSets(inv,"R").length,8);
-  assert.ok(!selectableSets(inv, "Q2").some((t) => t.id === "S3"));
+  assert.equal(inv.filter((t) => t.returned).length, 8);
+  assert.deepEqual(selectableSets(inv, "Q1").map(t=>t.id), ["H1","H2","M1","M2","S1","S2","S3","I1","I2","I3","W1","W2"]);
+  assert.equal(selectableSets(inv,"R").length,7);
+  assert.ok(selectableSets(inv, "Q2").some((t) => t.id === "S3"));
   assert.ok(selectableSets(inv, "Q3").some((t) => t.id === "S3"));
   assert.ok(qualifyingStage(create(),"Q3").duration < 10 * 60);
 });
@@ -58,13 +58,13 @@ test("22→16→10 knockouts set final positions by their own stage, with fresh 
   assert.equal(w.sessions.length, 3);
   assert.ok(w.inventories[21].find((t) => t.id === "S3").returned);
 });
-test("eliminated driver keeps their position, and unused reserved Q3 set becomes race available", () => {
+test("eliminated driver keeps their position, and unused qualifying sets stay excluded from the race", () => {
   const w = create();
   finishQualifyingStage(w, upgrades, profile);
   assert.ok(!w.active.includes(21));
   finishRemainingQualifying(w, upgrades, profile);
   assert.equal(w.grid.indexOf(21), 21);
-  assert.ok(selectableSets(w.inventories[21], "R").some((t) => t.id === "S3"));
+  assert.ok(!selectableSets(w.inventories[21], "R").some((t) => t.id === "S3"));
 });
 test("equal times are resolved by earliest lap, and worse later laps never replace best", () => {
   const w = create();

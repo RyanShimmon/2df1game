@@ -1,4 +1,4 @@
-import {createSectorSession,startSectorLap,advanceSectors,stopSectorLap} from "./sectors.js";
+import {createSectorSession,startSectorLap,advanceSectors,stopSectorLap,invalidateSector} from "./sectors.js";
 import {recordTiming,intervalSeconds,createTimingReference,timingCoordinate} from "./timing.js";
 import {planRaceStrategy,strategyWearLimit} from "./strategy.js";
 import {engineAcceleration,paceMode,fuelPerLap,applyThrottle,tyreWearFactor,stintLaps,cornerAccelerationLimit} from "./performance.js";
@@ -541,7 +541,7 @@ export function updateTrackLimits(car, dt, distance) {
     car.limitOutside = (car.limitOutside || 0) + dt;
     car.limitInside = 0;
     if (timed) car.qInvalid = true;
-    if (car.sectorTiming?.lap) car.sectorTiming.lap.valid=false;
+    invalidateSector(car);
     if (car.limitOutside > 0.08 && !car.limitExcursion) {
       car.limitExcursion = true;
       car.trackLimits = (car.trackLimits || 0) + 1;
@@ -780,6 +780,46 @@ function createCar(i, setup, upgrades, mode) {
     history: [],
   };
 }
+// Contact recovery uses the same body yaw, countersteering, traction and
+// slide resistance for humans and AI. A route target cannot rotate the body
+// instantly to erase the slip angle created by another car.
+export function steerCar(c,dt,{steer=0,throttle=0,brake=0,off=false,front=grip(c,"front"),rear=grip(c,"rear"),targetAngle=null}={}){
+  const g=front,rearGrip=rear;
+  const slowControl=1-clamp(c.speed/110,0,1);
+  const steeringGrip=clamp(g,.1,1)+(1-clamp(g,.1,1))*slowControl;
+  const turnRate=(2.3/(1+c.speed/180))*(.55+.45*steeringGrip)*
+    clamp(Math.max(c.speed,off && throttle ? 12 : 0)/32,0,1);
+  if(targetAngle!==null)steer=clamp(angleDiff(targetAngle,c.angle)/Math.max(.0001,turnRate*dt),-1,1);
+  const travelAngle=c.motionAngle ?? (c.angle+Math.atan2(c.sideSpeed || 0,Math.max(c.speed,1)));
+  const previous = c.angle;
+  const recoverySlip=angleDiff(travelAngle,c.angle);
+  const countersteering=Math.abs(recoverySlip)>.05 && Math.sign(steer)===Math.sign(recoverySlip);
+  const recoveryBoost=countersteering ? (1.5+.9*throttle+.5*clamp(Math.abs(recoverySlip)/.8,0,1))*(1+level(c.upgrades,"suspension")*.06) : 1;
+  let yawStep=steer*turnRate*recoveryBoost*dt;
+  if(countersteering) yawStep=Math.sign(yawStep)*Math.min(Math.abs(yawStep),Math.abs(recoverySlip));
+  if(targetAngle!==null)yawStep=Math.sign(yawStep)*Math.min(Math.abs(yawStep),Math.abs(angleDiff(targetAngle,c.angle)));
+  c.angle+=yawStep;
+  const turning = Math.abs(angleDiff(c.angle, previous)) / dt;
+  // Tyres can only bend the velocity vector by the available lateral force.
+  // The body can yaw past that travel direction: real sideways drift, not a
+  // fixed speed subtraction whenever skid marks are shown.
+  // On wet asphalt, acceleration / braking use some of the same traction
+  // budget as cornering. Lifting frees lateral grip instead of killing speed.
+  const wet=clamp(c.trackWetness || 0,0,1);
+  const longitudinalDemand=wet*(throttle*.48+brake*.62*(1-level(c.upgrades,"brakes")*.025))*clamp(c.speed/100,0,1);
+  const cornerGrip=(g*.45+rearGrip*.55)*Math.sqrt(Math.max(.35,1-longitudinalDemand**2));
+  const recoveryAuthority=countersteering ? Math.abs(steer)*(.65+.9*throttle)*clamp(Math.abs(recoverySlip)/.8,0,1) : 0;
+  const travelTurn=225*cornerGrip/Math.max(c.speed,25)*(countersteering ? 1.15+.25*throttle : 1)+recoveryAuthority*(1+level(c.upgrades,"suspension")*.08);
+  c.motionAngle=travelAngle+clamp(angleDiff(c.angle,travelAngle),-travelTurn*dt,travelTurn*dt);
+  const slipAngle=angleDiff(c.motionAngle,c.angle);
+  const slide=Math.max(clamp((c.speed*turning)/(225*cornerGrip)-1,0,1),clamp(Math.abs(slipAngle)/.35,0,1));
+  c.sliding=slide;
+  c.speed=Math.max(0,c.speed-(slidingResistance(c.speed,slide,slipAngle)+
+    Math.abs(steer)*Math.max(0,c.speed-180)*.025)*dt);
+  c.sideSpeed=c.speed*Math.sin(slipAngle);
+  return {turning,slide,slipAngle};
+}
+
 export class Race {
   constructor(setup, upgrades = {}, mode = "quick", profile = null) {
     if(mode==="career" && setup.playerUpgrades)upgrades=setup.playerUpgrades;
@@ -1349,41 +1389,12 @@ export class Race {
         ? acceleration(c) * throttle * (1 - 0.45 * steer * steer) * traction *
           Math.cos(angleDiff(c.motionAngle ?? c.angle,c.angle))
         : -(4 + c.speed * 0.012);
-    c.speed = clamp(c.speed + (accel - brake * brakingDeceleration(c) - overspeedDrag(c)) * dt, 0, top);
+    c.speed = clamp(c.speed + (accel - brake * brakingDeceleration(c) - overspeedDrag(c)) * dt, 0, Math.max(top,c.speed));
     if (this.pitLimiter) c.speed = Math.min(c.speed, PIT_SPEED);
     // Grass costs pace, but rolling resistance falls at low speed so the engine
     // can always get a fuelled car moving again. Do not subtract a fixed 90/sec.
     if(off) c.speed=Math.max(0,c.speed-(6+c.speed*.65)*dt);
-    const slowControl=1-clamp(c.speed/110,0,1);
-    const steeringGrip=clamp(g,.1,1)+(1-clamp(g,.1,1))*slowControl;
-    const turnRate=(2.3/(1+c.speed/180))*(.55+.45*steeringGrip)*
-      clamp(Math.max(c.speed,off && throttle ? 12 : 0)/32,0,1);
-    const travelAngle=c.motionAngle ?? (c.angle+Math.atan2(c.sideSpeed || 0,Math.max(c.speed,1)));
-    const previous = c.angle;
-    const recoverySlip=angleDiff(travelAngle,c.angle);
-    const countersteering=Math.abs(recoverySlip)>.05 && Math.sign(steer)===Math.sign(recoverySlip);
-    const recoveryBoost=countersteering ? (1.5+.9*throttle+.5*clamp(Math.abs(recoverySlip)/.8,0,1))*(1+level(c.upgrades,"suspension")*.06) : 1;
-    let yawStep=steer*turnRate*recoveryBoost*dt;
-    if(countersteering) yawStep=Math.sign(yawStep)*Math.min(Math.abs(yawStep),Math.abs(recoverySlip));
-    c.angle+=yawStep;
-    const turning = Math.abs(angleDiff(c.angle, previous)) / dt;
-    // Tyres can only bend the velocity vector by the available lateral force.
-    // The body can yaw past that travel direction: real sideways drift, not a
-    // fixed speed subtraction whenever skid marks are shown.
-    // On wet asphalt, acceleration / braking use some of the same traction
-    // budget as cornering. Lifting frees lateral grip instead of killing speed.
-    const wet=clamp(c.trackWetness || 0,0,1);
-    const longitudinalDemand=wet*(throttle*.48+brake*.62*(1-level(c.upgrades,"brakes")*.025))*clamp(c.speed/100,0,1);
-    const cornerGrip=(g*.45+rearGrip*.55)*Math.sqrt(Math.max(.35,1-longitudinalDemand**2));
-    const recoveryAuthority=countersteering ? Math.abs(steer)*(.65+.9*throttle)*clamp(Math.abs(recoverySlip)/.8,0,1) : 0;
-    const travelTurn=225*cornerGrip/Math.max(c.speed,25)*(countersteering ? 1.15+.25*throttle : 1)+recoveryAuthority*(1+level(c.upgrades,"suspension")*.08);
-    c.motionAngle=travelAngle+clamp(angleDiff(c.angle,travelAngle),-travelTurn*dt,travelTurn*dt);
-    const slipAngle=angleDiff(c.motionAngle,c.angle);
-    const slide=Math.max(clamp((c.speed*turning)/(225*cornerGrip)-1,0,1),clamp(Math.abs(slipAngle)/.35,0,1));
-    c.sliding=slide;
-    c.speed=Math.max(0,c.speed-(slidingResistance(c.speed,slide,slipAngle)+
-      Math.abs(steer)*Math.max(0,c.speed-180)*.025)*dt);
-    c.sideSpeed=c.speed*Math.sin(slipAngle);
+    const {turning,slide}=steerCar(c,dt,{steer,throttle,brake,off,front:g,rear:rearGrip});
     const dx=Math.cos(c.motionAngle)*c.speed*dt,
       dy=Math.sin(c.motionAngle)*c.speed*dt;
     c.x += dx;
@@ -1455,7 +1466,12 @@ export class Race {
     const water=trackWater(this.weather,c.s,TRACK.length,c.offset);
     const ranked=rankTyres(c,{tyres:TYRES,remaining:this.laps,water,futureWater:this.freezeWeather ? c.trackWetness : forecastWater(this.weather,c.ai.strategy.forecastHorizon),lapTime:Math.max(25,TRACK.length/205),pitLoss:estimatedPitLoss(c),starting:true});
     if(!ranked.length)return null;
-    const options=ranked.filter(o=>o.score<ranked[0].score+.18),weights=options.map(o=>Math.exp(-(o.score-ranked[0].score)/(.05+c.ai.strategy.risk*.1)));
+    // Extra physical sets must not give a compound extra votes on the grid.
+    // Rank complete strategies first, then choose the best set per compound.
+    const compounds=new Set(),options=ranked.filter(o=>{
+      if(o.score>=ranked[0].score+.18 || compounds.has(o.set.compound))return false;
+      compounds.add(o.set.compound);return true;
+    }),weights=options.map(o=>Math.exp(-(o.score-ranked[0].score)/(.05+c.ai.strategy.risk*.1)));
     let pick=c.aiRandom()*weights.reduce((a,b)=>a+b,0);
     for(let i=0;i<options.length;i++){pick-=weights[i];if(pick<=0){c.ai.strategy.plannedMode=options[i].mode || "balanced";return options[i].set;}}
     return options.at(-1).set;
@@ -1616,10 +1632,10 @@ export class Race {
     const slipTarget=pitApproach || yielding ? 0 : -turn*clamp(excess*.38+
       (mistake==="oversteer" ? .2 : 0),0,mistake ? .28 : .12);
     ai.slip+=(slipTarget-ai.slip)*(1-Math.exp(-(slipTarget ? 3 : (5+style.wetSkill*3)*(1+level(c.upgrades,"suspension")*.06))*dt));
-    // Slip is already smoothed above. Keep its velocity consistent with the
-    // body angle, while a separate impact component decays rather than being
-    // erased by the line controller after a collision.
-    const impactSideSpeed=((c.sideSpeed || 0)-(ai.slipSideSpeed || 0))*Math.exp(-5*dt);
+    // Body slip is separate from collision recovery. A contact's velocity
+    // is carried by motionAngle and resolved physically below, so the lane
+    // controller must not subtract it from its own steering request.
+    const impactSideSpeed=ai.contactRecovery ? 0 : ((c.sideSpeed || 0)-(ai.slipSideSpeed || 0))*Math.exp(-5*dt);
     ai.slipSideSpeed=c.speed*Math.sin(ai.slip);
     c.sideSpeed=ai.slipSideSpeed+impactSideSpeed;
     // Follow the path's lateral velocity directly; smooth only the recovery
@@ -1636,7 +1652,10 @@ export class Race {
     ai.lineVelocity=clamp(feedForward+ai.recoveryVelocity,-c.speed*.85-c.sideSpeed,c.speed*.85-c.sideSpeed);
     // A smoothed steering correction must not carry us through the space
     // reserved for a car alongside. Limit motion, never teleport the car.
-    if(!yielding && lane.min<=lane.max){
+    // Apply each neighbour's constraint even when the road edge leaves no
+    // full-width corridor (min > max). Moving away remains possible, but an
+    // unavailable lane must never release steering through the adjacent car.
+    if(!yielding){
       const margin=TRACK.width/2-18;
       if(lane.min>-margin)ai.lineVelocity=Math.max(ai.lineVelocity,Math.min(0,(lane.min-c.offset)/dt)-c.sideSpeed);
       if(lane.max<(pitApproach || ai.pitExitUntil>c.s ? Math.max(margin,c.offset,pitApproach?.offset || 0) : margin))ai.lineVelocity=Math.min(ai.lineVelocity,Math.max(0,(lane.max-c.offset)/dt)-c.sideSpeed);
@@ -1658,20 +1677,35 @@ export class Race {
     if (c.fuel <= 0) c.speed = Math.max(0, c.speed - 55 * dt);
     // Speed is the magnitude of travel, as it is for the player. Body slip
     // changes orientation; it must not subtract forward speed a second time.
-    c.speed=Math.max(0,c.speed-slidingResistance(c.speed,c.sliding,ai.slip)*dt);
+    const recovering=!!ai.contactRecovery && Number.isFinite(c.motionAngle);
+    if(!recovering)c.speed=Math.max(0,c.speed-slidingResistance(c.speed,c.sliding,ai.slip)*dt);
     const forward=Math.sqrt(Math.max(0,c.speed**2-(ai.lineVelocity+c.sideSpeed)**2));
     const delta=forward*dt/clamp(1-curvature*c.offset,.5,1.5);
     c.s += delta;
     const loc = sample(c.s);
     c.x = loc.x - Math.sin(loc.angle) * c.offset;
     c.y = loc.y + Math.cos(loc.angle) * c.offset;
+    // A contact changes the actual velocity vector. The route planner may
+    // request its line back, but tyres must bend that velocity with the same
+    // lateral-force ceiling as the player instead of cancelling the impulse.
+    if(recovering){
+      const requested=Math.atan2(c.y-oldY,c.x-oldX);
+      const brake=clamp((oldSpeed-c.speed)/(braking*dt),0,1);
+      steerCar(c,dt,{throttle,brake,front:contact.front,rear:contact.rear,targetAngle:requested});
+      c.x=oldX+Math.cos(c.motionAngle)*c.speed*dt;c.y=oldY+Math.sin(c.motionAngle)*c.speed*dt;
+      const actual=nearest(c.x,c.y,oldS);
+      const progress=wrap(actual.s-wrap(oldS,TRACK.length)+TRACK.length/2,TRACK.length)-TRACK.length/2;
+      c.s=oldS+clamp(progress,-c.speed*dt*3,c.speed*dt*3);c.offset=actual.offset;
+      ai.slip=angleDiff(c.motionAngle,c.angle);
+      ai.contactRecovery=Math.abs(angleDiff(requested,c.motionAngle))>.015 || Math.abs(ai.slip)>.015;
+    }
     // The sprite, collision box and slipstream must follow the movement that
     // actually happened. A traffic-constrained lane no longer points the body
     // along the unrestricted racing-line tangent (the old sideways "crab").
     const distance=Math.hypot(c.x-oldX,c.y-oldY);
     if(distance>.0001){
       c.motionAngle=Math.atan2(c.y-oldY,c.x-oldX);
-      c.angle=c.motionAngle-ai.slip;
+      if(!recovering)c.angle=c.motionAngle-ai.slip;
       ai.slipSideSpeed=c.speed*Math.sin(ai.slip);
       c.sideSpeed=ai.slipSideSpeed+impactSideSpeed;
     }
@@ -1744,14 +1778,12 @@ export class Race {
           const impulse=Math.min(65,closing*.525);
           for(const [c,v,sign] of [[a,av,-1],[b,bv,1]]) {
             v.x+=normal.x*impulse*sign; v.y+=normal.y*impulse*sign;
-            if(c.motionAngle!==undefined) {
-              c.speed=(c.speed<0 ? -1 : 1)*Math.min(maximumSpeed(c),Math.hypot(v.x,v.y));
-              c.motionAngle=Math.atan2(v.y,v.x);
-              c.sideSpeed=c.speed*Math.sin(angleDiff(c.motionAngle,c.angle));
-            } else {
-              c.speed=clamp(v.x*Math.cos(c.angle)+v.y*Math.sin(c.angle),0,maximumSpeed(c));
-              c.sideSpeed=clamp(-v.x*Math.sin(c.angle)+v.y*Math.cos(c.angle),-65,65);
-            }
+            // Contact can carry a car beyond its powered top speed; drag
+            // removes that excess afterwards. Clamping here destroys momentum.
+            c.speed=(c.speed<0 ? -1 : 1)*Math.hypot(v.x,v.y);
+            c.motionAngle=Math.atan2(v.y,v.x);
+            c.sideSpeed=Math.abs(c.speed)*Math.sin(angleDiff(c.motionAngle,c.angle));
+            if(!c.player && c.ai)c.ai.contactRecovery=true;
           }
         }
         // Small positional correction removes overlap without a visible jump.

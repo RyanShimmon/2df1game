@@ -14,12 +14,13 @@ test('smaller weekend pool retains physical wear between sessions rather than re
  finishQualifyingStage(w,{},profile);
  assert.equal(w.phase,'Q2');assert.equal(ensureWeekend(career,setup),w);
  assert.equal(inv.find(t=>t.id==='S1'),s);assert.equal(s.wear,.23);
- assert.deepEqual(selectableSets(inv,'Q2').filter(t=>['S','M','H'].includes(t.compound)).map(t=>t.id),['H1','M1','S1','S2']);
- assert.equal(selectableSets(inv,'Q2').filter(t=>t.compound==='I').length,2);
- assert.equal(selectableSets(inv,'Q2').filter(t=>t.compound==='W').length,1);
+ assert.deepEqual(selectableSets(inv,'Q2').filter(t=>['S','M','H'].includes(t.compound)).map(t=>t.id),['H1','H2','M1','M2','S1','S2','S3']);
+ assert.equal(selectableSets(inv,'Q2').filter(t=>t.compound==='I').length,3);
+ assert.equal(selectableSets(inv,'Q2').filter(t=>t.compound==='W').length,2);
 });
 test('old saves reduce unused excess sets once while preserving used, worn and selected sets',()=>{
  const c=newCareer(profile),w=createWeekend(c,setup);c.weekend=w;delete w.allocationVersion;delete w.softSetNumbering;
+ for(const inv of w.inventories)for(const t of inv)delete t.qualifyingOnly;
  for(const inv of w.inventories)for(const t of inv)if(t.compound==='S')t.reserved=t.id==='S4';
  for(const inv of w.inventories)for(const t of inv)t.returned=['H2','M3','S5','S6','S7','S8'].includes(t.id);
  const old=w.inventories[21],used=old.find(t=>t.id==='M2'),worn=old.find(t=>t.id==='I3');
@@ -28,7 +29,7 @@ test('old saves reduce unused excess sets once while preserving used, worn and s
  assert.equal(ensureWeekend(c,setup),w);
  assert.equal(used.wear,.35);assert.equal(used.distance,22000);assert.equal(used.returned,false);
  assert.equal(worn.returned,false);assert.equal(selected.returned,false);assert.equal(w.selectedSetId,selected.id);
- assert.equal(old.find(t=>t.id==='I4').returned,true);assert.equal(old.find(t=>t.id==='W2').returned,true);
+ assert.equal(old.find(t=>t.id==='I4').returned,true);assert.equal(old.find(t=>t.id==='W2').returned,false);
  assert.equal(w.phase,'Q2');assert.equal(w.elapsed,107);assert.equal(w.results[0].time,36);
  const before=JSON.stringify(w);migrateWeekend(w);assert.equal(JSON.stringify(w),before);
 });
@@ -82,7 +83,7 @@ for(const track of CIRCUITS)test(`${track.name}: qualifying AI yields, prepares 
  assert.ok(w.attempts?.[c.id]>0,'no qualifying attempt recorded');assert.ok(maxJump<20,`movement jump ${maxJump}`);
 });
 
-test('Q3 AI favour the returned Q3 Soft over spending an equally fresh race set',()=>{
+test('Q3 AI favour the qualifying-only Soft over spending an equally fresh race set',()=>{
  const w=createWeekend(newCareer(profile),setup);w.phase='Q3';w.active=Array.from({length:22},(_,i)=>i);
  w.weather.pattern='dry';w.weather.wetness=0;w.weather.sectors.fill(0);
  const q=new QualifyingRun(w,'S3',{},profile);

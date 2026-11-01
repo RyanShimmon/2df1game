@@ -19,11 +19,11 @@ for(const {id} of CIRCUITS)test(`${id}: all 22 grid slots launch straight withou
 });
 test('qualifying preview uses the same seeded weather as the session, and Sprint weekends vary',()=>{
  const scenarios=new Set();
- for(let seed=1;seed<=30;seed++){
+ for(let seed=1;seed<=128;seed++){
   const c=newCareer({driverName:'Weather',teamIndex:2});c.round=4;
   const w=createWeekend(c,{weatherSeed:seed,aiSeed:42,tyre:'M'});
-  assert.equal(w.setup.laps,12);assert.equal(w.setup.weather,'dynamic');
-  const preview=createWeather('dynamic',{seed,duration:qualifyingWeatherDuration(w)});
+  assert.equal(w.setup.laps,12);assert.ok(['dry','dynamic'].includes(w.setup.weather));
+  const preview=createWeather(w.setup.weather,{seed,duration:qualifyingWeatherDuration(w)});
   assert.deepEqual(w.weather,preview);const before=structuredClone(w.weather);
   assert.deepEqual(raceForecast(preview,{duration:qualifyingStage(w).duration}),raceForecast(w.weather,{duration:qualifyingStage(w).duration}));
   assert.deepEqual(w.weather,before);scenarios.add(w.weather.scenario);

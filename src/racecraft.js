@@ -2,7 +2,7 @@ import {planRaceStrategy} from "./strategy.js";
 import {engineAcceleration,cornerAccelerationLimit,corneringSpeed,aeroGripMultiplier} from "./performance.js";
 import {optimizeRacingLine,racingSplineCoefficients} from "./racing-line.js";
 import {tyreWeatherGrip, projectWeather, trackWater} from './weather.js';
-import {selectableSets} from './tyre-stock.js';
+import {selectableSets,isQualifyingSet} from './tyre-stock.js';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const wrap=(v,n)=>((v%n)+n)%n;
 const angleDiff=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
@@ -369,11 +369,11 @@ export function rankTyres(car,{tyres,remaining,water,futureWater,lapTime=35,pitL
     const extraStops=qualifying ? 0 : Math.max(0,Math.ceil(laps/Math.max(.5,usable))-1);
     const ruleCost=needDry && car.used.has(set.compound) && !['I','W'].includes(set.compound) ? pitLoss/laps : 0;
     const conditionLoss=set.wear*.1+Math.max(0,stint/(2*tyre.life))*.025;
-    // A Q3-only set will be returned afterwards, so spending it carries no
-    // opportunity cost for the race. Keep ordinary fresh Softs where possible.
-    const q3Set=qualifying && set.reserved && car.tyrePhase==='Q3';
-    const freshCost=qualifying && car.tyreSet && !set.used && set.compound==='S' && !q3Set ? .7+.5*car.driverStyle.tyreCare : 0;
-    const score=freshCost-(q3Set ? .35 : 0)+lapTime*(Math.pow(1/Math.max(.08,g),.32)+conditionLoss+(strategy.compoundBias[set.compound]||0))+extraStops*pitLoss/laps+ruleCost;
+    // Dedicated qualifying sets cannot be raced. Prefer them when competitive,
+    // while allowing a genuinely worn set to lose out to fresh general stock.
+    const qualifyingSet=qualifying && isQualifyingSet(set);
+    const freshCost=qualifying && !set.used && !qualifyingSet ? .7+.5*car.driverStyle.tyreCare : 0;
+    const score=freshCost-(qualifyingSet ? .35 : 0)+lapTime*(Math.pow(1/Math.max(.08,g),.32)+conditionLoss+(strategy.compoundBias[set.compound]||0))+extraStops*pitLoss/laps+ruleCost;
     return {set,score,usable,grip:g};
   }).sort((a,b)=>a.score-b.score || a.set.wear-b.set.wear || String(a.set.id).localeCompare(String(b.set.id)));
 }

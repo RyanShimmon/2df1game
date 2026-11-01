@@ -31,6 +31,12 @@ test('qualifying clocks only timed laps, keeps session records through garage wo
  near(q.sectors.fastestLap.time,p.bestLap);
  const saved=JSON.parse(JSON.stringify(w)),again=new QualifyingRun(saved,p.tyreSet.id,career.upgrades,profile);
  near(again.player.bestLap,p.bestLap);assert.deepEqual(again.sectors,q.sectors);
+ assert.deepEqual(again.player.sectorTiming.bars,p.sectorTiming.bars);
+ assert.equal(again.player.sectorTiming.event,null,'restoring an outing must not replay an old time popup');
+ const bars=structuredClone(again.player.sectorTiming.bars);
+ again.cars=[again.player];again.launch(again.player);
+ for(let i=0;i<60;i++)again.step(1/60,{});
+ assert.deepEqual(again.player.sectorTiming.bars,bars,'out lap must retain all completed sectors');
  for(const id of w.active)recordLap(w,id,id===21?20:30+id*.01,id);
  w.elapsed=9999;finishQualifyingStage(w,career.upgrades,profile);
  const next=nextQualifyingSession(q,career.upgrades,profile);

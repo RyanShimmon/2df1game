@@ -1,10 +1,10 @@
 # V10 — Grand Prix
 
-Version **1.10.0**.
+Version **1.11.0**.
 
-This release adds three persistent sector bars, session-specific sector/lap records and a fastest-lap indicator. The HUD shows current lap time with a separate qualifying countdown; race timing follows five nearby drivers, while qualifying keeps the compact neighbouring-driver view.
+This release adds a compact sector strip in the top HUD, a separate engineer message box and a continuous six-minute wetness forecast with weather icons. Sector colours persist across qualifying outings; a track-limit mistake invalidates its sector and the full lap without suppressing comparisons for later clean sectors. Both timing boards show five drivers including the player.
 
-Dunes has a revised sweeping layout with its parallel straights retained. Qualifying pit departures queue safely after aero service, race preparation offers a return to the career garage, and out/in-lap track-limit excursions receive warnings rather than lap-deletion messages. Varied weather is more likely to stay dry. P or Escape pauses, L controls the manual limiter, and starting-compound changes keep the page still. Race School explains qualifying traffic etiquette.
+Every driver receives one dedicated qualifying set per compound, shared across Q1–Q3 and excluded from the race. Dynamic weather is more likely to stay completely dry. AI contact recovery uses the same steering, grip and sliding limits as the player, and squeezed cars still respect their neighbours' space.
 
 A local browser game with top-down V10 racing, 22 cars, five tyre types, dynamic weather, qualifying and a saved career. Requires Node.js 18 or newer; no dependency installation is needed.
 
@@ -82,7 +82,7 @@ The quick-race circuit selector offers all 12 circuits. Existing active weekends
 
 Each career round requires Q1 → Q2 → Q3 knockouts: 22 → 16 → 10 cars. Stage clocks scale with circuit length (roughly 6–9 minutes), targeting three timed laps including out/in laps, pit travel and service; best times reset between stages. A timed lap must start strictly before zero; any such lap may finish after zero, including beyond the old 90-second cleanup window. Start-line crossings use their time within the physics step. The first Start qualifying button enters Q1 on track with the chosen compound. Weather previews use the same saved session clocks and forecast. Grid positions 17–22 come from Q1, 11–16 from Q2, and 1–10 from Q3. Equal times favour the earlier lap. All cars start in their pit garages. Press W / ↑ to leave whenever you choose; AI drivers leave at independently random times and wait again after each run. Each outing includes an out lap, one timed lap and an in lap. Additional laps cannot count until you return to your box and complete service. Fuel covers those three laps in Push mode, including the pit detour. Service refuels the car; a tyre change is optional and KEEP FITTED is the default. Actual set wear and distance persist. After service, release the throttle and press forward again to leave. You can finish the run early or end the stage to simulate the remainder. Eliminated players can simulate the remaining qualifying. No valid time means the back of that stage; the prototype allows a race start rather than modelling stewards' 107% waivers. Inter-session waiting breaks are skipped.
 
-The playable weekend pool is deliberately limited: two general-use Softs (S1–S2), one Medium (M1), one Hard (H1), two Intermediates (I1–I2) and one Wet (W1), plus a Soft (S3) reserved for Q3. Q3 participants return S3 afterwards; eliminated drivers retain it for the race. Unissued historical sets remain marked as returned for save compatibility. Older Soft IDs are relabelled consecutively without changing their wear, distance or eligibility; saved selections follow the same physical set. Older weekends keep selected and used sets within the same compound quotas for every driver; excess stock is returned while its wear/history remains saved. Every physical set stores wear, distance and used status. Starting set choice is free among remaining sets. The pit selector chooses exact sets; compound keys choose the freshest available set of that type.
+The playable weekend pool is deliberately limited: two general-use Softs (S1–S2), one Medium (M1), one Hard (H1), two Intermediates (I1–I2) and one Wet (W1), plus one qualifying-only set per compound (S3, M2, H2, I3 and W2). These additional sets are available throughout Q1–Q3, retain their wear between outings, and are excluded from race selection for every driver, including drivers eliminated early. Unissued historical sets remain marked as returned for save compatibility. Older Soft IDs are relabelled consecutively without changing their wear, distance or eligibility; saved selections follow the same physical set. Older weekends keep selected and used sets within the same compound quotas for every driver; excess stock is returned while its wear/history remains saved. Every physical set stores wear, distance and used status. Starting set choice is free among remaining sets. The pit selector chooses exact sets; compound keys choose the freshest available set of that type.
 
 Quick-race and career setup both show estimated tyre life at Balanced pace in suitable conditions, including upgrades and the selected physical set's remaining wear. Heat, sliding and other driving modes change the actual distance. Qualifying AI use a slower off-line route on out and in laps, hold their side for approaching timed cars, and merge for the final corner of an out lap when clear.
 
@@ -125,7 +125,7 @@ Tests cover player/AI races, tyre strategy, weather/drainage, tyre crossover gri
 
 Palette interpretations use the recognisable 2026 team colours, not licensed car models. Reference: [2026 teams](https://www.formula1.com/en/teams). Sporting-format reference: [FIA 2026 rules, B2.4 and B6](https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_b_sporting_-_iss_06_-_2026-04-28.pdf). Opponent performance is game balance. Fonts are optional network downloads with system fallbacks.
 
-The qualifying tower lists every driver’s PITS / OUT LAP / TIMED LAP / IN LAP state. A pinned cutoff card names the last advancing driver and shows your required improvement or buffer ahead of elimination; the boundary is marked in the scrollable results. Q3 shows the gap to pole.
+The desktop qualifying tower shows five drivers around the player, filling the window from below at pole and from above at the back. Nearby knockout boundaries remain marked. The personal last/best lap summary and the session countdown remain visible.
 
 Qualifying fuel is fixed at the defined three-lap amount. Its next-stop selector adds a coloured Current choice before Soft, selected by default to keep the fitted tyres. Replacement compounds automatically choose the best-condition available physical set; there is no duplicate next-set dropdown. Service hold displays its remaining seconds.
 
@@ -168,7 +168,7 @@ The qualifying race screen includes Move to Q2 / Q3 or End qualifying in P… ba
 
 Session advancement is locked until every active driver has attempted a timed lap. The button reports how many opponents still need their first run, or prompts the player to complete their own. Ending early simulates the rest of the session with repeated AI outings, tyre wear, weather and updated best times before applying knockouts. Time cycles 1× → 2× → 4× → 8× → 1× in qualifying only; physics still uses fixed simulation steps.
 
-Choose tyre set opens a scrollable allocation popup with compound colours, set IDs, condition bars and fresh/used/fitted labels. A used set can be selected for another outing or the next qualifying stage without resetting its wear. The popup is also available from qualifying preparation; quick compound selection stays available. Simulation pauses while browsing. Reserved and exhausted sets are disabled.
+Choose tyre set opens a scrollable allocation popup with compound colours, set IDs, condition bars and fresh/used/fitted labels. A used set can be selected for another outing or the next qualifying stage without resetting its wear. The popup is also available from qualifying preparation; quick compound selection stays available. Simulation pauses while browsing. Qualifying-only sets are labelled in qualifying and omitted entirely from race selection. Exhausted sets remain disabled.
 
 
 ### Race School
@@ -291,3 +291,14 @@ Each new career and season shuffles all twelve events once and saves that calend
 ### Known stationary-player traffic case
 
 Leaving the player parked on the Northline grid can cause an AI queue as cars return to that section. This also reproduces on v1.8.0 (`aiSeed: 42`, 16 laps, dry, no player input, 90 simulated seconds). It is separate from whole-lap line optimisation and remains unresolved; changes that weakened lane reservations introduced unsafe racing-speed passes and were not retained.
+
+
+### Desktop feedback and contact recovery
+
+Three unlabelled sector bars form the bottom row of the top telemetry. Engineer radio messages have their own box immediately below it. Sector times appear over their bar for 3.5 seconds at a crossing without reserving an empty row; the coloured results persist through qualifying in/out laps, garage work and saved outings until another timed sector replaces them. Each qualifying stage and the race keep independent records. A track-limit breach greys only the affected sector; later clean sectors still show purple (session best), green (personal improvement) or yellow (no improvement), while the invalid lap remains excluded from best laps and qualifying results.
+
+Varied quick races have a 65% fully dry chance. Career weather tendencies also receive a 65% dry override, giving roughly three quarters of scheduled weekends fully dry conditions; dynamic dry weekends are decided once before qualifying and stay dry for the race. Explicit wet quick-race choices and existing saved forecasts keep their conditions.
+
+The bottom forecast shows a continuous projected track-wetness curve for the next six minutes, with weather icons above it and a current wetness/trend summary. Rainfall and surface water remain distinct: icons show rain while the curve follows the same water accumulation and drying model used by the race.
+
+Contact impulses transfer equal momentum to both cars. AI impact recovery uses the same body rotation, countersteering, grip limits and slide resistance as the player; the body cannot snap onto its new velocity to erase collision slip. When a neighbouring car and the road edge leave no open lane, the AI still respects the adjacent car’s space instead of resuming an unrestricted turn toward the apex. Collision momentum is not clamped at the powered top speed; normal drag removes any excess.

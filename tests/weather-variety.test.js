@@ -88,7 +88,7 @@ test('career race forecast changes without resetting current rain or surface wat
 test('weather seed is independent of player tyres and scales fronts for race length',()=>{
  const setup={track:'northline',laps:16,fuel:19,weather:'dynamic',aiSeed:123};
  const a=new Race({...setup,tyre:'M'}),b=new Race({...setup,tyre:'S'}),c=new Race({...setup,tyre:'M',aiSeed:124});
- assert.deepEqual(a.weather,b.weather);assert.notDeepEqual(a.weather.points,c.weather.points);
+ assert.deepEqual(a.weather,b.weather);assert.notEqual(a.weather.seed,c.weather.seed);
  assert.ok(raceWeatherDuration(24,8000)>raceWeatherDuration(8,5000));
 });
 test('forecast describes holding light rain and warns when it will strengthen',()=>{
@@ -97,7 +97,7 @@ test('forecast describes holding light rain and warns when it will strengthen',(
  const p=projectWeather(w,180);assert.match(forecast(p),/Heavy rain/);
 });
 
-test('varied forecasts give roughly one in four sessions completely dry weather, while retaining every wet scenario',()=>{
+test('varied forecasts give roughly two in three sessions completely dry weather, while retaining every wet scenario',()=>{
  let dry=0;const wet=new Set();
  for(let seed=1;seed<=2000;seed++){
   const w=createWeather('dynamic',{seed,duration:1500});
@@ -105,7 +105,7 @@ test('varied forecasts give roughly one in four sessions completely dry weather,
    dry++;assert.equal(w.wetness,0);assert.ok(w.points.every(([,rain])=>rain===0));
   }else wet.add(w.scenario);
  }
- assert.ok(dry>440&&dry<560,`${dry}/2000 dry forecasts`);
+ assert.ok(dry>1200&&dry<1400,`${dry}/2000 dry forecasts`);
  assert.equal(wet.size,5);
 });
 test('wet-biased career events can have a dry weekend; that choice persists into the race and across reloads',()=>{
@@ -120,7 +120,7 @@ test('wet-biased career events can have a dry weekend; that choice persists into
    assert.ok(saved.weather.points.every(([,rain])=>rain===0));
   }else{wet++;assert.equal(w.setup.weather,'sustainedRain');}
  }
- assert.ok(dry>30&&dry<70,`${dry}/200 dry Alpine weekends`);assert.ok(wet>0);
+ assert.ok(dry>110&&dry<150,`${dry}/200 dry Alpine weekends`);assert.ok(wet>0);
  for(const pattern of ['intermediate','sustainedRain','wetToDry','showers','lateRain'])
   for(let seed=1;seed<=20;seed++)assert.equal(createWeather(pattern,{seed}).scenario,pattern);
 });
