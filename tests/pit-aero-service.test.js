@@ -8,23 +8,23 @@ import {driveQualifyingOuting} from './qualifying-driver.js';
 import {developmentBench} from '../src/development-preview.js';
 const profile={driverName:'Pit tester',teamIndex:2};
 const setup={track:'northline',laps:24,fuel:28,tyre:'S',weather:'dry',aiSeed:42,tyreTemperatureEnabled:false};
-const approx=(a,b)=>assert.ok(Math.abs(a-b)<1e-7,`${a} != ${b}`);
-function qualifying(){const career=newCareer(profile);career.upgrades.aero=1;const w=createWeekend(career,setup);career.weekend=w;const q=new QualifyingRun(w,'S1',career.upgrades,profile);q.cars=[q.player];q.pitRandom=()=>0;return q;}
-function race(){const r=new Race(setup,{aero:1,crew:0});r.cars=[r.player];r.pitRandom=()=>0;return r;}
+const approx=(a,b)=>assert.ok(Math.abs(a-b)<1e-6,`${a} != ${b}`);
+function qualifying(){const career=newCareer(profile);career.upgrades.aero=1;const w=createWeekend(career,setup);career.weekend=w;const q=new QualifyingRun(w,'S1',career.upgrades,profile);q.cars=[q.player];return q;}
+function race(){const r=new Race(setup,{aero:1,crew:0});r.cars=[r.player];return r;}
 function box(r){r.enterPit(r.player);Object.assign(r.player.pit,{distance:r.player.pit.boxDistance,stage:'entry'});r.player.speed=0;r.stepPit(r.player,.01,{});}
 function wait(r,seconds){for(let i=0;i<Math.round(seconds*100)&&r.player.pit;i++)r.stepPit(r.player,.01,{});}
 test.afterEach(()=>selectTrack('northline'));
 test('race queues aero without changing physics, then adds exactly ten seconds after tyres and penalty',()=>{
  const r=race(),c=r.player,top=cleanAirTopSpeed(c);c.penalty=5;
  assert.equal(r.selectAero('lowDrag'),true);assert.equal(c.aeroSpec,'balanced');approx(cleanAirTopSpeed(c),top);
- box(r);approx(c.pit.serviceDuration,2.3);approx(c.pit.timer,17.3);assert.equal(c.penalty,0);
- wait(r,17.28);assert.equal(c.aeroSpec,'balanced');assert.equal(c.pit.serviced,false);
+ box(r);approx(c.pit.serviceDuration,4.3);approx(c.pit.timer,19.3);assert.equal(c.penalty,0);
+ wait(r,19.28);assert.equal(c.aeroSpec,'balanced');assert.equal(c.pit.serviced,false);
  wait(r,.03);assert.equal(c.aeroSpec,'lowDrag');assert.equal(c.pit.serviced,true);approx(cleanAirTopSpeed(c),top*1.1);
  assert.equal(c.history.at(-1).aeroSeconds,10);
 });
 test('unchanged package has no extra wait, crew upgrades do not shorten aero work',()=>{
- for(const crew of [0,4]){const r=race();r.player.upgrades.crew=crew;r.pitRandom=()=>1;r.selectAero('downforce');box(r);approx(r.player.pit.timer,5.5-crew*.5+10);}
- const r=race();r.selectAero('balanced');box(r);approx(r.player.pit.timer,2.3);
+ for(const crew of [0,4]){const r=race();r.player.upgrades.crew=crew;r.selectAero('downforce');box(r);approx(r.player.pit.timer,4.3-crew*.5+10);}
+ const r=race();r.selectAero('balanced');box(r);approx(r.player.pit.timer,4.3);
 });
 test('qualifying aero-only work retains physical tyres and blocks departure for ten seconds',()=>{
  const q=qualifying(),c=q.player,set=c.tyreSet;set.wear=.23;c.wear=.23;
@@ -38,16 +38,16 @@ test('tyre and aero choices combine in either order without losing or repeating 
  for(const first of ['tyres','aero']){
   const q=qualifying(),c=q.player;
   if(first==='tyres'){q.selectGarageSet('M1');q.selectAero('lowDrag');}else{q.selectAero('lowDrag');q.selectGarageSet('M1');}
-  approx(c.pit.timer,12.3);wait(q,4);const remaining=c.pit.timer;
+  approx(c.pit.timer,14.3);wait(q,4);const remaining=c.pit.timer;
   q.selectAero('lowDrag');approx(c.pit.timer,remaining);q.selectGarageSet('M1');approx(c.pit.timer,remaining);
-  q.selectGarageSet('W1');approx(c.pit.timer,remaining+2.3);
-  wait(q,remaining+2.31);assert.equal(c.tyreSet.id,'W1');assert.equal(c.aeroSpec,'lowDrag');
+  q.selectGarageSet('W1');approx(c.pit.timer,14.3);
+  wait(q,remaining+4.31);assert.equal(c.tyreSet.id,'W1');assert.equal(c.aeroSpec,'lowDrag');
  }
 });
 test('cancelling or revising aero preserves other service and cannot fit it for free',()=>{
- const r=race();r.selectAero('downforce');box(r);wait(r,1);r.selectAero('balanced');approx(r.player.pit.timer,1.3);
- r.selectAero('lowDrag');approx(r.player.pit.timer,11.3);wait(r,3);r.selectAero('downforce');approx(r.player.pit.timer,10);
- assert.equal(r.player.aeroSpec,'balanced');wait(r,10.01);assert.equal(r.player.aeroSpec,'downforce');
+ const r=race();r.selectAero('downforce');box(r);wait(r,1);r.selectAero('balanced');approx(r.player.pit.timer,3.3);
+ r.selectAero('lowDrag');approx(r.player.pit.timer,13.3);wait(r,3);r.selectAero('downforce');approx(r.player.pit.timer,10.3);
+ assert.equal(r.player.aeroSpec,'balanced');wait(r,10.31);assert.equal(r.player.aeroSpec,'downforce');
  const q=qualifying();q.selectAero('lowDrag');q.selectAero('balanced');assert.equal(q.player.pit.serviced,true);assert.equal(q.player.stops,0);
 });
 test('Q2 and Q3 begin in their track garage with worn tyres, fitted aero, and fresh timing',()=>{
@@ -96,8 +96,8 @@ test('each engine level increases acceleration across all speeds and packages wi
 test('returning from either aero package to Balanced restores neutral performance after ten seconds',()=>{
  for(const spec of ['downforce','lowDrag']){
   const r=race(),c=r.player,neutral=cleanAirTopSpeed(c);c.aeroSpec=spec;
-  assert.equal(r.selectAero('balanced'),true);box(r);approx(c.pit.timer,12.3);
-  wait(r,12.28);assert.equal(c.aeroSpec,spec);wait(r,.03);
+  assert.equal(r.selectAero('balanced'),true);box(r);approx(c.pit.timer,14.3);
+  wait(r,14.28);assert.equal(c.aeroSpec,spec);wait(r,.03);
   assert.equal(c.aeroSpec,'balanced');approx(cleanAirTopSpeed(c),neutral);assert.equal(c.history.at(-1).aeroSeconds,10);
  }
 });

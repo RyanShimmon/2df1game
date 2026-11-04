@@ -1990,3 +1990,12 @@ body:not(.mobile-game) .qualifying-clock b { color:#e8eee8; font-size:11px; lett
 body:not(.mobile-game) .qualifying-clock.session-expired { gap:0; }
 body:not(.mobile-game) .qualifying-clock.session-expired b { display:inline-flex; align-items:center; gap:5px; font-size:10px; }
 body:not(.mobile-game) .qualifying-clock svg { width:12px; height:14px; fill:none; stroke:currentColor; stroke-width:1.6; }
+
+.season-leader { margin-bottom:18px; }
+.season-leader-result { display:flex; align-items:center; justify-content:space-between; gap:20px; }
+.season-leader-result > b { font-size:17px; }
+.season-leader-result > strong { display:flex; align-items:baseline; gap:6px; color:var(--lime); font-size:28px; font-variant-numeric:tabular-nums; }
+.season-leader-result small { font-size:10px; letter-spacing:1px; }
+.season-leader .hint { margin:10px 0 0; }
+
+.difficulty-status { color:var(--lime); font-size:12px; margin:12px 0 0; }

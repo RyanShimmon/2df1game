@@ -4,7 +4,7 @@ import {createWeather,advanceWeather,rainAt,migrateWeather,projectWeather,weathe
 import {forecastWater} from '../src/racecraft.js';
 import {Race,TYRES} from '../src/core.js';
 import {newCareer} from './career-fixture.js';
-import {createWeekend,startRaceWeather} from '../src/weekend.js';
+import {createWeekend,startRaceWeather,createQualifyingWeather} from '../src/weekend.js';
 const constant=(rain,water=0)=>({...createWeather('dry',{seed:1}),rain,wetness:water,sectors:Array(32).fill(water),points:[[0,rain],[4000,rain]]});
 function sample(pattern,seed,duration=900){
  const w=createWeather(pattern,{seed,duration}),rows=[];
@@ -123,4 +123,22 @@ test('wet-biased career events can have a dry weekend; that choice persists into
  assert.ok(dry>110&&dry<150,`${dry}/200 dry Alpine weekends`);assert.ok(wet>0);
  for(const pattern of ['intermediate','sustainedRain','wetToDry','showers','lateRain'])
   for(let seed=1;seed<=20;seed++)assert.equal(createWeather(pattern,{seed}).scenario,pattern);
+});
+
+test('pre-qualifying forecasts use the exact saved career plan, including dry overrides',()=>{
+ let dryOverride=0,rainy=0;
+ for(const round of [1,2,4,6,8,12])for(const weatherSeed of [1,2,3,5,9,17,29,42]){
+  const career=newCareer({driverName:'Forecast QA',teamIndex:2});career.round=round;
+  const before=structuredClone(career);
+  const forecast=createQualifyingWeather(career,weatherSeed);
+  assert.deepEqual(career,before,'preview does not create the weekend or spend team budgets');
+  const weekend=createWeekend(career,{aiSeed:42,weatherSeed});
+  assert.deepEqual(forecast,weekend.weather,`round ${round}, seed ${weatherSeed}`);
+  if(forecast.pattern==='dry')dryOverride++;else rainy++;
+  const predicted=structuredClone(forecast),actual=structuredClone(weekend.weather);
+  advanceWeather(predicted,180);for(let i=0;i<180*20;i++)advanceWeather(actual,.05);
+  assert.ok(Math.abs(predicted.wetness-actual.wetness)<.002);
+  assert.ok(Math.abs(predicted.rain-actual.rain)<1e-9);
+ }
+ assert.ok(dryOverride>0&&rainy>0,'both dry overrides and wet sessions are covered');
 });

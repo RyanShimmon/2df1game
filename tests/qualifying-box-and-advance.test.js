@@ -11,13 +11,14 @@ test('an in lap captures the physical pit entrance without B, even after a cance
  q.step(1/60,{});assert.ok(p.pit);assert.equal(p.pit.stage,'entry');
 });
 test('service has a minimum wait and then holds indefinitely; garage tyre choice gets fitted before departure',()=>{
- const q=create(),p=q.player;q.cars=[p];q.pitRandom=()=>0;
+ const q=create(),p=q.player;q.cars=[p];
  p.garage=false;p.pit.serviced=false;p.pit.stage='service';p.pit.previousSet=p.tyreSet;p.pit.timer=2.3;p.qState='in';p.wear=.2;p.tyreSet.wear=.2;
  for(let i=0;i<60;i++)q.step(1/60,{throttle:true});assert.equal(p.pit.stage,'service');assert.equal(p.speed,0);assert.equal(q.launch(p),false);
  for(let i=0;i<100;i++)q.step(1/60,{throttle:true});assert.ok(p.garage);assert.ok(p.qNeedsRelease);
  const x=p.x,y=p.y,wear=p.wear;for(let i=0;i<600;i++)q.step(1/60,{throttle:true});assert.equal(p.x,x);assert.equal(p.y,y);assert.equal(p.wear,wear);
  assert.equal(q.selectGarageSet('M1'),true);assert.equal(p.pit.stage,'service');assert.equal(q.launch(p),false);assert.equal(p.tyreSet.id,'S1');
- for(let i=0;i<160;i++)q.step(1/60,{});assert.equal(p.tyreSet.id,'M1');assert.ok(p.garage);assert.equal(p.speed,0);
+ for(let i=0;i<240;i++)q.step(1/60,{});assert.equal(p.tyreSet.id,'S1');
+ for(let i=0;i<25;i++)q.step(1/60,{});assert.equal(p.tyreSet.id,'M1');assert.ok(p.garage);assert.equal(p.speed,0);
  q.step(1/60,{});q.step(1/60,{throttle:true});assert.equal(p.qState,'out');assert.equal(p.garage,false);
 });
 test('sets can be changed during the return service rather than committed before entry',()=>{

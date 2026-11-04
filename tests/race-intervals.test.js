@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {recordTiming,intervalSeconds,passageTime,createTimingReference,circuitTime,outstandingPenalty} from '../src/timing.js';
+import {recordTiming,intervalSeconds,passageTime,createTimingReference,circuitTime,outstandingPenalty,timingCoordinate} from '../src/timing.js';
 const length=8000;
 test('a variable-speed interval is the time since the leading car passed this track location',()=>{
  const lead={speed:200},follower={speed:90};
@@ -51,14 +51,14 @@ test('the shared clock follows the circuit across lap boundaries and flyovers',(
  assert.ok(intervalSeconds(a,b,900)>1 && intervalSeconds(a,b,900)<2);
  assert.ok(circuitTime(reference,2100)-circuitTime(reference,1100)>7);
 });
-test('standing still or driving down the pit lane does not train the racing clock to pit speed',()=>{
+test('pit travel, traffic and changing race pace cannot rewrite the session timing reference',()=>{
  const reference=createTimingReference(1000,()=>({speed:200,distanceScale:1})),original=[...reference.rates];
  const c={speed:80,pit:{stage:'entry'}};recordTiming(c,0,100,1000,reference);
  for(let i=1;i<=50;i++)recordTiming(c,i/10,100+i*8,1000,reference);
  assert.deepEqual(reference.rates,original);
  c.pit=null;c.speed=100;
  for(let i=51;i<=100;i++)recordTiming(c,i/10,500+(i-50)*10,1000,reference);
- assert.ok(reference.rates.some((r,i)=>r>original[i]),'slower genuine racing pace updates estimates');
+ assert.deepEqual(reference.rates,original,'slower traffic cannot change another pair of cars’ interval');
 });
 test('unserved penalties alter the single gap, including the portion being served',()=>{
  const reference=createTimingReference(1000,()=>({speed:100,distanceScale:1}));
@@ -70,4 +70,35 @@ test('unserved penalties alter the single gap, including the portion being serve
  a.pit.penaltyRemaining=4;recordTiming(a,11,500,1000,reference);recordTiming(b,11,500,1000,reference);
  assert.ok(Math.abs(intervalSeconds(a,b,500)+4)<1e-9,'elapsed service replaces the pending penalty once');
  assert.equal(outstandingPenalty(a),4);
+});
+
+test('a pit gap closes monotonically even while a full field slows in the intervening corners',()=>{
+ const reference=createTimingReference(2000,s=>({speed:s<1000?300:180,distanceScale:1}));
+ const pit={speed:0,pit:{stage:'service'},penalty:0},chase={speed:150,penalty:0};
+ const traffic=Array.from({length:20},(_,i)=>({speed:80,s:200+i*20}));
+ recordTiming(pit,0,900,2000,reference);recordTiming(chase,0,0,2000,reference);
+ for(const car of traffic)recordTiming(car,0,car.s,2000,reference);
+ let previous=intervalSeconds(pit,chase,0);
+ for(let tick=1;tick<=80;tick++){
+  const t=tick/10;
+  recordTiming(pit,t,900,2000,reference);recordTiming(chase,t,t*150,2000,reference);
+  for(const car of traffic){car.s+=8;recordTiming(car,t,car.s,2000,reference);}
+  const gap=intervalSeconds(pit,chase,t*150);
+  assert.ok(gap<previous,`gap grew from ${previous} to ${gap} while the chase car advanced`);
+  const order=timingCoordinate(pit,900,t)-timingCoordinate(chase,t*150,t);
+  assert.ok(Math.abs(order-gap)<1e-9);
+  if(t===6)assert.ok(Math.abs(gap)<1e-9,'equal track progress has zero interval');
+  previous=gap;
+ }
+ assert.ok(previous<0,'the chasing car is ahead after passing the pit box');
+});
+
+test('unserved penalties shift the pit gap without making the approach fluctuate',()=>{
+ const reference=createTimingReference(2000,()=>({speed:200,distanceScale:1}));
+ const pit={speed:0,pit:{stage:'service'},penalty:2},chase={speed:100,penalty:0};
+ recordTiming(pit,0,1000,2000,reference);recordTiming(chase,0,0,2000,reference);
+ for(let tick=1;tick<=80;tick++){
+  const t=tick/10;recordTiming(pit,t,1000,2000,reference);recordTiming(chase,t,t*100,2000,reference);
+  assert.ok(Math.abs(intervalSeconds(pit,chase,t*100)-(3-t*.5))<1e-9);
+ }
 });

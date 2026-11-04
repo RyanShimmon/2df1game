@@ -1,10 +1,10 @@
 # V10 — Grand Prix
 
-Version **1.11.0**.
+Version **1.12.0**.
 
-This release adds a compact sector strip in the top HUD, a separate engineer message box and a continuous six-minute wetness forecast with weather icons. Sector colours persist across qualifying outings; a track-limit mistake invalidates its sector and the full lap without suppressing comparisons for later clean sectors. Both timing boards show five drivers including the player.
+This release improves AI racing lines, steering continuity, difficulty differences and overtaking. Cars can pass stationary traffic on either clear side, and can continue looking for passing opportunities while away from the ideal line. Tyre advantages still depend on grip, wear, temperature, weather and pace mode. Sustained slides now leave continuous skid trails, with the same skid threshold for the player and AI.
 
-Every driver receives one dedicated qualifying set per compound, shared across Q1–Q3 and excluded from the race. Dynamic weather is more likely to stay completely dry. AI contact recovery uses the same steering, grip and sliding limits as the player, and squeezed cars still respect their neighbours' space.
+Drafting produces a stronger acceleration benefit at high speed. Pit service times are consistent and reduced by crew upgrades. Race gaps use a shared timing reference, qualifying forecasts match their session, and the career garage includes season standings. Press T for the tyre menu and O for the aero menu.
 
 A local browser game with top-down V10 racing, 22 cars, five tyre types, dynamic weather, qualifying and a saved career. Requires Node.js 18 or newer; no dependency installation is needed.
 

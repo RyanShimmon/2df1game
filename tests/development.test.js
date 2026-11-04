@@ -70,7 +70,7 @@ test('fuel efficiency reduces real fuel burn and qualifying loads still cover th
 test('pit crew improves preparation and keeps service within the existing physical time limits',()=>{
  const a=car(),b=car({crew:4});a.tyreTemperatureEnabled=true;b.tyreTemperatureEnabled=true;prepareTyres(a);prepareTyres(b);
  assert.equal(b.tyreTemperatures[0]-a.tyreTemperatures[0],6);
- const preview=upgradePreview({...newCareer(profile),upgrades:{...emptyUpgrades(),crew:3}},'crew');assert.match(preview.rows[0].after,/2.3–3.5s/);
+ const preview=upgradePreview({...newCareer(profile),upgrades:{...emptyUpgrades(),crew:3}},'crew');assert.match(preview.rows[0].after,/2.3s/);
 });
 test('commercial upgrades increase only earned sponsor income, preserving conditions and normal race prizes',()=>{
  const c=newCareer(profile);c.upgrades.commercial=3;c.sponsor='points';

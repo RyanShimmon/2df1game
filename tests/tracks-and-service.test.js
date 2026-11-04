@@ -48,12 +48,26 @@ test('banking gives a smooth, material cornering grip benefit',()=>{
  const car={tyre:'M',tyreAge:1000,wear:0,trackWetness:0,offset:0,upgrades,s};
  const banked=grip(car);car.s=0;assert.ok(banked>grip(car)*1.15);
 });
-test('random tyre service stays between 2.3s and the upgraded maximum',()=>{
- assert.equal(tyreServiceTime(0,()=>0),2.3);assert.equal(tyreServiceTime(0,()=>1),5.5);
- assert.equal(tyreServiceTime(4,()=>1),3.5);
- const values=new Set();for(let i=0;i<100;i++){const t=tyreServiceTime(0,()=>i/99);assert.ok(t>=2.3 && t<=5.5);values.add(t);}
- assert.equal(values.size,100);
- for(let crew=1;crew<=4;crew++)assert.ok(tyreServiceTime(crew,()=>1)<tyreServiceTime(crew-1,()=>1));
+test('tyre service is repeatable and each crew upgrade saves half a second',()=>{
+ for(let crew=0;crew<=4;crew++) {
+  for(let stop=0;stop<20;stop++)assert.ok(Math.abs(tyreServiceTime(crew)-(4.3-.5*crew))<1e-10);
+  if(crew)assert.ok(Math.abs(tyreServiceTime(crew-1)-tyreServiceTime(crew)-.5)<1e-10);
+ }
+ assert.equal(tyreServiceTime(-1),tyreServiceTime(0));assert.equal(tyreServiceTime(99),tyreServiceTime(4));
+});
+test('player and AI pit services use the same fixed crew time on every visit',()=>{
+ for(const crew of [0,2,4])for(const player of [true,false]) {
+  const r=new Race({track:'northline',laps:12,fuel:15,tyre:'M',weather:'dry',aiSeed:42},{crew});
+  const c=player?r.player:r.cars[0];r.cars=[c];c.upgrades.crew=crew;
+  r.pitRandom=()=>{throw new Error('tyre service must not draw randomness');};
+  for(let visit=0;visit<3;visit++) {
+   c.pit=null;c.speed=0;r.enterPit(c);
+   Object.assign(c.pit,{distance:c.pit.boxDistance,stage:'entry'});
+   r.stepPit(c,.01,{});
+   assert.equal(c.pit.stage,'service');assert.equal(c.pit.serviceDuration,tyreServiceTime(crew));
+   assert.equal(c.pit.timer,tyreServiceTime(crew));
+  }
+ }
 });
 test('qualifying fuel and garage placement adapt to the selected circuit',()=>{
  for(const track of ['harbour','alpine','crossover']) {

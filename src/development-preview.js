@@ -1,5 +1,5 @@
 import {speedValue,speedUnitLabel,formatSpeed} from "./units.js";
-import {UPGRADES,level,fuelMultiplier,sponsorPayout,aeroPackage,aeroGrip} from "./development.js";
+import {UPGRADES,level,tyreServiceSeconds,fuelMultiplier,sponsorPayout,aeroPackage,aeroGrip} from "./development.js";
 import {TRACK,AI_LINE,TYRES,acceleration,accelerationGrip,brakingDeceleration,grip,maximumSpeed,estimatedTyreLife,clamp} from "./core.js";
 import {brakingTarget,racingPoint} from "./racecraft.js";
 const cache=new Map();
@@ -23,7 +23,7 @@ export function developmentBench(upgrades={},aeroSpec="balanced"){
   if(lapStart===null&&c.s>=TRACK.length)lapStart=clock;
  }
  c.speed=220;
- const data={accelerate,highSpeed,rollStart,rollEnd,braking,lap:lapStart===null?Infinity:clock-lapStart,corner:Math.sqrt(225*grip(c)/.006),medium:estimatedTyreLife("M",{upgrades}),soft:estimatedTyreLife("S",{upgrades}),fuel:24*1.1*fuelMultiplier(upgrades),crewMax:Math.max(2.3,5.5-level(upgrades,"crew")*.5),traction:level(upgrades,"suspension")*2.5,recovery:level(upgrades,"suspension")*6,sponsor:sponsorPayout(upgrades,1400),package:aeroPackage(upgrades,aeroSpec).name};
+ const data={accelerate,highSpeed,rollStart,rollEnd,braking,lap:lapStart===null?Infinity:clock-lapStart,corner:Math.sqrt(225*grip(c)/.006),medium:estimatedTyreLife("M",{upgrades}),soft:estimatedTyreLife("S",{upgrades}),fuel:24*1.1*fuelMultiplier(upgrades),crewTime:tyreServiceSeconds(level(upgrades,"crew")),traction:level(upgrades,"suspension")*2.5,recovery:level(upgrades,"suspension")*6,sponsor:sponsorPayout(upgrades,1400),package:aeroPackage(upgrades,aeroSpec).name};
  cache.set(key,data);return data;
 }
 export function upgradePreview(career,key,{tyreTemperatureEnabled=true,speedUnit="kph"}={}){
@@ -36,7 +36,7 @@ export function upgradePreview(career,key,{tyreTemperatureEnabled=true,speedUnit
  suspension:[metric("Traction support",before.traction,after.traction,"%"),metric("Countersteer support",before.recovery,after.recovery,"%")],
  brakes:[metric(`${Math.round(speedValue(250,speedUnit))}–${formatSpeed(0,speedUnit)}`,before.braking,after.braking,"s",2)],
  tyres:[metric("Soft life",before.soft,after.soft," laps"),metric("Medium life",before.medium,after.medium," laps")],
- crew:[metric("Tyre service",`2.3–${before.crewMax.toFixed(1)}s`,`2.3–${after.crewMax.toFixed(1)}s`),...(tyreTemperatureEnabled ? [metric("Tyre preparation",`+${level(career.upgrades,"crew")*1.5}°C`,`+${level(next,"crew")*1.5}°C`)] : [])],
+ crew:[metric("Tyre service",`${before.crewTime.toFixed(1)}s`,`${after.crewTime.toFixed(1)}s`),...(tyreTemperatureEnabled ? [metric("Tyre preparation",`+${level(career.upgrades,"crew")*1.5}°C`,`+${level(next,"crew")*1.5}°C`)] : [])],
  engineer:[metric("Engineer briefing",["Basic radio","Fuel + tyre estimates","Weather crossover windows","Pit rejoin + traffic"][level(career.upgrades,key)],["Basic radio","Fuel + tyre estimates","Weather crossover windows","Pit rejoin + traffic"][level(next,key)])],
  commercial:[metric("Successful £1,400 contract",`£${before.sponsor.toLocaleString("en-GB")}`,`£${after.sponsor.toLocaleString("en-GB")}`)],
  }[key] || [];

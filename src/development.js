@@ -14,7 +14,7 @@ export const UPGRADES={
  suspension:{name:"Suspension & differential",desc:"More progressive traction and stronger countersteer recovery. You still control the slide.",cost:3600,max:5,group:"Chassis"},
  brakes:{name:"Brakes & balance",desc:"Stronger, more stable braking. Compound, wear, temperature and rain still limit stopping power.",cost:3200,max:5,group:"Chassis"},
  tyres:{name:"Tyre engineering",desc:"7% less wear per level, a gentler grip cliff and better control of excess heat.",cost:4300,max:5,group:"Race operations"},
- crew:{name:"Pit crew training",desc:"Narrower service-time range and better tyre preparation. Minimum tyre change remains 2.3 seconds.",cost:2200,max:4,group:"Race operations"},
+ crew:{name:"Pit crew training",desc:"Consistent tyre changes: 4.3 seconds initially, 0.5 seconds faster per level, down to 2.3 seconds. Better tyre preparation.",cost:2200,max:4,group:"Race operations"},
  engineer:{name:"Race engineer",desc:"L1: fuel and tyre estimates. L2: weather crossover windows. L3: pit rejoin and traffic estimates.",cost:1600,max:3,group:"Race operations"},
  commercial:{name:"Commercial development",desc:"10% more sponsor income per level. Contract conditions still have to be met.",cost:1800,max:3,group:"Team business"},
 };
@@ -37,6 +37,7 @@ export const emptyUpgrades=()=>Object.fromEntries(Object.keys(UPGRADES).map(k=>[
 export const level=(upgrades,key)=>clamp(Number(upgrades?.[key])||0,0,UPGRADES[key]?.max || 0);
 export function normalizeUpgrades(upgrades={}){return Object.fromEntries(Object.keys(UPGRADES).map(k=>[k,Math.floor(level(upgrades,k))]));}
 export const upgradePrice=(upgrades,key)=>UPGRADES[key] ? Math.round(UPGRADES[key].cost*(1+level(upgrades,key)*.55)) : Infinity;
+export const tyreServiceSeconds=crew=>4.3-.5*Math.floor(clamp(Number(crew)||0,0,4));
 export const fuelMultiplier=upgrades=>1-level(upgrades,"efficiency")*.02;
 export const sponsorMultiplier=upgrades=>1+level(upgrades,"commercial")*.10;
 export const sponsorPayout=(upgrades,amount)=>Math.round(amount*sponsorMultiplier(upgrades));
@@ -61,7 +62,7 @@ export function upgradeDetails(key,installedLevel){
   suspension:`${pct(n*2.5)} more traction support and ${pct(n*6)} more countersteer support. Helps put power down and recover slides.`,
   brakes:`${pct(n*5)} more braking force. Tyre compound, wear, temperature and rain still determine how much grip is available.`,
   tyres:`${pct(n*7)} less tyre wear, a gentler worn-tyre grip cliff and better control of overheating.`,
-  crew:`Tyre changes take 2.3–${Math.max(2.3,5.5-n*.5).toFixed(1)} seconds. Replacement tyres are prepared ${percentage(n*1.5)}°C warmer when temperature simulation is enabled.`,
+  crew:`Tyre changes take ${tyreServiceSeconds(n).toFixed(1)} seconds every stop. Replacement tyres are prepared ${percentage(n*1.5)}°C warmer when temperature simulation is enabled.`,
   engineer:["Basic race radio.","Adds fuel-margin and remaining tyre-life estimates.","Adds fuel and tyre estimates, plus predicted weather crossover windows.","Adds fuel and tyre estimates, weather crossover windows, and pit rejoin position and traffic estimates."][n],
   commercial:`Earns ${pct(n*10)} more on successful sponsor contracts. The sponsor's conditions still have to be met.`,
  };

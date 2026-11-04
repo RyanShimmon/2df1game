@@ -63,6 +63,13 @@ test('yielding car holds its side for a timed lap and waits before merging into 
  car.qState='in';assert.equal(qualifyingLane(car,line,[]).preparing,false);
  car.qState='timed';assert.equal(qualifyingLane(car,line,[]),null);
 });
+test('clear-road qualifying courtesy holds its edge through harmless racing-line movements',()=>{
+ const line={width:126,length:5000,step:100,finalCornerStart:4600,points:Array.from({length:50},()=>({offset:20,angle:0,curvature:0,distanceScale:1}))};
+ const car={id:0,s:2000,speed:180,offset:49,qState:'in',ai:{yieldSide:1}};
+ assert.equal(qualifyingLane(car,line,[]).offset,49,'29 units of existing clearance do not need another crossing');
+ for(const point of line.points)point.offset=35;
+ assert.equal(qualifyingLane(car,line,[]).offset,-49,'yield away when the upcoming line occupies the held edge');
+});
 for(const track of CIRCUITS)test(`${track.name}: qualifying AI yields, prepares its flying lap and completes an outing`,()=>{
  const w=createWeekend(newCareer(profile),setup);w.setup.track=track.id;w.setup.weather='dry';
  w.weather.pattern='dry';w.weather.wetness=0;w.weather.sectors.fill(0);

@@ -1,18 +1,17 @@
 // Passage traces remain available for measured splits. Live gaps use one
 // shared circuit clock: progress through each road section converted to racing
-// seconds. It stays continuous when a car stops in the pit or passes a flyover.
+// seconds. The reference is fixed for the session: learning from other cars
+// mid-race would change a stationary car's gap without either rival moving.
+// It stays continuous when a car stops in the pit or passes a flyover.
 export function createTimingReference(length,sample){
  const count=Math.ceil(length/80),step=length/count;
  const rates=Array.from({length:count},(_,i)=>{
   const p=sample((i+.5)*step);return Math.max(.4,p.distanceScale || 1)/Math.max(30,p.speed);
  });
- return {length,step,rates,baseline:[...rates],revision:0,cachedRevision:-1,prefix:[]};
+ const prefix=[0];for(const rate of rates)prefix.push(prefix.at(-1)+step*rate);
+ return {length,step,rates,prefix};
 }
 export function circuitTime(reference,progress){
- if(reference.cachedRevision!==reference.revision){
-  const prefix=[0];for(const rate of reference.rates)prefix.push(prefix.at(-1)+reference.step*rate);
-  reference.prefix=prefix;reference.cachedRevision=reference.revision;
- }
  const lap=Math.floor(progress/reference.length),s=progress-lap*reference.length;
  const index=Math.min(reference.rates.length-1,Math.floor(s/reference.step));
  return lap*reference.prefix.at(-1)+reference.prefix[index]+(s-index*reference.step)*reference.rates[index];
@@ -25,22 +24,12 @@ export function timingCoordinate(car,progress,now=car.timing?.time || 0){
  const penalty=car.finished && Number.isFinite(car.finishTime) && Number.isFinite(car.trackFinishTime) ? car.finishTime-car.trackFinishTime : outstandingPenalty(car);
  return circuitTime(reference,progress)+finish-penalty;
 }
-function learnRacingPace(reference,car,from,to,dt){
- // Pit speed, standing starts, spins and shortcuts must not redefine racing
- // pace. Genuine slower racing in rain does update the local clock gradually.
- if(!reference || car.pit || car.garage || car.finished || car.speed<70 || car.sliding>.5 || from<0 || to<=from || to-from>Math.max(40,car.speed*dt*2))return;
- const rate=dt/(to-from),s=((from+to)/2%reference.length+reference.length)%reference.length;
- const index=Math.min(reference.rates.length-1,Math.floor(s/reference.step));
- const target=Math.max(reference.baseline[index]*.5,Math.min(reference.baseline[index]*4,rate));
- reference.rates[index]+=(target-reference.rates[index])*(1-Math.exp(-dt/4));reference.revision++;
-}
 const SPACING=20;
 export function recordTiming(car,time,progress,lapLength,reference=null){
  let trace=car.timing;
  if(!trace){car.timing={reference,time,progress,points:[{s:progress,t:time}],frontier:{s:progress,t:time},next:(Math.floor(progress/SPACING)+1)*SPACING};return;}
  if(reference)trace.reference=reference;
  const from=trace.progress,at=trace.time,delta=progress-from;
- if(time>at)learnRacingPace(trace.reference,car,from,progress,time-at);
  if(delta>0 && time>at){
   // Ignore coordinate resets/recovery jumps instead of fabricating split times.
   if(delta<=Math.max(40,Math.abs(car.speed || 0)*(time-at)*3)){

@@ -1,3 +1,5 @@
+import {recordSkid} from "./skids.js";
+import {recordSeasonResult} from "./championship.js";
 import {createSectorSession,startSectorLap,advanceSectors,stopSectorLap,invalidateSector} from "./sectors.js";
 import {recordTiming,intervalSeconds,createTimingReference,timingCoordinate} from "./timing.js";
 import {planRaceStrategy,strategyWearLimit} from "./strategy.js";
@@ -7,7 +9,7 @@ import {SEASON_LENGTH,careerSchedule,shuffledSeasonOrder,ensureSeasonOrder} from
 import {SPONSORS,sponsorMet} from "./sponsors.js";
 export {SPONSORS} from "./sponsors.js";
 import {engineerReport} from "./engineer.js";
-import {UPGRADES,AERO_PACKAGES,emptyUpgrades,normalizeUpgrades,level,upgradePrice,fuelMultiplier,sponsorPayout,aeroPackage,aeroGrip,setAeroPackage,createTeamDevelopment,migrateDevelopment,developTeams,developmentSnapshot,fundTeams,racePrize} from "./development.js";
+import {UPGRADES,AERO_PACKAGES,emptyUpgrades,normalizeUpgrades,level,upgradePrice,tyreServiceSeconds,fuelMultiplier,sponsorPayout,aeroPackage,aeroGrip,setAeroPackage,createTeamDevelopment,migrateDevelopment,developTeams,developmentSnapshot,fundTeams,racePrize} from "./development.js";
 export {UPGRADES,AERO_PACKAGES,fuelMultiplier,sponsorPayout,setAeroPackage,developTeams,developmentSnapshot};
 import {selectableSets} from "./tyre-stock.js";
 import {seededRandom,driverSeed,buildRacingLine,racingPoint,qualifyingLane,planRacingLane,laneGeometry,projectedPaceAdvantage,brakingTarget,updateSlipstream,forecastWater,createStrategy,rankTyres,availableAISets} from "./racecraft.js";
@@ -39,10 +41,10 @@ export function estimatedTyreLife(compound, {wear=0, upgrades={}, mode="balanced
   return stintLaps(compound,TYRES,{wear,upgrades,mode,wetness:wetness ?? (compound==="W"?.75:compound==="I"?.35:0)});
 }
 export const DIFFICULTIES = {
-  easy:{name:"Easy",pace:.78,skill:-.08,braking:.50,throttle:.70,prizeBonus:0},
-  normal:{name:"Normal",pace:.94,skill:0,braking:.72,throttle:.86,prizeBonus:0},
-  hard:{name:"Hard",pace:1.02,skill:.05,braking:.86,throttle:.94,prizeBonus:.05},
-  expert:{name:"Expert",pace:1.10,skill:.09,braking:.96,throttle:1,prizeBonus:.10},
+  easy:{name:"Easy",pace:.74,skill:-.08,braking:.46,throttle:.64,prizeBonus:0},
+  normal:{name:"Normal",pace:.89,skill:0,braking:.68,throttle:.81,prizeBonus:0},
+  hard:{name:"Hard",pace:.99,skill:.05,braking:.84,throttle:.92,prizeBonus:.05},
+  expert:{name:"Expert",pace:1.10,skill:.09,braking:.98,throttle:1,prizeBonus:.10},
 };
 export const normalizeDifficulty=value=>Object.hasOwn(DIFFICULTIES,value) ? value : "normal";
 export const TEAMS = [
@@ -158,6 +160,7 @@ export function settleCareer(career, result) {
   fundTeams(career,{...result,raceFormat:format},SPONSORS,DIFFICULTIES[difficulty].prizeBonus);
   career.cash += prize + bonus;
   career.points += points;
+  recordSeasonResult(career,result,format);
   career.seasonPoints += points;
   career.history.unshift({
     season: career.season,
@@ -476,10 +479,7 @@ export function bankingGrip(s) {
     return 1+.16*Math.sin(Math.PI*(wrap(s,TRACK.length)-a)/(b-a));
   return 1;
 }
-export function tyreServiceTime(crew=0,random=Math.random) {
-  const maximum=Math.max(2.3,5.5-clamp(crew,0,4)*.5);
-  return 2.3+clamp(random(),0,1)*(maximum-2.3);
-}
+export const tyreServiceTime=tyreServiceSeconds;
 export function raceProgress(car) {
   if(car.s<0 && !(car.completedLaps>0)) return car.s;
   const laps=Math.max(car.completedLaps || 0,Math.floor(Math.max(0,car.s)/TRACK.length));
@@ -508,7 +508,7 @@ export function cleanAirTopSpeed(car){
   return Math.min(MAX_SPEED,MAX_SPEED*(1+level(car.upgrades,"engine")*.035)*(car.pace || 1)*(1-car.fuel*.0006))*mode*pack.top;
 }
 export function estimatedPitLoss(car){
- const service=(2.3+Math.max(2.3,5.5-level(car.upgrades,"crew")*.5))/2;
+ const service=tyreServiceTime(level(car.upgrades,"crew"));
  const straightSpeed=Math.min(cleanAirTopSpeed(car),300);
  return Math.max(8,PIT_LANE.length/PIT_SPEED-(TRACK.length-TRACK.pitEntry+TRACK.pitExit)/Math.max(160,straightSpeed)+service);
 }
@@ -525,6 +525,7 @@ export function acceleration(car) {return engineAcceleration(car.speed,engineMod
 function overspeedDrag(car){return Math.max(0,car.speed-cleanAirTopSpeed(car))*.6*(1-(car.slipstream?.strength || 0));}
 // Passive loss from a held slide, shared by player and AI. Braking force is
 // still limited independently by the current front-tyre grip.
+export const leavesSkidMarks=car=>car.speed>45 && Math.abs(angleDiff(car.motionAngle ?? car.angle,car.angle))>.07;
 export const slidingResistance=(speed,slide,slip)=>Math.max(0,speed)*(.012*slide+.015*Math.sin(slip)**2);
 export function tyreRuleMet(car) {
   return (
@@ -814,8 +815,7 @@ export function steerCar(c,dt,{steer=0,throttle=0,brake=0,off=false,front=grip(c
   const slipAngle=angleDiff(c.motionAngle,c.angle);
   const slide=Math.max(clamp((c.speed*turning)/(225*cornerGrip)-1,0,1),clamp(Math.abs(slipAngle)/.35,0,1));
   c.sliding=slide;
-  c.speed=Math.max(0,c.speed-(slidingResistance(c.speed,slide,slipAngle)+
-    Math.abs(steer)*Math.max(0,c.speed-180)*.025)*dt);
+  c.speed=Math.max(0,c.speed-slidingResistance(c.speed,slide,slipAngle)*dt);
   c.sideSpeed=c.speed*Math.sin(slipAngle);
   return {turning,slide,slipAngle};
 }
@@ -1209,7 +1209,7 @@ export class Race {
       ) {
         p.stage = "service";
         car.speed = 0;
-        p.serviceDuration=this.qualifying && p.nextSet===p.previousSet ? 2.3 : tyreServiceTime(car.upgrades.crew,this.pitRandom || (car.player ? Math.random : car.aiRandom));
+        p.serviceDuration=this.qualifying && p.nextSet===p.previousSet ? 2.3 : tyreServiceTime(car.upgrades.crew);
         p.aeroRemaining=p.nextAeroSpec && p.nextAeroSpec!==car.aeroSpec ? 10 : 0;
         p.aeroServiceSeconds=p.aeroRemaining;
         p.penaltyRemaining=car.penalty;
@@ -1283,6 +1283,7 @@ export class Race {
       offset: c.offset,
       performance:c.player ? passingPerformance(c,this.difficulty) : c.ai.racePace,
       passingTarget:c.ai.lane?.phase==="passing" ? c.ai.lane.targetId : null,
+      launchPass:!!c.ai.lane?.launchPass,passingOffset:c.ai.lane?.requestedOffset,passingClearS:c.ai.lane?.launchClearS,
       pit: c.pit,
       garage: c.garage,
       finished: c.finished,
@@ -1386,7 +1387,8 @@ export class Race {
     const traction = clamp(accelerationGrip(c), 0.25, 1);
     const accel =
       throttle && c.fuel > 0
-        ? acceleration(c) * throttle * (1 - 0.45 * steer * steer) * traction *
+        ? Math.min(acceleration(c) * throttle * traction,
+          cornerAccelerationLimit(c.speed,Math.abs(steer)*(2.3/(1+c.speed/180))*(.55+.45*clamp(g,.1,1))/Math.max(25,c.speed),rearGrip)) *
           Math.cos(angleDiff(c.motionAngle ?? c.angle,c.angle))
         : -(4 + c.speed * 0.012);
     c.speed = clamp(c.speed + (accel - brake * brakingDeceleration(c) - overspeedDrag(c)) * dt, 0, Math.max(top,c.speed));
@@ -1417,8 +1419,7 @@ export class Race {
       effort = drivingTyreEffort(c,{qualifying:!!this.qualifying,slide,brake,steer});
     resources(c, dt, distance, effort,{throttle,brake,corner:Math.sign(steer)*clamp(c.speed*turning/225,0,1.3),wheelspin:throttle*clamp(1-traction+(paceMode(c).power-1)*2,0,1)});
     this.tyreAdvice(c);
-    if ((slide > 0.12 || (brake && c.speed > 160)) && this.skids.length < 1400)
-      this.skids.push({ x: c.x, y: c.y, a: c.angle, t: this.time });
+    recordSkid(c,this.skids,this.time,leavesSkidMarks(c));
     if (n.dist < 120 && next.dist >= 120 && c.contactCooldown === 0) {
       c.contacts++;
       c.contactCooldown = 2;
@@ -1545,14 +1546,15 @@ export class Race {
     return plan.pitRequested;
   }
   stepAI(c, dt) {
-    const oldX=c.x,oldY=c.y,oldS=c.s,oldAngle=c.angle;
+    const oldX=c.x,oldY=c.y,oldS=c.s,oldAngle=c.angle,oldOffset=c.offset;
     const remain=this.laps-raceProgress(c)/TRACK.length;
     const water=c.trackWetness || 0;
     const style=c.driverStyle,ai=c.ai;
     // Launch in the assigned grid lane before gradually joining the racing line.
     if(ai.launch===undefined)ai.launch=!this.qualifying&&this.time<.1&&c.speed<2 ? {s:c.s,offset:c.offset} : null;
     const launchProgress=ai.launch ? clamp((c.s-ai.launch.s-120)/140,0,1) : 1;
-    const launching=launchProgress<1;
+    if(ai.launch&&launchProgress>=1&&!ai.lane?.launchPass)ai.launch=null;
+    const launching=!!ai.launch&&(launchProgress<1 || !!ai.lane?.launchPass&&c.s<(ai.lane.launchClearS ?? -Infinity));
     const shouldPit=this.qualifying ? c.qState==='in' : this.strategyReviewedAt===this.time ? c.ai.strategy.pitRequested : this.reviewAIStrategy(c,remain);
     // Commit to the next entrance when the request begins. In qualifying the
     // timed lap ends just AFTER some circuits' pit entries: that is the start
@@ -1611,9 +1613,15 @@ export class Race {
     if(yielding) target=Math.min(target*.82,210);
     if(mistake)target*=mistake==='wide' ? .88 : .94;
     if(pitApproach)target=Math.min(target,pitSpeedLimit);
+    // A slow or stopped obstruction uses the same lane search anywhere on the
+    // circuit. The initial delay only allows for normal launch reaction time.
+    const blockedLaunch=!pitApproach && (ai.lane?.launchPass&&c.s<(ai.lane.launchClearS ?? -Infinity) || this.time>.35 && (this.traffic || this.cars).some(o=>
+      o.id!==c.id&&!o.pit&&!o.garage&&!o.dnf&&!o.finished &&
+      wrap(o.s-c.s,TRACK.length)>0 && wrap(o.s-c.s,TRACK.length)<Math.max(170,c.speed*1.5+60) && Math.abs(o.offset-c.offset)<30 && o.speed<Math.max(8,c.speed*.45)));
     const lane=planRacingLane(c,AI_LINE,this.traffic || this.cars,{time:this.time,
-      allowPass:!launching&&!pitApproach&&!mistake&&(!this.qualifying||c.qState==="timed"),
-      baseOffset:launching ? ai.launch.offset+(path.offset-ai.launch.offset)*launchProgress : null,
+      allowPass:(!launching||blockedLaunch)&&!pitApproach&&!mistake&&(!this.qualifying||c.qState==="timed"),
+      blockedLaunch,
+      baseOffset:launching&&ai.launch ? ai.launch.offset+(path.offset-ai.launch.offset)*launchProgress : null,
       routeOffset:pitApproach?.offset ?? null,
       paceAdvantage:(other,shift=0)=>projectedPaceAdvantage(AI_LINE,c.s,c.speed,ai.racePace,
         other.performance || other.ai?.racePace || passingPerformance(this.cars.find(o=>o.id===other.id),this.difficulty),
@@ -1645,8 +1653,14 @@ export class Race {
     const progressRate=c.speed/Math.hypot(clamp(1-curvature*c.offset,.5,1.5),slope);
     let feedForward=pitApproach || yielding ? slope*progressRate :
       (racingPoint(AI_LINE,c.s+progressRate*dt).offset-path.offset)/dt;
-    if(launching)feedForward*=launchProgress;
-    if(desiredOffset<=lane.min+.1&&feedForward<0 || desiredOffset>=lane.max-.1&&feedForward>0&&(!pitApproach || lane.max<pitApproach.offset-.1))feedForward=0;
+    const referenceVelocity=feedForward;
+    if(launching)feedForward*=blockedLaunch ? 0 : launchProgress;
+    const constrained=(desiredOffset<=lane.min+.1&&feedForward<0 || desiredOffset>=lane.max-.1&&feedForward>0&&(!pitApproach || lane.max<pitApproach.offset-.1));
+    // Blend changes in path support rather than switching its lateral velocity
+    // off/on in one frame when a neighbour enters or leaves the lane constraint.
+    const support=constrained ? 0 : 1;
+    ai.pathSupport=clamp((ai.pathSupport ?? 1)+clamp(support-(ai.pathSupport ?? 1),-dt*5,dt*3),0,1);
+    feedForward*=ai.pathSupport;
     const recovery=clamp((desiredOffset-c.offset)*2.4-c.sideSpeed,-55,55);
     ai.recoveryVelocity=(ai.recoveryVelocity || 0)+clamp((recovery-(ai.recoveryVelocity || 0))*8,-180*Math.max(.25,contact.all),180*Math.max(.25,contact.all))*dt;
     ai.lineVelocity=clamp(feedForward+ai.recoveryVelocity,-c.speed*.85-c.sideSpeed,c.speed*.85-c.sideSpeed);
@@ -1672,6 +1686,17 @@ export class Race {
       cornerAccelerationLimit(c.speed,drivenPath.curvature,grip(c,"rear")));
     c.speed += clamp(target - c.speed, -braking * dt, accel * dt)-overspeedDrag(c)*dt;
     c.speed = Math.max(0, c.speed);
+    if(blockedLaunch){
+      // Keep a slow evasive turn moving forwards, even when braking changes
+      // speed after the lateral controller ran. Never rotate in place.
+      const roadAngle=sample(oldS).angle;
+      const currentHeading=clamp(angleDiff(c.motionAngle ?? oldAngle,roadAngle),-1.2,1.2);
+      const wantedHeading=Math.asin(clamp((ai.lineVelocity+c.sideSpeed)/Math.max(.01,c.speed),-.93,.93));
+      const turnRate=(2.3/(1+c.speed/180))*(.55+.45*clamp(contact.front,.1,1));
+      const heading=clamp(wantedHeading,currentHeading-turnRate*dt,currentHeading+turnRate*dt);
+      ai.lineVelocity=c.speed*Math.sin(heading)-c.sideSpeed;
+      c.offset=oldOffset+(ai.lineVelocity+c.sideSpeed)*dt;
+    }
     if(!pitApproach && Math.abs(c.offset)>TRACK.width/2) c.speed=Math.max(0,c.speed-(6+c.speed*.65)*dt);
     if(!pitApproach) updateTrackLimits(c,dt,Math.abs(c.offset));
     if (c.fuel <= 0) c.speed = Math.max(0, c.speed - 55 * dt);
@@ -1679,17 +1704,79 @@ export class Race {
     // changes orientation; it must not subtract forward speed a second time.
     const recovering=!!ai.contactRecovery && Number.isFinite(c.motionAngle);
     if(!recovering)c.speed=Math.max(0,c.speed-slidingResistance(c.speed,c.sliding,ai.slip)*dt);
+    const followingArc=!launching&&!pitApproach&&!yielding;
+    const alignment=Math.max(.7,Math.cos(angleDiff(path.angle,sample(oldS).angle)));
+    const shift=(oldOffset-path.offset+(ai.lineVelocity+c.sideSpeed-referenceVelocity)*dt)/alignment;
+    const positionAt=(s,currentOffset=null)=>{
+      const arc=racingPoint(AI_LINE,s),loc=sample(s);
+      const alignment=Math.max(.7,Math.cos(angleDiff(arc.angle,loc.angle)));
+      let offset=currentOffset ?? (followingArc ? arc.offset+shift*alignment : c.offset);
+      // Preserve occupied space if the final distance integration differs from
+      // the controller's prediction. The boundary may already overlap us;
+      // in that case keep movement away from the neighbour available.
+      if(!yielding && currentOffset===null){
+        const margin=TRACK.width/2-18;
+        if(lane.min>-margin)offset=Math.max(offset,Math.min(oldOffset,lane.min));
+        if(lane.max<(pitApproach || ai.pitExitUntil>oldS ? Math.max(margin,oldOffset,pitApproach?.offset || 0) : margin))offset=Math.min(offset,Math.max(oldOffset,lane.max));
+      }
+      // Keep the world-space racing arc. Rebuilding it from a lateral offset
+      // loses its along-road component and twitches at centreline boundaries.
+      const lateral=(offset-arc.offset)/alignment;
+      let x=arc.x-Math.sin(arc.angle)*lateral,y=arc.y+Math.cos(arc.angle)*lateral;
+      if(launching || pitApproach){
+        // The pit entrance is a physical line in road coordinates. Join that
+        // route before capture, rather than extending an offset racing arc
+        // past it. Grid departures likewise start in their marked lanes.
+        const blend=pitApproach ? 0 : launchProgress*launchProgress*(3-2*launchProgress);
+        const gridX=loc.x-Math.sin(loc.angle)*offset,gridY=loc.y+Math.cos(loc.angle)*offset;
+        x=gridX+(x-gridX)*blend;y=gridY+(y-gridY)*blend;
+      }
+      return {x,y,offset};
+    };
+    // Switching from a racing lane to the pit route (or back) must preserve
+    // position. Any residual is steered out over distance, never teleported.
+    const origin=positionAt(oldS,oldOffset),settle=recovering ? 0 : Math.exp(-c.speed*dt/80);
+    const residualX=(oldX-origin.x)*settle,residualY=(oldY-origin.y)*settle;
+    const advance=s=>{const p=positionAt(s);return {...p,x:p.x+residualX,y:p.y+residualY};};
     const forward=Math.sqrt(Math.max(0,c.speed**2-(ai.lineVelocity+c.sideSpeed)**2));
-    const delta=forward*dt/clamp(1-curvature*c.offset,.5,1.5);
-    c.s += delta;
-    const loc = sample(c.s);
-    c.x = loc.x - Math.sin(loc.angle) * c.offset;
-    c.y = loc.y + Math.cos(loc.angle) * c.offset;
+    let delta=forward*dt/clamp(1-curvature*oldOffset,.5,1.5);
+    let next=advance(oldS+delta);
+    // Progress is a road coordinate, not distance travelled. Match the actual
+    // curved path to the available speed instead of gaining speed on an inside
+    // arc or losing it where the track centreline bends underneath the route.
+    for(let i=0;i<2 && delta>0;i++){
+      const distance=Math.hypot(next.x-oldX,next.y-oldY);
+      if(distance<.0001)break;
+      delta*=clamp(c.speed*dt/distance,.5,1.5);
+      next=advance(oldS+delta);
+    }
+    c.s=oldS+delta;c.x=next.x;c.y=next.y;c.offset=next.offset;
+    // A lane request cannot rotate the travelling car instantaneously. Keep
+    // the physical velocity continuous when a traffic constraint changes.
+    if(!recovering&&!pitApproach&&!yielding&&c.speed>.0001){
+      const prior=c.motionAngle ?? oldAngle,requested=Math.atan2(c.y-oldY,c.x-oldX);
+      const yawLimit=(launching ? 1 : 2)*(2.3/(1+c.speed/180))*(.55+.45*clamp(contact.front,.1,1))*dt;
+      const yaw=angleDiff(requested,prior);
+      if(Math.abs(yaw)>yawLimit){
+        const heading=prior+clamp(yaw,-yawLimit,yawLimit);
+        c.x=oldX+Math.cos(heading)*c.speed*dt;c.y=oldY+Math.sin(heading)*c.speed*dt;
+        const actual=nearest(c.x,c.y,oldS);
+        c.s=oldS+wrap(actual.s-wrap(oldS,TRACK.length)+TRACK.length/2,TRACK.length)-TRACK.length/2;c.offset=actual.offset;
+      }
+    }
     // A contact changes the actual velocity vector. The route planner may
     // request its line back, but tyres must bend that velocity with the same
     // lateral-force ceiling as the player instead of cancelling the impulse.
     if(recovering){
-      const requested=Math.atan2(c.y-oldY,c.x-oldX);
+      // Recover toward a point ahead on the requested lane, not the next
+      // integration sample. That sample assumes we are already on its arc;
+      // after a collision its small projection error can point sideways or
+      // backwards and send the car away from the road for several seconds.
+      const look=Math.max(45,c.speed*.4),guideS=oldS+look;
+      const guide=pitApproach || yielding ? sample(guideS) : racingPoint(AI_LINE,guideS);
+      const guideShift=pitApproach || yielding ? desiredOffset : desiredOffset-path.offset;
+      const requested=Math.atan2(guide.y+Math.cos(guide.angle)*guideShift-oldY,
+        guide.x-Math.sin(guide.angle)*guideShift-oldX);
       const brake=clamp((oldSpeed-c.speed)/(braking*dt),0,1);
       steerCar(c,dt,{throttle,brake,front:contact.front,rear:contact.rear,targetAngle:requested});
       c.x=oldX+Math.cos(c.motionAngle)*c.speed*dt;c.y=oldY+Math.sin(c.motionAngle)*c.speed*dt;
@@ -1723,8 +1810,7 @@ export class Race {
       c.weatherTarget=this.qualifying ? recommendedTyre(water) : c.ai.strategy.choice?.compound;
       this.tryEnterPit(c,{x:oldX,y:oldY,s:oldS},entryS);
     }
-    if(c.sliding>.18 && this.time%(1/12)<dt && this.skids.length<1400)
-      this.skids.push({x:c.x,y:c.y,a:c.angle,t:this.time});
+    recordSkid(c,this.skids,this.time,leavesSkidMarks(c));
   }
   collisions() {
     const active = this.cars.filter(

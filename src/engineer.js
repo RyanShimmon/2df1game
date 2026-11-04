@@ -1,6 +1,6 @@
 import {fuelPerLap,stintLaps,tyreWearFactor} from "./performance.js";
 import {thermalWear} from "./tyre-temperature.js";
-import {fuelMultiplier,level} from "./development.js";
+import {fuelMultiplier,level,tyreServiceSeconds} from "./development.js";
 import {forecastWater} from "./racecraft.js";
 import {tyreWeatherGrip} from "./weather.js";
 import {selectableSets} from "./tyre-stock.js";
@@ -31,7 +31,7 @@ export function engineerReport(race,{track,pitLane,tyres,progress,basePitLoss}){
  let rejoin=null,pitLoss=null;
  if(lvl>=3 && !race.qualifying){
   const lap=p.lastLap>0 ? p.lastLap : Number.isFinite(p.bestLap) ? p.bestLap : track.length/(205*(p.pace || 1));
-  const speed=track.length/Math.max(15,lap),service=(2.3+Math.max(2.3,5.5-level(p.upgrades,"crew")*.5))/2;
+  const speed=track.length/Math.max(15,lap),service=tyreServiceSeconds(level(p.upgrades,"crew"));
   const queue=race.cars.find(c=>c!==p&&c.team.name===p.team.name&&c.pit?.stage==="service");
   pitLoss=(basePitLoss ?? Math.max(0,pitLane.length/80+service-(track.length-track.pitEntry+track.pitExit)/speed))+(p.penalty || 0)+(queue?.pit.timer || 0);
   const after=progress(p)-pitLoss*speed;

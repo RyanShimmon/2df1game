@@ -1,3 +1,4 @@
+import {drawSkids} from "./skids.js";
 import {speedValue} from "./units.js";
 import {gridSlot,
   TRACK,
@@ -281,17 +282,7 @@ export class Renderer {
       );
     }
     if (race && !menu) {
-      for (const s of race.skids) {
-        ctx.globalAlpha = Math.max(0, 0.35 * (1 - (race.time - s.t) / 16));
-        ctx.save();
-        ctx.translate(s.x, s.y);
-        ctx.rotate(s.a);
-        ctx.fillStyle = "#12191d";
-        ctx.fillRect(-7, -10, 14, 3);
-        ctx.fillRect(-7, 7, 14, 3);
-        ctx.restore();
-      }
-      ctx.globalAlpha = 1;
+      drawSkids(ctx,race.skids,race.time);
       for(const c of race.cars) if((!c.garage || c.player) && !trackLayer(c.s)) this.car(ctx,interpolatedCar(c,alpha),c.player ? countdownPulse(race.countdown) : 0);
       this.flyovers(ctx,race,alpha);
       for(const c of race.cars) if((!c.garage || c.player) && trackLayer(c.s)) this.car(ctx,interpolatedCar(c,alpha),c.player ? countdownPulse(race.countdown) : 0);

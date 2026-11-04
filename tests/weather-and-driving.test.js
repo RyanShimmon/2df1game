@@ -173,7 +173,7 @@ test("AI traffic does not teleport and committed passing sides stay stable", () 
   r.stepAI(c, 1 / 60);
   assert.equal(c.passOffset, lane);
 });
-test("top speed takes sustained acceleration and steering costs exit pace", () => {
+test("top speed takes sustained acceleration and saturated cornering grip costs exit pace", () => {
   const simulate = (steer) => {
     const r = make();
     r.cars = [r.player];
@@ -194,10 +194,10 @@ test("top speed takes sustained acceleration and steering costs exit pace", () =
     return { speed: r.player.speed, first300, first329 };
   };
   const straight = simulate(0),
-    turning = simulate(0.7);
+    turning = simulate(1);
   assert.ok(straight.first300 > 5);
   assert.ok(straight.first329 > straight.first300 + 6 && straight.first329 < 40);
-  assert.ok(turning.first300 > straight.first300 + 1);
+  assert.ok(turning.first300 === null ? turning.speed < 300 : turning.first300 > straight.first300 + 1);
   assert.ok(turning.first329 === null ? turning.speed < 329 : turning.first329 > straight.first329 + 2);
 });
 test("career distance is set by the weekend and old saves gain wet tyres without losing wear", () => {

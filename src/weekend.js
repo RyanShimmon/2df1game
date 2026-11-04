@@ -142,6 +142,14 @@ export function beginQualifying(w,upgrades,profile,{setId,compound=w.setup.tyre}
   w.selectedSetId=selected.id;w.selectedPhase=w.phase;
   return new QualifyingRun(w,selected.id,upgrades,profile);
 }
+// Preview and live qualifying must resolve the same career weather tendency.
+// Keep this pure: opening the forecast must not create a weekend, spend team
+// budgets or lock the player's setup before they press Start qualifying.
+export function createQualifyingWeather(career,weatherSeed) {
+  const schedule=careerSchedule(career);
+  const pattern=careerWeatherPattern(schedule.weather,weatherSeed);
+  return createWeather(pattern,{seed:weatherSeed,duration:qualifyingWeatherDuration({setup:{track:schedule.track}})});
+}
 export function createWeekend(career, setup) {
   const schedule = careerSchedule(career);
   developTeams(career,setup.aiSeed);
@@ -173,7 +181,7 @@ export function createWeekend(career, setup) {
       teamDevelopment:developmentSnapshot(career,schedule.track),
     },
     eventName: schedule.name,
-    weather: createWeather(weatherPattern,{seed:weatherSeed,duration:qualifyingWeatherDuration({setup:{track:schedule.track}})}),
+    weather: createQualifyingWeather(career,weatherSeed),
     conditions: { weather: "Dry", temperature: 24 },
     phase: "Q1",
     active: Array.from({ length: 22 }, (_, i) => i),
@@ -526,7 +534,7 @@ export class QualifyingRun extends Race {
     if (p.nextSet===set) return true;
     p.previousSet=c.tyreSet;p.nextSet=set;p.nextTyre=set.compound;
     p.serviced=false;p.stage="service";c.speed=0;
-    p.serviceDuration=set===c.tyreSet ? 2.3 : tyreServiceTime(c.upgrades.crew,this.pitRandom || c.aiRandom);
+    p.serviceDuration=set===c.tyreSet ? 2.3 : tyreServiceTime(c.upgrades.crew);
     p.timer=Math.max(0,(p.timer || 0)-(p.aeroRemaining || 0),p.serviceDuration)+(p.aeroRemaining || 0);
     c.qNeedsRelease=true;
     this.say("Tyres selected. Minimum service wait, then press W / ↑ when ready to leave.");

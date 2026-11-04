@@ -57,7 +57,7 @@ test('actual player acceleration reaches each package ceiling without a hidden 3
 test('installed upgrade explanations reflect the owned level and actual service limits',()=>{
  assert.match(upgradeDetails('tyres',3).description,/21% less tyre wear/);
  assert.match(upgradeDetails('brakes',2).description,/10% more braking force/);
- assert.match(upgradeDetails('crew',2).description,/2.3–4.5 seconds/);
+ assert.match(upgradeDetails('crew',2).description,/3.3 seconds every stop/);
  assert.match(upgradeDetails('engineer',3).description,/pit rejoin position and traffic/);
  assert.equal(upgradeDetails('unknown',2),null);
 });

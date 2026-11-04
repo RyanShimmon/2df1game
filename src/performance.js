@@ -61,5 +61,12 @@ export function engineAcceleration(speed,{basePower,power,drag,packageTop=1,top,
  const resistance=basePower*.82*(Math.max(0,speed)/330)**1.3*drag;
  const approach=clamp((speed/top-.60)/.40,0,1);
  const reserve=1-.84*approach*approach*(3-2*approach);
- return Math.max(0,power-resistance*(1-.16*tow)-4-speed*.012-Math.max(0,speed-330*packageTop)*.55)*reserve;
+ // The clean-air taper models the engine running out of thrust near its cap.
+ // Applying that taper to recovered drag as well hid most of the tow's pull.
+ // Recover aerodynamic resistance directly, increasingly at high speed, then
+ // taper only as the draft ceiling approaches. No extra engine power is added.
+ const wakeSpeed=clamp((speed-140)/160,0,1),wake=clamp(tow,0,1);
+ const recoveredDrag=resistance*.28*wake*wakeSpeed*wakeSpeed*(3-2*wakeSpeed);
+ const draftHeadroom=clamp((top-speed)/18,0,1);
+ return Math.max(0,power-resistance-4-speed*.012-Math.max(0,speed-330*packageTop)*.55)*reserve+recoveredDrag*draftHeadroom;
 }

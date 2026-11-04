@@ -80,7 +80,6 @@ test("pit stop changes tyres without refuelling; speeding penalty is served", ()
 test("pit crew upgrade reduces service time", () => {
   const duration = (crew) => {
     const r = new Race(setup, { crew });
-    r.pitRandom=()=>1;
     r.player.speed = 70;
     r.pitLimiter = true;
     r.enterPit(r.player);
@@ -195,8 +194,6 @@ test("one-stop and two-stop strategies are competitive over a 32-lap Quick Race 
       { engine: 0, aero: 0, tyres: 0, crew: 0 },
     );
     r.countdown = 0;
-    // Fix service at its midpoint so random 2.3–5.5s stops do not skew this pace comparison.
-    r.pitRandom = () => .5;
     const c = r.player;
     c.player = false;
     c.pace = 1;
