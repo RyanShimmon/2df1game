@@ -86,15 +86,34 @@ test('dry compound rules remain enforced for Grands Prix, without an unnecessary
  for(const format of ['grandPrix','sprint']){
   fit(r,c,{tyre:'H',age:10,wear:.4,fuel:3});c.raceFormat=format;
   assert.equal(r.reviewAIStrategy(c,1.5),format==='grandPrix');
-  if(format==='grandPrix'){assert.equal(c.ai.strategy.reason,'compound rule');assert.notEqual(c.ai.strategy.choice.compound,'H');}
+  if(format==='grandPrix'){assert.equal(c.ai.strategy.reason,'compound rule');assert.notEqual(c.ai.strategy.choice.compound,'M');}
  }
 });
 
 test('a worthwhile strategic stop is still taken when the planned stint reaches its pit window',()=>{
  const r=race(),c=r.cars[1];
- fit(r,c,{tyre:'S',age:10.3,wear:.8,fuel:26});
- assert.equal(r.reviewAIStrategy(c,21.7),true);
+ fit(r,c,{tyre:'S',age:8,wear:.68,fuel:26});
+ assert.equal(r.reviewAIStrategy(c,24),true);
  assert.equal(c.ai.strategy.reason,'faster race strategy');
- assert.equal(c.ai.strategy.choice.compound,'H');
+ assert.equal(c.ai.strategy.choice.compound,'M');
  assert.ok(c.ai.strategy.projectedStopLaps<1);
+});
+
+test('Riviera dry running separates an upgraded Soft on Save from an unupgraded Medium on Push',()=>{
+ const r=race('riviera'),c=r.cars[0],stops=[];
+ for(const [tyre,mode,tyres] of [['S','save',1],['M','push',0]]){
+  const upgrades={tyres};
+  for(let age=.25;age<20;age+=.25){
+   const wear=age*wearPerLap(tyre,TYRES,{mode,upgrades});
+   fit(r,c,{tyre,mode,upgrades,age,wear,fuel:(24-age)*1.14});
+   if(r.reviewAIStrategy(c,24-age)){stops.push(age);break;}
+  }
+ }
+ assert.equal(stops.length,2);assert.ok(stops[0]+1<=stops[1],stops.join(' / '));
+});
+test('a legal car with two dry laps left can race to the flag at zero tyre condition',()=>{
+ const r=race('riviera'),c=r.cars[0];
+ fit(r,c,{tyre:'M',age:17,wear:1.08,fuel:2.6});c.used.add('S');
+ assert.equal(r.reviewAIStrategy(c,2),false);
+ assert.equal(c.ai.strategy.projectedStopLaps,2);
 });

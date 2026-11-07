@@ -93,3 +93,16 @@ test('directional pace controls move one step and stop at Save and Push',()=>{
  assert.equal(stepPaceMode('save',-1),'save');assert.equal(stepPaceMode('save',1),'balanced');
  assert.equal(stepPaceMode('balanced',1),'push');assert.equal(stepPaceMode('push',1),'push');
 });
+
+test('empty and over-limit saved sets retain 77% of their fresh mechanical grip',()=>{
+ for(const tyre of Object.keys(TYRES))for(const upgrade of [0,1,5]){
+  assert.equal(tyreWearFactor(tyre,1,upgrade),.77);
+  assert.equal(tyreWearFactor(tyre,1.12,upgrade),.77);
+ }
+});
+test('identical physical sideslip produces identical wear regardless of controller steering estimates',()=>{
+ const base=vehicle('balanced');Object.assign(base,{tyre:'S',motionAngle:.1,angle:0});
+ const player={...base,player:true,sliding:1},ai={...base,player:false,sliding:.1};
+ for(const c of [player,ai])resources(c,1/60,100,drivingTyreEffort(c,{brake:.4,steer:.6}),{brake:.4,corner:.6});
+ assert.equal(player.wear,ai.wear);
+});

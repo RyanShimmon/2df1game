@@ -3,7 +3,7 @@ import {recordSeasonResult} from "./championship.js";
 import {createSectorSession,startSectorLap,advanceSectors,stopSectorLap,invalidateSector} from "./sectors.js";
 import {recordTiming,intervalSeconds,createTimingReference,timingCoordinate} from "./timing.js";
 import {planRaceStrategy,strategyWearLimit} from "./strategy.js";
-import {engineAcceleration,paceMode,fuelPerLap,applyThrottle,tyreWearFactor,stintLaps,cornerAccelerationLimit} from "./performance.js";
+import {engineAcceleration,paceMode,fuelPerLap,applyThrottle,tyreWearFactor,tyrePaceWear,wearPerLap,stintLaps,cornerAccelerationLimit} from "./performance.js";
 import {GRAND_PRIX_POINTS,racePoints,raceFormat,quickRaceFormat} from "./race-rules.js";
 import {SEASON_LENGTH,careerSchedule,shuffledSeasonOrder,ensureSeasonOrder} from "./calendar.js";
 import {SPONSORS,sponsorMet} from "./sponsors.js";
@@ -13,7 +13,7 @@ import {UPGRADES,AERO_PACKAGES,emptyUpgrades,normalizeUpgrades,level,upgradePric
 export {UPGRADES,AERO_PACKAGES,fuelMultiplier,sponsorPayout,setAeroPackage,developTeams,developmentSnapshot};
 import {selectableSets} from "./tyre-stock.js";
 import {seededRandom,driverSeed,buildRacingLine,racingPoint,qualifyingLane,planRacingLane,laneGeometry,projectedPaceAdvantage,brakingTarget,updateSlipstream,forecastWater,createStrategy,rankTyres,availableAISets} from "./racecraft.js";
-import {prepareTyres,thermalGrip,thermalWear,updateTyreTemperatures,coolStoredSets,distributeWear,holdOptimalTemperature,THERMAL} from "./tyre-temperature.js";
+import {prepareTyres,tyreSlipLoad,thermalGrip,thermalWear,updateTyreTemperatures,coolStoredSets,distributeWear,holdOptimalTemperature,THERMAL} from "./tyre-temperature.js";
 import {CIRCUITS,circuitById,circuitAnchors} from "./tracks.js";
 export {CIRCUITS,circuitById};
 import {
@@ -678,31 +678,19 @@ export function targetSpeed(car, s = car.s) {
     (1 + (car.upgrades?.engine || 0) * 0.012)
   );
 }
-export function drivingTyreEffort(car,{qualifying=!!car.qualifyingRun,slide=car.sliding || 0,brake=0,steer=0}={}) {
-  const base=qualifying && car.qState!=="timed" ? .45 : paceMode(car).wear;
+export function drivingTyreEffort(car,{qualifying=!!car.qualifyingRun,slide=tyreSlipLoad(car),brake=0,steer=0}={}) {
+  const base=qualifying && car.qState!=="timed" ? .45 : tyrePaceWear(car.tyre,car.drive);
   return base*(1+clamp(slide,0,1)*.5+clamp(brake,0,1)*clamp(steer,-1,1)**2*.15);
 }
 export function resources(car, dt, distance, effort = 1, load = {}) {
   updateTyreTemperatures(car,dt,load);
   const previousWear=car.wear;
   car.tyreAge += distance;
-  car.wear = clamp(
-    car.wear +
-      (distance / (TRACK.length * TYRES[car.tyre].life)) *
-        effort * thermalWear(car) *
-        (car.tyre === "I" || car.tyre === "W"
-          ? 1 +
-            Math.max(
-              0,
-              (car.tyre === "W" ? 0.55 : 0.28) - (car.trackWetness || 0),
-            ) *
-              5
-          : 1 - (car.trackWetness || 0) * 0.25) *
-        (1 - (car.upgrades?.tyres || 0) * 0.07),
-    0,
-    1.12,
-  );
-  const wearAmount=car.wear-previousWear;car.wear=previousWear;distributeWear(car,wearAmount,load);
+  const wearRate=wearPerLap(car.tyre,TYRES,{
+    upgrades:car.upgrades,wetness:car.trackWetness,thermal:thermalWear(car),stress:effort,
+  });
+  const nextWear=clamp(previousWear+distance/TRACK.length*wearRate,0,1.12);
+  distributeWear(car,nextWear-previousWear,load);
   // Fuel follows the power map and actual load, independently of the tyre effort.
   const fuelLoad=load.throttle==null ? 1 : .82+.18*clamp(load.throttle,0,1);
   car.fuel=Math.max(0,car.fuel-distance/TRACK.length*fuelPerLap(car.drive,car.upgrades,fuelLoad));
@@ -1416,7 +1404,7 @@ export class Race {
     const limits = updateTrackLimits(c, dt, entranceApproach ? 0 : next.dist);
     if (limits) this.say(limits);
     const distance = Math.hypot(dx, dy),
-      effort = drivingTyreEffort(c,{qualifying:!!this.qualifying,slide,brake,steer});
+      effort = drivingTyreEffort(c,{qualifying:!!this.qualifying,brake,steer});
     resources(c, dt, distance, effort,{throttle,brake,corner:Math.sign(steer)*clamp(c.speed*turning/225,0,1.3),wheelspin:throttle*clamp(1-traction+(paceMode(c).power-1)*2,0,1)});
     this.tyreAdvice(c);
     recordSkid(c,this.skids,this.time,leavesSkidMarks(c));
@@ -1501,9 +1489,8 @@ export class Race {
     plan.projectedStopLaps=staying?.stint ?? null;
     if(!best || remaining<.55)return plan.pitRequested=false;
     const water=c.trackWetness || 0;
-    const dryWear=['I','W'].includes(c.tyre) ? 1+Math.max(0,(c.tyre==='W' ? .55 : .28)-water)*5 : 1-water*.25;
-    const effort=paceMode(c).wear;
-    const wearRate=dryWear*effort*(1+(c.sliding || 0)*.5)*thermalWear(c)*(1-(c.upgrades?.tyres || 0)*.07)/TYRES[c.tyre].life;
+    const wearRate=wearPerLap(c.tyre,TYRES,{mode:c.drive,upgrades:c.upgrades,wetness:water,
+      stress:1+tyreSlipLoad(c)*.5,thermal:thermalWear(c)});
     const toEntry=wrap(TRACK.pitEntry-c.s,TRACK.length)/TRACK.length;
     // Leave another entrance available if traffic prevents a safe turn-in.
     const mustChange=!tyreRuleMet(c) && remaining<3.25+plan.risk*.5;
@@ -1519,7 +1506,12 @@ export class Race {
     const strategicStop=stopWindow && usefulReplacement && best.totalTime!=null &&
       family(best.set.compound)===family(c.tyre) &&
       best.totalTime+context.pitLoss*1.2+2<staying.totalTime;
-    const canFinish=remaining<1.8 && c.wear+wearRate*remaining<.97;
+    // Near the flag a worn set can finish. Compare the recoverable lap time
+    // with the actual stop loss, while keeping weather and compound rules.
+    const finishWear=Math.min(1,c.wear+wearRate*remaining/2);
+    const finishGrip=TYRES[c.tyre].grip*tyreWeatherGrip(c.tyre,water)*tyreWearFactor(c.tyre,finishWear,level(c.upgrades,"tyres"));
+    const remainingGain=remaining*context.lapTime*(Math.max(.08,finishGrip)**-.32-Math.max(.08,replacementGrip)**-.32);
+    const canFinish=remaining<=3 && remainingGain<context.pitLoss;
     const tyreLife=!canFinish && usefulReplacement && (c.wear+wearRate*toEntry>strategyWearLimit(c,c.tyre) || (c.wear+wearRate>.98 && remaining>1.1));
     const urgent=c.wear>.96 && usefulReplacement || mustChange;
     const gain=(Math.pow(1/Math.max(.08,currentGrip),.32)-Math.pow(1/Math.max(.08,replacementGrip),.32))*Math.max(25,TRACK.length/205)*Math.min(remaining,2.5+plan.forecastHorizon/Math.max(25,TRACK.length/205));

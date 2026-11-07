@@ -102,7 +102,7 @@ function stop({tyre='M',wear=0,water=0,temp=null,wheels=null,speed=250}={}){
 test('actual player stopping distance increases with wear and follows dry compound grip',()=>{
  const soft=stop({tyre:'S'}),medium=stop({tyre:'M'}),hard=stop({tyre:'H'}),worn=stop({tyre:'M',wear:.97});
  assert.ok(soft.distance<medium.distance&&medium.distance<hard.distance);
- assert.ok(worn.distance>medium.distance*1.4);assert.ok(worn.time>medium.time);
+ assert.ok(worn.distance>medium.distance*1.2 && worn.distance<medium.distance*1.35);assert.ok(worn.time>medium.time);
 });
 test('wet braking favours wets, then intermediates, while hard slicks brake better than mediums and softs',()=>{
  const distance={};for(const tyre of ['S','M','H','I','W'])distance[tyre]=stop({tyre,water:1,speed:160}).distance;
@@ -114,7 +114,7 @@ test('front temperatures and individual front wear affect real braking, while di
  const ideal=stop({temp:100}),cold=stop({temp:30}),hot=stop({temp:165});
  assert.ok(cold.distance>ideal.distance*1.1);assert.ok(hot.distance>ideal.distance*1.05);
  const wornFront=stop({wear:.5,wheels:[.97,.97,.03,.03]}),wornRear=stop({wear:.5,wheels:[.03,.03,.97,.97]});
- assert.ok(wornFront.distance>wornRear.distance*1.4);
+ assert.ok(wornFront.distance>wornRear.distance*1.2 && wornFront.distance<wornRear.distance*1.35);
 });
 test('AI braking on worn slicks in rain cannot exceed the player grip-limited braking force',()=>{
  const r=new Race(setup),c=r.cars[0],loc=sample(1900);r.cars=[c];r.traffic=[c];
@@ -153,5 +153,5 @@ test('real wet-weather braking follows suitability and wear for Intermediate and
  assert.ok(stop({tyre:'I',water:.35}).distance<stop({tyre:'W',water:.35}).distance);
  assert.ok(stop({tyre:'W',water:.85}).distance<stop({tyre:'I',water:.85}).distance);
  for(const [tyre,water] of [['I',.35],['W',.85]])
-  assert.ok(stop({tyre,water,wear:.97}).distance>stop({tyre,water}).distance*1.4);
+  {const ratio=stop({tyre,water,wear:.97}).distance/stop({tyre,water}).distance;assert.ok(ratio>1.2 && ratio<1.35);}
 });

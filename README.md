@@ -1,8 +1,8 @@
 # V10 — Grand Prix
 
-Version **1.12.0**.
+Version **1.13.0**.
 
-This release improves AI racing lines, steering continuity, difficulty differences and overtaking. Cars can pass stationary traffic on either clear side, and can continue looking for passing opportunities while away from the ideal line. Tyre advantages still depend on grip, wear, temperature, weather and pace mode. Sustained slides now leave continuous skid trails, with the same skid threshold for the player and AI.
+Fully worn tyres retain enough grip to race to the flag. Soft and Medium stints have more distinct pit windows, and the race timing board shows each driver’s completed stops. The career garage includes the full season standings. Qualifying departures vary by driver and weekend, with time budgeted for two timed runs.
 
 Drafting produces a stronger acceleration benefit at high speed. Pit service times are consistent and reduced by crew upgrades. Race gaps use a shared timing reference, qualifying forecasts match their session, and the career garage includes season standings. Press T for the tyre menu and O for the aero menu.
 

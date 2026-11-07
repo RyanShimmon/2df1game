@@ -29,7 +29,9 @@ test(`${better}/${worse} at ${water*100}% water: same-condition corner, braking 
  const limits=tyre=>{c.tyre=tyre;const g=grip(c);return {corner:corneringSpeed(g,.005,330),brake:brakingDeceleration(c),exit:cornerAccelerationLimit(150,.005,grip(c,'rear'))};};
  const a=limits(better),b=limits(worse);for(const key of Object.keys(a))assert.ok(a[key]>b[key],key);
  c.tyre=better;c.wear=.98;c.wheelWear=Array(4).fill(.98);
- assert.ok(brakingDeceleration(c)<b.brake,'condition must still override the compound name');
+ const worn=brakingDeceleration(c);
+ assert.ok(worn<a.brake*.85 && worn>a.brake*.75,'worn tyre retains controlled braking in its own conditions');
+ if(!water)assert.ok(worn<b.brake,'fresh harder slick beats the worn softer slick');
 });
 function velocityLap(tyre){
  const r=new Race(setup),c=r.cars[0],p=sample(0),line=racingPoint(AI_LINE,0);

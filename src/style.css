@@ -1992,10 +1992,20 @@ body:not(.mobile-game) .qualifying-clock.session-expired b { display:inline-flex
 body:not(.mobile-game) .qualifying-clock svg { width:12px; height:14px; fill:none; stroke:currentColor; stroke-width:1.6; }
 
 .season-leader { margin-bottom:18px; }
-.season-leader-result { display:flex; align-items:center; justify-content:space-between; gap:20px; }
-.season-leader-result > b { font-size:17px; }
-.season-leader-result > strong { display:flex; align-items:baseline; gap:6px; color:var(--lime); font-size:28px; font-variant-numeric:tabular-nums; }
-.season-leader-result small { font-size:10px; letter-spacing:1px; }
-.season-leader .hint { margin:10px 0 0; }
+.season-leader h3 { margin:12px 0 4px; }
+.season-leader .ghost { margin-top:14px; width:100%; text-align:left; }
+.season-table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+.season-table th,.season-table td { padding:8px 10px; text-align:right; border-bottom:1px solid var(--line); }
+.season-table th:nth-child(2) { text-align:left; }
+.season-table tbody th span { border-left:3px solid; padding-left:8px; }
+.season-table thead { color:var(--muted); }
+.season-table .me { background:#d6fca116; color:var(--lime); }
+body:not(.mobile-game) .tower:not(.qualifying-tower) .timing-row,
+body:not(.mobile-game) .tower:not(.qualifying-tower) .tower-head {
+ display:grid; grid-template-columns:16px 3px minmax(0,1fr) 54px 32px 26px;
+ gap:4px; padding-inline:10px; align-items:center;
+}
+body:not(.mobile-game) .tower:not(.qualifying-tower) .tower-head span:first-child { grid-column:span 3; }
+body:not(.mobile-game) .tower:not(.qualifying-tower) :is(.gap,.stop-count,.compound-label,.tower-head span:not(:first-child)) { text-align:right; font-variant-numeric:tabular-nums; }
 
 .difficulty-status { color:var(--lime); font-size:12px; margin:12px 0 0; }

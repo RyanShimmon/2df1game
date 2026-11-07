@@ -22,11 +22,12 @@ for(const saved of [false,true])test(`Velocity Q1: a leading 32.80 lap survives 
  w.weather.points=[[0,0],[5000,0]];w.weather.rain=0;
  if(saved){q.endRun();c=loadCareer({getItem:()=>JSON.stringify(c)});w=c.weekend;q=new QualifyingRun(w,'W1',c.upgrades,profile);}
  const weather=structuredClone(w.weather),banked=structuredClone(w.results.find(r=>r.id===21));
+ const attempts=w.attempts; // Includes timed laps completed before returning to a saved garage.
  const outcome=await q.endSessionAsync({yieldControl:async()=>{}});
  assert.equal(outcome.through,true);assert.equal(w.phase,'Q2');assert.equal(w.sessions.length,1);
  assert.equal(outcome.position,1);assert.deepEqual(w.sessions[0].results.find(r=>r.id===21),banked);
  assert.deepEqual(w.weather,weather,'early completion must not give opponents a drying-track advantage');
- assert.ok(q.cars.filter(c=>!c.player).some(c=>c.stops>=2),'opponents still make several real outings');
+ for(const car of q.cars.filter(c=>!c.player))assert.ok(attempts[car.id]>=2,`driver ${car.id} completed ${attempts[car.id]} timed runs`);
  assert.ok(w.inventories[0].some(set=>set.wear>0),'opponents pay the actual tyre wear');
  const next=new QualifyingRun(w,'W1',c.upgrades,profile);next.step(.05,{});
  assert.ok(w.weather.elapsed>weather.elapsed);assert.ok(w.weather.wetness<weather.wetness,'live Q2 weather resumes normally');

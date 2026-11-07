@@ -44,7 +44,11 @@ export function planRaceStrategy(car,{tyres,sets,remaining,water,futureWater,lap
        const nextLife=Math.max(0,strategyWearLimit(car,next.compound)-(next.wear || 0))/wearPerLap(next.compound,tyres,{mode:'balanced',upgrades:car.upgrades,wetness:futureWater});
        if(left-nextLife>0)lengths.add(Math.min(left,Math.max(1,left-nextLife)));
       }
-      const targets=[...lengths].filter(n=>n>.05 && n<=Math.max(capacity,(.96-wear)/Math.max(.001,rate))+.01).sort((a,b)=>a-b);
+      // The fitted set can finish a short final stint beyond its useful life.
+      // Charge its actual worn pace for every remaining lap.
+      const finishOnCurrent=set===current && left<=3;
+      const maxStint=Math.max(capacity,(.96-wear)/Math.max(.001,rate));
+      const targets=[...lengths].filter(n=>n>.05 && (n<=maxStint+.01 || finishOnCurrent && n===left)).sort((a,b)=>a-b);
       let travelled=0;
       for(const duration of targets){
        while(travelled<duration-.00001){
@@ -58,7 +62,7 @@ export function planRaceStrategy(car,{tyres,sets,remaining,water,futureWater,lap
         wear+=step*wearRate;travelled+=step;
        }
        const finished=state.done+duration>=total-.01;
-       if(wear>Math.max(limit,finished?.96:limit)+.001 || fuel+Math.max(0,left-duration)*fuelPerLap("save",car.upgrades)>state.fuel+.15)continue;
+       if((!finished || !finishOnCurrent) && wear>Math.max(limit,finished?.96:limit)+.001 || fuel+Math.max(0,left-duration)*fuelPerLap("save",car.upgrades)>state.fuel+.15)continue;
        const stop=state.stints.length ? pitLoss : 0;
        const preference=(strategy.compoundBias?.[set.compound] || 0)*lapTime*duration;
        const stints=[...state.stints,{set,mode,laps:duration,endWear:wear}];

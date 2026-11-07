@@ -289,15 +289,14 @@ export function stageOrder(w) {
 }
 function* simulateAIQualifyingSteps(w,upgrades,profile,options={}) {
   const stage=qualifyingStage(w);
-  const ids=w.active.filter(id=>id!==21 && !w.results.some(r=>r.id===id));
+  const ids=w.active.filter(id=>id!==21 && (w.attempts?.[id] ?? Number(w.results.some(r=>r.id===id)))<2);
   if(!stage || w.elapsed>=stage.duration || !ids.length)return;
-  const q=new QualifyingRun(w,null,upgrades,profile,{...options,aiOnly:true,driverIds:ids});
+  const q=new QualifyingRun(w,null,upgrades,profile,{...options,aiOnly:true,driverIds:ids,targetAttempts:2});
   // Two complete outings where the remaining clock and real tyre stock allow.
   // This is the same weather, pit, temperature and wear simulation as live play.
   for(let i=0;(i<20*(stage.duration+90) || q.hasTimedLaps()) && !q.done;i++){
     q.step(.05,{});
-    for(const c of q.cars)if(c.stops>=2)c.qReleaseAt=Infinity;
-    if(q.cars.every(c=>c.stops>=2 || c.qUnavailable))break;
+    if(q.cars.every(car=>car.qUnavailable || car.garage && car.qReleaseAt===Infinity))break;
     yield;
   }
   q.endRun();
@@ -436,6 +435,7 @@ export class QualifyingRun extends Race {
     if (!selected && !options.aiOnly) throw Error("Select an available tyre set");
     this.qualifying = true;
     this.freezeWeather=!!options.freezeWeather;
+    this.targetAttempts=options.targetAttempts ?? Infinity;
     this.profile=profile;
     this.timeScale=1;
     this.weather = w.weather;
@@ -470,25 +470,45 @@ export class QualifyingRun extends Race {
       c.garage = true;
       c.speed = 0;
       c.qReleaseAt = this.time + this.releaseDelay(c);
-      const distance = this.pitBoxForCar(c);
-      c.pit = set ? { distance, boxDistance: distance, startS: TRACK.pitEntry,
-        stage: "exit", serviced: true, entryOffset: 0, timer: 0,
-        nextSet: set, nextTyre: c.tyre } : null;
-      const loc = samplePit(distance);
-      c.s = TRACK.pitEntry + loc.progress;
-      const bay = c.player ? 26 : (c.id % 2 ? 45 : 26);
-      c.x = loc.x - Math.sin(loc.angle)*bay;
-      c.y = loc.y + Math.cos(loc.angle)*bay;
-      c.angle = loc.angle;
-      c.offset = 0;
+      this.parkInGarage(c);
     }
     this.nextSetId = selected?.id;
     this.nextTyre = selected?.compound || this.player.tyre;
     this.say(this.stage.name + " · press W / ↑ to leave. Out lap → timed lap → in lap. Same tyres by default.");
   }
+  parkInGarage(c){
+    const distance = this.pitBoxForCar(c);
+    c.pit = c.tyreSet ? { distance, boxDistance: distance, startS: TRACK.pitEntry,
+      stage: "exit", serviced: true, entryOffset: 0, timer: 0,
+      nextSet: c.tyreSet, nextTyre: c.tyre } : null;
+    const loc = samplePit(distance);
+    c.s = TRACK.pitEntry + loc.progress;
+    const bay = c.player ? 26 : (c.id % 2 ? 45 : 26);
+    c.x = loc.x - Math.sin(loc.angle)*bay;
+    c.y = loc.y + Math.cos(loc.angle)*bay;
+    c.angle = loc.angle;
+    c.offset = 0;
+  }
   releaseDelay(c) {
-    // Individual, varied departure times; another delay follows each serviced run.
-    return (c.stops ? 6 : 4) + c.aiRandom()*(c.stops ? 12 : 24) + c.ai.strategy.reaction*1.5;
+    const attempts=this.weekend.attempts?.[c.id] ?? Number(this.weekend.results.some(row=>row.id===c.id));
+    if(attempts>=this.targetAttempts)return Infinity;
+    const stageNumber=Number(this.stage.name.slice(1));
+    const random=seededRandom(driverSeed(this.raceSeed ^ Math.imul(stageNumber*31+attempts,0x45d9f3b),c.id));
+    const remaining=this.stage.duration-this.weekend.elapsed;
+    const lap=Math.max(TRACK.length/225,(c.lastLap || 0))*
+      (1+.22*(c.trackWetness || 0))/Math.max(.65,c.driverStyle.pace);
+    // Leave time for out / timed / in, pit travel and the following out lap.
+    // The second timed lap may finish after the flag if it starts in time.
+    const reserve=attempts===0 ? 4.3*lap+45 : 1.35*lap+16;
+    if(attempts>=2 && remaining<reserve)return Infinity;
+    const slack=Math.max(0,remaining-reserve);
+    const window=Math.min(slack,this.stage.duration*.24);
+    if(attempts===0){
+      // An absolute opening slot survives re-entering a saved garage.
+      return Math.min(slack,Math.max(0,random()*Math.min(this.stage.duration*.31,
+        Math.max(0,this.stage.duration-reserve))-this.weekend.elapsed));
+    }
+    return Math.min(slack,3+random()*window);
   }
   canLeaveGarage(c) {
     return c.qState==="garage" && !!c.pit?.serviced && c.pit.stage!=="service" &&
@@ -650,6 +670,18 @@ export class QualifyingRun extends Race {
     this.updateDrafting(dt);
     for(const c of this.cars) {
       coolStoredSets(c,dt);
+      // A missed entrance can leave an in-lap car out of fuel. Recover it to
+      // its own bay on session time, retaining its real tyres and lap count.
+      if(c.qState==="stranded" && !c.player && this.time>=c.qRecoveryAt){
+        this.parkInGarage(c);
+        c.fuel=getQualifyingFuel(c.upgrades);
+        c.qState="garage";
+        c.ai.pitEntryS=null;
+        c.ai.contactRecovery=false;
+        c.motionAngle=c.angle;
+        c.sideSpeed=0;
+        c.qReleaseAt=this.time+this.releaseDelay(c);
+      }
       if(c.garage && c.pit?.stage!=="service") {
         updateTyreTemperatures(c,dt);
         if(c.qNeedsRelease && !input.throttle) c.qNeedsRelease=false;
@@ -701,6 +733,7 @@ export class QualifyingRun extends Race {
       if(!c.pit && c.fuel<=0 && c.speed<4) {
         c.garage=true;
         c.qState="stranded";
+        c.qRecoveryAt=this.time+30;
         if(c.player) { this.say("Out of fuel. Return to the garage to prepare another outing."); if(!this.hasTimedLaps())this.endRun(); }
       }
     }

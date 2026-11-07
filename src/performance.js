@@ -35,14 +35,26 @@ export function applyThrottle(car,requested,dt){
  return car.throttleApplied;
 }
 export function tyreWearFactor(compound,wear,engineering=0){
- const profile={S:[.12,1.25,.78],M:[.09,1.5,.82],H:[.065,1.8,.86],I:[.10,1.5,.82],W:[.10,1.5,.82]}[compound] || [.09,1.5,.82];
- const w=Math.max(0,wear || 0),late=clamp((w-profile[2])/(1.08-profile[2]+clamp(engineering,0,5)*.012),0,1);
- return Math.max(.4,1-profile[0]*w**profile[1]-.55*late*late*(3-2*late));
+ const profile={S:[.12,1.25,.68],M:[.09,1.5,.82],H:[.065,1.8,.86],I:[.10,1.5,.82],W:[.10,1.5,.82]}[compound] || [.09,1.5,.82];
+ const used=clamp(wear || 0,0,1);
+ const lateStart=profile[2]+clamp(engineering,0,5)*.012;
+ const late=clamp((used-lateStart)/(1-lateStart),0,1);
+ // The condition gauge runs out of competitive tread. The remaining rubber
+ // still carries braking and lateral load, including on older saved sets.
+ const normalLoss=profile[0]*used**profile[1];
+ const lateLoss=(.23-profile[0])*late*late*(3-2*late);
+ return 1-normalLoss-lateLoss;
 }
-export const usefulWear=compound=>({S:.82,M:.86,H:.90,I:.86,W:.86}[compound] || .86);
+export const usefulWear=compound=>({S:.73,M:.86,H:.90,I:.86,W:.86}[compound] || .86);
+export function tyrePaceWear(compound,mode){
+ const wear=paceMode(mode).wear;
+ // Lifting saves fuel on every compound. Soft rubber still wears rapidly
+ // from rolling and cornering, even with a gentle power map.
+ return compound==="S" && wear<1 ? 1-(1-wear)*.55 : wear;
+}
 export function wearPerLap(compound,tyres,{mode="balanced",upgrades={},wetness=0,thermal=1,stress=1}={}){
  const water=clamp(wetness,0,1),weather=["I","W"].includes(compound) ? 1+Math.max(0,(compound==="W"?.55:.28)-water)*5 : 1-water*.25;
- return paceMode(mode).wear*weather*thermal*stress*(1-clamp(upgrades.tyres || 0,0,5)*.07)/tyres[compound].life;
+ return tyrePaceWear(compound,mode)*weather*thermal*stress*(1-clamp(upgrades.tyres || 0,0,5)*.07)/tyres[compound].life;
 }
 export function stintLaps(compound,tyres,{wear=0,limit=usefulWear(compound),...options}={}){
  return Math.max(0,limit-wear)/wearPerLap(compound,tyres,options);

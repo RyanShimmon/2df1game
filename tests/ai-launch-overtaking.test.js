@@ -123,8 +123,10 @@ for(const [own,other,water] of [['S','M',0],['M','H',0],['I','W',.35],['W','I',.
   assert.equal(grip(c),grip(player));assert.equal(brakingDeceleration(c),brakingDeceleration(player));
   assert.equal(accelerationGrip(c),accelerationGrip(player));
  }
+ const freshGain=gain(chase,lead);
  chase.wear=1;chase.wheelWear=Array(4).fill(1);
- assert.ok(gain(chase,lead)<0,'a worn faster compound is not automatically favoured');
+ assert.ok(gain(chase,lead)<freshGain,'wear reduces the predicted advantage even if the rival has unsuitable tyres');
+ if(water===0)assert.ok(gain(chase,lead)<0,'a fresh harder slick beats the worn softer slick');
  chase.wear=0;chase.wheelWear=[0,0,0,0];
  const {low,high}=THERMAL[own];chase.tyreTemperatureEnabled=true;chase.tyreTemperatures=Array(4).fill((low+high)/2);
  const ideal=gain(chase,lead);chase.tyreTemperatures=Array(4).fill(high+70);

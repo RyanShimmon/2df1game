@@ -8,6 +8,7 @@ function makeQ3(round,playerQ2=10){
  const c=newCareer(profile);c.round=round;const w=c.weekend=createWeekend(c,{tyre:'S',aiSeed:42});
  for(let phase=1;phase<=2;phase++){
   for(const [i,id] of w.active.entries())recordLap(w,id,id===21 ? phase===2 ? 30+playerQ2-.5 : 25 : 30+i,10+i);
+  w.elapsed=w.qualifyingDurations[w.phase];
   finishQualifyingStage(w,c.upgrades,profile);
  }
  return {c,w,q:new QualifyingRun(w,'S3',c.upgrades,profile)};
@@ -50,6 +51,7 @@ test('a saved race grid is repaired from archived stage classifications without 
 test('advancing Q1 keeps its archived display separate from the new empty Q2 timing table',()=>{
  const c=newCareer(profile),w=createWeekend(c,{tyre:'S',aiSeed:1}),q=new QualifyingRun(w,'S1',c.upgrades,profile);
  for(const [i,id] of w.active.entries())recordLap(w,id,id===21?25:30+i,10+i);
+ w.elapsed=w.qualifyingDurations[w.phase];
  finishQualifyingStage(w,c.upgrades,profile);
  assert.equal(w.phase,'Q2');assert.deepEqual(w.results,[]);
  assert.equal(qualifyingClassification(w,'Q1').results.find(r=>r.id===21).time,25);

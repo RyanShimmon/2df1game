@@ -7,6 +7,13 @@ export const THERMAL = {
   H:{low:90,high:124,heat:.92}, I:{low:62,high:90,heat:.98}, W:{low:52,high:74,heat:1},
 };
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+// Both driving controllers can estimate steering demand differently. Rubber
+// scrub comes from the angle between the body and its actual travel.
+export function tyreSlipLoad(car){
+  if(!Number.isFinite(car.motionAngle) || !Number.isFinite(car.angle))return clamp(car.sliding || 0,0,1);
+  const delta=car.motionAngle-car.angle;
+  return clamp(Math.abs(Math.atan2(Math.sin(delta),Math.cos(delta)))/.35,0,1);
+}
 const average=a=>a.reduce((s,v)=>s+v,0)/a.length;
 const valid=a=>Array.isArray(a)&&a.length===4&&a.every(Number.isFinite);
 export function holdOptimalTemperature(car){
@@ -73,7 +80,7 @@ export function updateTyreTemperatures(car,dt,load={}){
   const ambient=24-6*water,target=parked ? spec.low-9 : ambient;
   const throttle=clamp(load.throttle || 0,0,1),brake=clamp(load.brake || 0,0,1);
   const corner=clamp(Math.abs(load.corner || 0),0,1.3)*moving;
-  const turn=Math.sign(load.corner || 0),slide=clamp(car.sliding || 0,0,1);
+  const turn=Math.sign(load.corner || 0),slide=tyreSlipLoad(car);
   const dryWet=car.tyre==='W' ? 1-clamp(water/.55,0,1) : car.tyre==='I' ? 1-clamp(water/.18,0,1) : 0;
   const cooling=parked ? .055 : .033+speed*.00018+water*.075;
   car.tyreTemperatures=car.tyreTemperatures.map((temp,i)=>{
