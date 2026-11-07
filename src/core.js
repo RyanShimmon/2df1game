@@ -9,7 +9,7 @@ import {SEASON_LENGTH,careerSchedule,shuffledSeasonOrder,ensureSeasonOrder} from
 import {SPONSORS,sponsorMet} from "./sponsors.js";
 export {SPONSORS} from "./sponsors.js";
 import {engineerReport} from "./engineer.js";
-import {UPGRADES,AERO_PACKAGES,emptyUpgrades,normalizeUpgrades,level,upgradePrice,tyreServiceSeconds,fuelMultiplier,sponsorPayout,aeroPackage,aeroGrip,setAeroPackage,createTeamDevelopment,migrateDevelopment,developTeams,developmentSnapshot,fundTeams,racePrize} from "./development.js";
+import {UPGRADES,AERO_PACKAGES,emptyUpgrades,normalizeUpgrades,level,upgradePrice,tyreServiceSeconds,fuelMultiplier,sponsorPayout,aeroUnlocked,aeroPackage,aeroGrip,setAeroPackage,createTeamDevelopment,migrateDevelopment,developTeams,developmentSnapshot,fundTeams,racePrize} from "./development.js";
 export {UPGRADES,AERO_PACKAGES,fuelMultiplier,sponsorPayout,setAeroPackage,developTeams,developmentSnapshot};
 import {selectableSets} from "./tyre-stock.js";
 import {seededRandom,driverSeed,buildRacingLine,racingPoint,qualifyingLane,planRacingLane,laneGeometry,projectedPaceAdvantage,brakingTarget,updateSlipstream,forecastWater,createStrategy,rankTyres,availableAISets} from "./racecraft.js";
@@ -516,7 +516,7 @@ export function liveInterval(ahead,car) {
 }
 export function cleanAirTopSpeed(car){
   const mode=paceMode(car).top;
-  const pack=aeroPackage(car.upgrades,car.aeroSpec);
+  const pack=aeroPackage(car.upgrades,car.aeroSpec,car.quickSetup);
   return Math.min(MAX_SPEED,MAX_SPEED*(1+level(car.upgrades,"engine")*.035)*(car.pace || 1)*(1-car.fuel*.0006))*mode*pack.top;
 }
 export function estimatedPitLoss(car){
@@ -528,7 +528,7 @@ export function maximumSpeed(car){return cleanAirTopSpeed(car)+18*(car.slipstrea
 function engineModel(car){
   const basePower=90*(car.pace || 1)*(1-car.fuel*.002);
   const power=basePower*(1+level(car.upgrades,"engine")*.07)*paceMode(car).power;
-  const pack=aeroPackage(car.upgrades,car.aeroSpec);
+  const pack=aeroPackage(car.upgrades,car.aeroSpec,car.quickSetup);
   return {basePower,power,drag:pack.drag,packageTop:pack.top,
     top:maximumSpeed(car),cleanTop:cleanAirTopSpeed(car),tow:car.slipstream?.strength || 0};
 }
@@ -669,7 +669,7 @@ export function passingPerformance(car,difficulty="normal",contact=null) {
  const brakingSkill=car.player ? 1 : Math.min(1,skill.braking+water*.14*style.wetSkill);
  const throttleSkill=car.player ? 1 : Math.min(1,skill.throttle+water*.10*style.wetSkill);
  return {grip:(contact?.all ?? grip(car))/bank,rearGrip:(contact?.rear ?? grip(car,"rear"))/bank,braking:(contact ? Math.min(300,240+level(car.upgrades,"brakes")*12)*contact.front : brakingDeceleration(car))*brakingSkill/bank,
-  top:maximumSpeed(car),commitment,aero:{level:level(car.upgrades,"aero"),corner:aeroPackage(car.upgrades,car.aeroSpec).corner,gripScale:aeroGrip(car)},
+  top:maximumSpeed(car),commitment,aero:{level:level(car.upgrades,"aero"),corner:aeroPackage(car.upgrades,car.aeroSpec,car.quickSetup).corner,gripScale:aeroGrip(car)},
   engine:engineModel(car),throttle:clamp(accelerationGrip(car,contact?.rear),.25,1)*throttleSkill,
   acceleration:acceleration({...car,speed:clamp(car.speed,180,280)})*clamp(accelerationGrip(car,contact?.rear),.25,1)*throttleSkill};
 }
@@ -892,7 +892,8 @@ export class Race {
       this.player.name = identity.driverName;
     }
     this.player.upgrades=normalizeUpgrades(upgrades);
-    this.player.aeroSpec=aeroPackage(upgrades,setup.aeroSpec)===AERO_PACKAGES.balanced ? "balanced" : setup.aeroSpec;
+    this.player.quickSetup=mode==="quick";
+    this.player.aeroSpec=aeroPackage(upgrades,setup.aeroSpec,this.player.quickSetup)===AERO_PACKAGES.balanced ? "balanced" : setup.aeroSpec;
     for(const car of this.cars)if(!car.player){
       const team=setup.teamDevelopment?.find(t=>t.teamIndex===TEAMS.indexOf(car.team));
       if(team){car.upgrades=normalizeUpgrades(team.upgrades);car.aeroSpec=aeroPackage(car.upgrades,team.aeroSpec)===AERO_PACKAGES.balanced ? "balanced" : team.aeroSpec;}
@@ -977,7 +978,7 @@ export class Race {
   }
   canSelectAero() {
     const c=this.player;
-    return !this.done && level(c.upgrades,"aero")>=1 &&
+    return !this.done && aeroUnlocked(c.upgrades,c.quickSetup) &&
       (!this.qualifying || !!c.pit && (c.garage || c.pit.stage==="service"));
   }
   selectAero(spec) {
@@ -1004,6 +1005,11 @@ export class Race {
   }
   pitEntryTarget(car,requested){
     if(!requested){car.ai.pitEntryS=null;return null;}
+    // Once the marked gate is behind an AI, abandon this approach. Let it
+    // merge back from its actual offset and race to the next entrance.
+    if(!car.player && car.ai.pitEntryS!=null && car.s>car.ai.pitEntryS+PIT_BOUNDARY_HALF_LENGTH){
+      car.ai.pitEntryS=null;car.ai.pitExitUntil=car.s+220;
+    }
     if(car.ai.pitEntryS==null || car.s>car.ai.pitEntryS+80){
       const next=car.s+wrap(TRACK.pitEntry-car.s,TRACK.length),current=next-TRACK.length;
       car.ai.pitEntryS=car.player && car.s-current<=PIT_BOUNDARY_HALF_LENGTH ? current : next;
@@ -1100,6 +1106,18 @@ export class Race {
       (TEAMS.findIndex((t) => t.name === car.team.name) - 5) * 40
     );
   }
+  entryQueueSpeed(car,distance){
+    // Use one distance along the pit road on both sides of the gate. The
+    // leading car must not disappear from traffic the instant it enters.
+    let cap=Infinity;
+    for(const other of this.cars){
+      if(other===car || !other.pit || other.garage || other.finished || other.dnf)continue;
+      const gap=other.pit.distance-distance;
+      if(gap<0 || gap===0 && other.id>car.id || gap>150)continue;
+      cap=Math.min(cap,Math.max(0,other.speed+(gap-52)*.9));
+    }
+    return cap;
+  }
   stepPit(car, dt, input = {}) {
     const p = car.pit;
     if(p.stage==="service")updateTyreTemperatures(car,dt);
@@ -1152,6 +1170,10 @@ export class Race {
         : !p.serviced
           ? Math.min(PIT_SPEED, Math.sqrt(Math.max(0, remaining) * 280))
           : PIT_SPEED;
+      // Until the team bays branch off this is one lane: follow the car
+      // ahead, including a teammate waiting for their box to become free.
+      if(automatic && p.distance<PIT_LANE.boxDistance-5*40-120)
+        target=Math.min(target,this.entryQueueSpeed(car,p.distance));
       if(automatic && p.serviced){
         const exitRemaining=PIT_LANE.length-p.distance;
         if(exitRemaining<140){
@@ -1510,7 +1532,7 @@ export class Race {
     // Leave another entrance available if traffic prevents a safe turn-in.
     const mustChange=!tyreRuleMet(c) && remaining<3.25+plan.risk*.5;
     const currentGrip=TYRES[c.tyre].grip*tyreWeatherGrip(c.tyre,water)*tyreWearFactor(c.tyre,c.wear,level(c.upgrades,"tyres"));
-    const replacementGrip=best.grip*tyreWearFactor(best.set.compound,best.set.wear,level(c.upgrades,"tyres"));
+    const replacementGrip=TYRES[best.set.compound].grip*tyreWeatherGrip(best.set.compound,water)*tyreWearFactor(best.set.compound,best.set.wear,level(c.upgrades,"tyres"));
     const usefulReplacement=replacementGrip>currentGrip*1.015 && (best.set.compound!==c.tyre || c.wear-best.set.wear>.06);
     // A fresh-set search can find a better *later* stint split than the bounded
     // keep-tyres search. That is not evidence to throw away healthy tyres now.
@@ -1518,7 +1540,11 @@ export class Race {
     // allow enough lead time for the next review and the physical pit approach.
     const reviewLead=Math.min(.25,(plan.nextReview-this.time)/context.lapTime+900/TRACK.length);
     const stopWindow=staying?.stops>0 && staying.stint<=toEntry+reviewLead;
-    const strategicStop=stopWindow && usefulReplacement && best.totalTime!=null &&
+    // A fractional stint split from the planner is not a reason to box
+    // a healthy set. Judge the tread spent by this entrance, not a fixed
+    // pit lap: used starting sets and genuine weather crossovers still work.
+    const stintEstablished=c.wear+wearRate*toEntry>=strategyWearLimit(c,c.tyre)*.45;
+    const strategicStop=stintEstablished && stopWindow && usefulReplacement && best.totalTime!=null &&
       family(best.set.compound)===family(c.tyre) &&
       best.totalTime+context.pitLoss*1.2+2<staying.totalTime;
     // Near the flag a worn set can finish. Compare the recoverable lap time
@@ -1544,7 +1570,7 @@ export class Race {
     const teammate=(this.traffic || []).some(o=>o.id!==c.id && o.team===c.team.name && (o.boxRequested || o.pit && !o.pit.serviced));
     // A teammate already committing to the box can make a marginal stop costly.
     // Urgent tyre changes and the last legal compound stop take precedence.
-    if(teammate && !urgent && !weather && c.wear+wearRate<.95){plan.reason='teammate traffic';return plan.pitRequested=false;}
+    if(teammate && !committed && !urgent && !weather && c.wear+wearRate<.95){plan.reason='teammate traffic';return plan.pitRequested=false;}
     if(plan.pitRequested || (!recent && (tyreLife || weather || mustChange || strategicStop))){
       plan.pitRequested=true;plan.choice=best.set;
       plan.reason=mustChange ? 'compound rule' : weather ? 'weather crossover' : tyreLife ? 'tyre life' : strategicStop ? 'faster race strategy' : plan.reason;
@@ -1594,10 +1620,35 @@ export class Race {
     const temperatures=c.tyreTemperatureEnabled!==false ? c.tyreTemperatures || [] : [],high=THERMAL[c.tyre].high;
     if(temperatures.some(t=>t>high+10))ai.cooling=true;
     else if(!temperatures.some(t=>t>high-3))ai.cooling=false;
-    const mustSave=ai.cooling || (!this.qualifying && c.fuel<remain*fuelPerLap("balanced",c.upgrades)+.15);
+    const reserve=c.fuel-remain*fuelPerLap("balanced",c.upgrades);
+    // Separate fuel thresholds prevent spending and saving the same marginal reserve.
+    ai.savingFuel=!this.qualifying && reserve<(ai.savingFuel ? .45 : .15);
+    const mustSave=ai.cooling || ai.savingFuel;
     const passingAttack=ai.lane?.phase==="passing" && ai.strategy.plannedMode!=="save" &&
       c.wear<strategyWearLimit(c,c.tyre)-.06 && c.fuel>remain*fuelPerLap("balanced",c.upgrades)+.4;
-    c.drive=yielding ? (c.qState==="in" ? "save" : "balanced") : mustSave ? "save" : this.qualifying || ai.mode==="attack" || passingAttack ? "push" : ai.mode==="conserve" ? "save" : c.ai.strategy.plannedMode || "balanced";
+    const planned=ai.strategy.plannedMode || "balanced";
+    if(this.qualifying && c.qState==="timed"){
+      c.drive="push";
+      ai.pacePhase="timed";
+    } else {
+      let targetMode=planned;
+      if(this.qualifying){
+        if(c.qState==="in" || mustSave)targetMode="save";
+        else targetMode=yielding ? "balanced" : "push";
+      } else if(mustSave || planned==="save")targetMode="save";
+      else if(ai.mode==="attack" || passingAttack)targetMode="push";
+
+      // This is the earliest allowed switch. Keep the current map for as
+      // many laps as the stint plan, traffic and fuel reserve justify it.
+      const phase=this.qualifying ? c.qState : "race";
+      if(ai.pacePhase!==phase || this.time>=(ai.paceHoldUntil ?? 0)){
+        if(c.drive!==targetMode){
+          c.drive=targetMode;
+          ai.paceHoldUntil=this.time+8+ai.strategy.reaction;
+        }
+        ai.pacePhase=phase;
+      }
+    }
     // Reuse grip until movement changes the contact point or speed.
     const contact={all:grip(c),front:grip(c,"front"),rear:grip(c,"rear")};
     ai.racePace=passingPerformance(c,this.difficulty,contact);
@@ -1619,7 +1670,7 @@ export class Race {
     let target=brakingTarget(AI_LINE,c.s,contact.all,braking*brakingSkill,maximumSpeed(c),commitment,c.offset-path.offset,paceCeiling,ai.racePace.aero);
     if(yielding) target=Math.min(target*.82,210);
     if(mistake)target*=mistake==='wide' ? .88 : .94;
-    if(pitApproach)target=Math.min(target,pitSpeedLimit);
+    if(pitApproach)target=Math.min(target,pitSpeedLimit,this.entryQueueSpeed(c,-Math.max(0,pitApproach.distance)));
     // A slow or stopped obstruction uses the same lane search anywhere on the
     // circuit. The initial delay only allows for normal launch reaction time.
     const blockedLaunch=!pitApproach && (ai.lane?.launchPass&&c.s<(ai.lane.launchClearS ?? -Infinity) || this.time>.35 && (this.traffic || this.cars).some(o=>
@@ -1688,6 +1739,7 @@ export class Race {
     // Holding the corner target still needs throttle. Cutting it to zero
     // at equality repeatedly reset power delivery, penalising the grippier
     // car as it reached its target earlier and tried to accelerate away.
+    ai.brakeApplied=clamp((c.speed-target)/(braking*dt),0,1);
     const throttle=applyThrottle(c,target>=c.speed-.01 ? 1 : 0,dt);
     const accel = Math.min(acceleration(c) * throttle * clamp(accelerationGrip(c), 0.25, 1)*throttleSkill,
       cornerAccelerationLimit(c.speed,drivenPath.curvature,grip(c,"rear")));

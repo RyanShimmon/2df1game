@@ -8,7 +8,7 @@ const profile={driverName:'Setup tester',teamIndex:2};
 test('buying the first aero upgrade unlocks packages; every factory package request is neutral',()=>{
  const c=newCareer(profile);c.cash=20000;assert.equal(aeroUnlocked(c.upgrades),false);
  assert.equal(setAeroPackage(c,'lowDrag'),false);
- const r=new Race({track:'northline',laps:12,fuel:14,tyre:'M',weather:'dry',aiSeed:42,tyreTemperatureEnabled:false});
+ const r=new Race({track:'northline',laps:12,fuel:14,tyre:'M',weather:'dry',aiSeed:42,tyreTemperatureEnabled:false},c.upgrades,'career',profile);
  const car=r.player;car.speed=200;
  const expected=[grip(car),cleanAirTopSpeed(car),acceleration(car)];
  for(const spec of Object.keys(AERO_PACKAGES)){

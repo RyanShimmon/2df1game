@@ -96,11 +96,13 @@ try {
  settings.speedUnit=saved.speedUnit==="mph" ? "mph" : "kph";
  settings.autoPitLimiter=saved.autoPitLimiter !== false;
  settings.difficulty=normalizeDifficulty(saved.difficulty);
+ settings.drivingGuide=saved.drivingGuide===true;
  settings.tyreTemperature=saved.tyreTemperature!==false;
  settings.mobileSteering=saved.mobileSteering==="arrows" ? "arrows" : "stick";
  settings.steeringSensitivity=Math.max(.6,Math.min(1.5,Number(saved.steeringSensitivity)||1));
 } catch {}
 renderer.speedUnit=settings.speedUnit;
+renderer.showDrivingGuide=!!settings.drivingGuide;
 if(career.weekend?.setup)career.weekend.setup.tyreTemperatureEnabled=settings.tyreTemperature;
 let mobileInput=window.matchMedia("(pointer: coarse)").matches;
 const mobileControls=new TouchControls(),landscapeGate=new LandscapeGate();
@@ -209,7 +211,7 @@ function tyreLifeIndicator(selected={compound:setup.tyre,wear:0}) {
   return `<section class="tyre-life" aria-label="Estimated stint life"><div class="tyre-life-heading"><b>ESTIMATED STINT LIFE</b><span>Balanced pace · suitable conditions</span></div><div class="tyre-life-grid">${["S","M","H","I","W"].map(compound=>`<div style="--tyre:${TYRES[compound].color}"><i class="tyre-dot"></i><span>${TYRES[compound].name}</span><b>≈ ${estimatedTyreLife(compound,{upgrades}).toFixed(1).replace(/\.0$/,"")} laps</b></div>`).join("")}</div><p class="tyre-life-remaining">${selected.id ? selected.id+" · " : ""}${TYRES[selected.compound].name} selected <strong>≈ ${remaining.toFixed(1)} laps remaining</strong></p>${wetnessGuide(career.weekend && screen==="career" ? career.weekend.weather.wetness : null)}</section>`;
 }
 function header() {
-  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.13.1</div></header>`;
+  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.14.0</div></header>`;
 }
 function tabs() {
   return `<div class="tabs"><button class="tab ${screen === "quick" ? "active" : ""}" data-screen="quick">Quick race</button><button class="tab ${screen === "career" ? "active" : ""}" data-screen="career">Career garage</button><button class="tab" data-action="school">Race School</button><button class="tab" data-action="help">How to drive ↗</button><button class="tab" data-action="settings">Settings</button></div>`;
@@ -221,15 +223,16 @@ function quickWeatherDescription() {
   return `Start: ${condition} · ${Math.round(preview.wetness*100)}% track wetness. ${WEATHER_OPTIONS.find(option=>option.id===setup.weather)?.description || ""}`;
 }
 function startingAeroButton(spec) {
-  const unlocked=aeroUnlocked(screen==="career" ? career.weekend?.setup.playerUpgrades || career.upgrades : {});
-  if(!unlocked)return `<div class="field weather-choice"><span class="field-label">Starting aero package</span><div class="fixed-race-distance"><strong>Balanced · standard setup</strong><span>${screen==="career" ? "Buy Aerodynamics level 1 to unlock package selection." : "Standard car · no aero package bonus or penalty."}</span></div></div>`;
+  const unlocked=screen==="quick" || aeroUnlocked(career.weekend?.setup.playerUpgrades || career.upgrades);
+  if(!unlocked)return `<div class="field weather-choice"><span class="field-label">Starting aero package</span><div class="fixed-race-distance"><strong>Balanced · standard setup</strong><span>Buy Aerodynamics level 1 to unlock package selection.</span></div></div>`;
   return `<div class="field weather-choice"><span class="field-label">Starting aero package</span><button class="circuit-picker-trigger" data-action="starting-aero" aria-haspopup="dialog"><span><b data-starting-aero-name>${AERO_PACKAGES[spec || "balanced"].name}</b><small>Choose your setup · free before the start</small></span><span aria-hidden="true">↗</span></button></div>`;
 }
 function showStartingAeroPicker() {
   if(el("aero-picker"))return;
   const weekend=screen==="career" ? career.weekend : null;
-  if(screen!=="career" || weekend?.phase!=="R" || !aeroUnlocked(weekend.setup.playerUpgrades || career.upgrades))return;
-  let selected=weekend.setup.aeroSpec || "balanced";
+  const quick=screen==="quick";
+  if(!quick && ((weekend && weekend.phase!=="R") || !aeroUnlocked(weekend?.setup.playerUpgrades || career.upgrades)))return;
+  let selected=(quick ? setup.aeroSpec : weekend?.setup.aeroSpec || career.aeroSpec) || "balanced";
   const trigger=document.activeElement,backdrop=document.createElement("div");backdrop.className="modal-backdrop";backdrop.id="aero-picker";
   backdrop.innerHTML=`<section class="modal aero-picker-modal" role="dialog" aria-modal="true" aria-labelledby="starting-aero-title"><div class="track-picker-heading"><div><div class="eyebrow">RACE PREPARATION</div><h2 id="starting-aero-title">Starting aero package</h2></div><button class="ghost" data-close-aero aria-label="Close aero selector">×</button></div><p class="hint">Free to change before the start. Changes during qualifying or the race add 10 seconds of pit service.</p><div class="aero-packages">${Object.entries(AERO_PACKAGES).map(([spec,pack])=>`<button class="aero-choice" data-choose-aero="${spec}"><b>${pack.name}</b><span>${pack.desc}</span><small>${aeroPackageSummary(spec)}</small></button>`).join("")}</div><button class="primary" id="confirm-starting-aero">CONFIRM AERO →</button></section>`;
   const close=openStrategyPicker(backdrop,race,trigger);
@@ -237,7 +240,11 @@ function showStartingAeroPicker() {
   backdrop.querySelectorAll("[data-choose-aero]").forEach(button=>button.onclick=()=>{selected=button.dataset.chooseAero;refresh();});
   backdrop.querySelector("[data-close-aero]").onclick=close;backdrop.onclick=event=>{if(event.target===backdrop)close();};
   el("confirm-starting-aero").onclick=()=>{
-    if(!setAeroPackage(career,selected))return;save();
+    if(quick)setup.aeroSpec=selected;
+    else {
+      if(!setAeroPackage(career,selected))return;
+      save();
+    }
     close();app.querySelectorAll("[data-starting-aero-name]").forEach(label=>label.textContent=AERO_PACKAGES[selected].name);
     const garageSummary=app.querySelector('[data-garage-section="aero"] small');if(garageSummary)garageSummary.textContent=AERO_PACKAGES[selected].name+" · Choose your starting setup";
   };
@@ -259,7 +266,7 @@ function setupCard() {
     if (setup.fuel < setup.laps * 0.85 || setup.fuel > setup.laps * 1.35)
       setup.fuel = +(setup.laps * 1.15).toFixed(1);
   }
-  return `<section class="race-card"><div class="track-header"><h3>${TRACK.name}</h3><span class="badge">${scheduled ? scheduled.name : "DYNAMIC WEATHER"}</span></div><div class="specs"><span>GRID<b>22 cars</b></span><span>CHARACTER<b>${TRACK.character}</b></span><span>LAP LENGTH<b>${(TRACK.length/1000).toFixed(2)} km</b></span>${!scheduled ? `<span>AI<b>${DIFFICULTIES[settings.difficulty].name}</b></span>` : ""}</div>${!scheduled ? `<div class="field weather-choice"><span class="field-label">Circuit</span><button class="circuit-picker-trigger" id="track-choice" aria-label="Choose circuit: ${TRACK.name}" aria-haspopup="dialog"><span><b>${TRACK.name}</b><small>Choose from 12 circuits</small></span><span aria-hidden="true">▦</span></button></div>` : ""}<div class="form-row"><div class="field">${scheduled ? `<span class="field-label">Race distance</span><div class="fixed-race-distance"><strong>${scheduled.laps} laps</strong><span>Weekend distance · ${DIFFICULTIES[settings.difficulty].name} AI</span></div>` : `<label for="laps">Race distance</label>${selector("laps","Race distance",setup.laps)}<label for="starting-position" class="starting-position-label">Starting position</label>${selector("starting-position","Starting position",setup.startingPosition ?? 22)}`}</div><div class="field"><label>Starting compound</label><div class="compound-row">${compounds(setup.tyre, "start-tyre")}</div></div></div>${!scheduled ? `<div class="field weather-choice"><label for="weather-choice">Weather</label>${selector("weather-choice","Weather",setup.weather,"weather-description")}<p class="hint" id="weather-description">${quickWeatherDescription()}</p></div>` : ""}${!scheduled ? startingAeroButton(setup.aeroSpec) : ""}${scheduled ? `<div class="fuel-row"><span>Qualifying fuel</span><b>${getQualifyingFuel(career.upgrades).toFixed(2)} laps · fixed</b></div><p class="hint">About three timed laps per session. Each outing has an out lap, a timed lap and an in lap; fuel is fixed for that outing.</p>` : `<div class="fuel-row"><span>Starting fuel <b id="fuel-value">${setup.fuel.toFixed(1)} laps</b></span><span id="fuel-risk"></span></div><input id="fuel" type="range" min="${setup.laps * 0.85}" max="${setup.laps * 1.35}" step="0.1" value="${setup.fuel}" aria-label="Starting fuel in laps"><p class="hint">Less fuel means less weight. Balanced driving uses ~1.10 fuel laps per lap; conserve to stretch it. No refuelling.</p>`}${tyreLifeIndicator()}${scheduled ? '<button class="ghost race-forecast-trigger" data-action="qualifying-forecast" aria-haspopup="dialog">Qualifying weather forecast ↗</button>' : ""}<button class="primary" data-action="start"><span>${screen === "career" ? `START QUALIFYING · ROUND ${career.round}` : "TAKE TO THE GRID"}</span><span>→</span></button></section>`;
+  return `<section class="race-card"><div class="track-header"><h3>${TRACK.name}</h3><span class="badge">${scheduled ? scheduled.name : "DYNAMIC WEATHER"}</span></div><div class="specs"><span>GRID<b>22 cars</b></span><span>CHARACTER<b>${TRACK.character}</b></span><span>LAP LENGTH<b>${(TRACK.length/1000).toFixed(2)} km</b></span>${!scheduled ? `<span>AI<b>${DIFFICULTIES[settings.difficulty].name}</b></span>` : ""}</div>${!scheduled ? `<div class="field weather-choice"><span class="field-label">Circuit</span><button class="circuit-picker-trigger" id="track-choice" aria-label="Choose circuit: ${TRACK.name}" aria-haspopup="dialog"><span><b>${TRACK.name}</b><small>Choose from 12 circuits</small></span><span aria-hidden="true">▦</span></button></div>` : ""}<div class="form-row"><div class="field">${scheduled ? `<span class="field-label">Race distance</span><div class="fixed-race-distance"><strong>${scheduled.laps} laps</strong><span>Weekend distance · ${DIFFICULTIES[settings.difficulty].name} AI</span></div>` : `<label for="laps">Race distance</label>${selector("laps","Race distance",setup.laps)}<label for="starting-position" class="starting-position-label">Starting position</label>${selector("starting-position","Starting position",setup.startingPosition ?? 22)}`}</div><div class="field"><label>Starting compound</label><div class="compound-row">${compounds(setup.tyre, "start-tyre")}</div></div></div>${!scheduled ? `<div class="field weather-choice"><label for="weather-choice">Weather</label>${selector("weather-choice","Weather",setup.weather,"weather-description")}<p class="hint" id="weather-description">${quickWeatherDescription()}</p></div>` : ""}${startingAeroButton(scheduled ? career.aeroSpec : setup.aeroSpec)}${scheduled ? `<div class="fuel-row"><span>Qualifying fuel</span><b>${getQualifyingFuel(career.upgrades).toFixed(2)} laps · fixed</b></div><p class="hint">About three timed laps per session. Each outing has an out lap, a timed lap and an in lap; fuel is fixed for that outing.</p>` : `<div class="fuel-row"><span>Starting fuel <b id="fuel-value">${setup.fuel.toFixed(1)} laps</b></span><span id="fuel-risk"></span></div><input id="fuel" type="range" min="${setup.laps * 0.85}" max="${setup.laps * 1.35}" step="0.1" value="${setup.fuel}" aria-label="Starting fuel in laps"><p class="hint">Less fuel means less weight. Balanced driving uses ~1.10 fuel laps per lap; conserve to stretch it. No refuelling.</p>`}${tyreLifeIndicator()}${scheduled ? '<button class="ghost race-forecast-trigger" data-action="qualifying-forecast" aria-haspopup="dialog">Qualifying weather forecast ↗</button>' : ""}<button class="primary" data-action="start"><span>${screen === "career" ? `START QUALIFYING · ROUND ${career.round}` : "TAKE TO THE GRID"}</span><span>→</span></button></section>`;
 }
 function showTrackPicker() {
   if(el("track-picker-modal")) return;
@@ -713,6 +720,7 @@ function bindMenu() {
     bindWeekend();
     return;
   }
+  app.querySelector("[data-action=starting-aero]")?.addEventListener("click",showStartingAeroPicker);
   if(el("track-choice")) el("track-choice").onclick=showTrackPicker;
   bindChoicePicker(el("weather-choice"),{title:"Choose your weather",options:pickerOptions["weather-choice"],onChange:value=>{
     setup.weather=value;refreshSetup();
@@ -786,6 +794,15 @@ function raceUI() {
   temperatures.innerHTML=`<span class="temperature-label">TYRE TEMP</span><div class="temperature-wheels">${WHEELS.map(w=>`<span class="temperature-wheel" data-wheel="${w}" role="img" aria-label="${w} tyre temperature"><span>${w}</span></span>`).join("")}</div>`;
   dashboard.appendChild(temperatures);
   if(!mobileInput){
+    const guideButton=document.createElement("button");
+    guideButton.setAttribute("aria-keyshortcuts","I");
+    guideButton.type="button";guideButton.className="ghost";guideButton.dataset.action="driving-guide";
+    app.querySelector("[data-action=view]").after(guideButton);
+    guideButton.onclick=()=>{
+      settings.drivingGuide=!renderer.showDrivingGuide;
+      renderer.showDrivingGuide=settings.drivingGuide;
+      saveMobileSettings();refreshHUDIcons();
+    };
     const conditions=el("weather-hud");conditions.classList.add("dashboard-conditions");
     conditions.innerHTML=`<div class="conditions-weather"><svg id="weather-symbol" viewBox="0 0 24 24" aria-hidden="true"></svg></div><div class="conditions-water"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c-2 4-7 8-7 12a7 7 0 0 0 14 0c0-4-5-8-7-12Z"/></svg><b id="track-water"></b></div><span id="race-limits" class="conditions-limits"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4m0 1c5-5 9 5 14 0v10c-5 5-9-5-14 0"/></svg><span class="limit-dots" aria-hidden="true"><i></i><i></i><i></i></span></span><span id="race-penalty" class="conditions-penalty" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M9 2h6m-3 7v5l3 2"/></svg><b></b></span>`;
     const controls=document.createElement("div");controls.className="dashboard-controls";
@@ -990,6 +1007,7 @@ function hudIcon(button, name, label, active=false){
     fullscreen:'<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/>',
     sound:'<path d="M4 9h4l5-4v14l-5-4H4zM16 8q5 4 0 8m3-11q8 7 0 14"/>',
     muted:'<path d="M4 9h4l5-4v14l-5-4H4zM17 9l5 6m0-6-5 6"/>',
+    guide:'<path d="M3 20c8 0 1-10 10-10s5-6 8-7"/><path d="m15 3 6-.5-.5 6"/>',
     map:'<path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2zM9 3v16m6-14v16"/>',
     settings:'<path d="m9 3-1 3-3 1 1 3-2 2 2 2-1 3 3 1 1 3h6l1-3 3-1-1-3 2-2-2-2 1-3-3-1-1-3z"/><circle cx="12" cy="12" r="3"/>',
     fastForward:'<path d="m3 5 8 7-8 7V5Zm10 0 8 7-8 7V5Z"/>',
@@ -1003,6 +1021,11 @@ function refreshHUDIcons(){
   const actions=app.querySelector(".race-actions");if(!actions)return;
   hudIcon(actions.querySelector('[data-action=sound]'),muted ? "muted" : "sound",muted ? "Enable engine sound" : "Mute engine sound");
   hudIcon(actions.querySelector('[data-action=view]'),"map",overview ? "Close circuit map" : "Show circuit map",overview);
+  const guide=actions.querySelector('[data-action=driving-guide]');
+  if(guide){
+    hudIcon(guide,"guide","Racing line (I) · green: throttle · amber: lift · red: brake",renderer.showDrivingGuide);
+    guide.setAttribute("aria-pressed",String(renderer.showDrivingGuide));
+  }
   hudIcon(actions.querySelector('[data-action=settings]'),"settings","Settings");
   hudIcon(actions.querySelector('[data-action=pause]'),"pause","Pause race (P / Esc)");
   if(el("mobile-timing")){const open=app.querySelector(".tower").classList.contains("mobile-open");hudIcon(el("mobile-timing"),open ? "close" : "timing",open ? "Close timing" : "Show timing board",open);}
@@ -1077,7 +1100,7 @@ function refreshPaceControl(){
   const control=app.querySelector(".pace-selector");if(!control || !race)return;
   const mode=race.player.drive,details=paceMode(mode),current=control.querySelector(".pace-current");
   const icons={save:'<path d="M20 3C9 2 4 7 5 13s12 8 15-10ZM4 21l10-10"/>',balanced:'<path d="M5 9h14M5 15h14"/>',push:'<path d="m13 2-9 12h7l-1 8 10-13h-7l1-7Z"/>'};
-  control.dataset.mode=mode;control.title=`${details.name}: ${details.description} F: pace left · G: pace right`;
+  control.dataset.mode=mode;current.style.color=details.color;control.title=`${details.name}: ${details.description} F: pace left · G: pace right`;
   control.setAttribute("aria-label",`Pace: ${details.name}. F moves left; G moves right.`);
   current.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true">${icons[mode] || icons.balanced}</svg>`;
   const order=Object.keys(PACE_MODES),next=order[(order.indexOf(mode)+1)%order.length];
@@ -1122,7 +1145,7 @@ function showAeroPicker() {
   const close=openStrategyPicker(backdrop,running,el("browse-race-aero"));
   const refresh=()=>{
     backdrop.querySelectorAll("[data-choose-aero]").forEach(button=>{const active=button.dataset.chooseAero===selected;button.classList.toggle("selected",active);button.setAttribute("aria-pressed",active);});
-    el("aero-selection-note").textContent=!aeroUnlocked(running.player.upgrades) ? "Buy Aerodynamics level 1 in Car development to unlock aero packages. The standard Balanced setup has no package bonuses or penalties." : !canChange ? "In qualifying, choose your aero while stopped in the pit box." : selected===fitted ? "Keep fitted package · no additional service" : `${AERO_PACKAGES[selected].name} · +10s at ${running.player.garage || running.player.pit?.stage==="service" ? "this stop" : "your next stop"}`;
+    el("aero-selection-note").textContent=!aeroUnlocked(running.player.upgrades,running.player.quickSetup) ? "Buy Aerodynamics level 1 in Car development to unlock aero packages. The standard Balanced setup has no package bonuses or penalties." : !canChange ? "In qualifying, choose your aero while stopped in the pit box." : selected===fitted ? "Keep fitted package · no additional service" : `${AERO_PACKAGES[selected].name} · +10s at ${running.player.garage || running.player.pit?.stage==="service" ? "this stop" : "your next stop"}`;
   };
   backdrop.querySelector("[data-close-aero]").onclick=close;backdrop.onclick=event=>{if(event.target===backdrop)close();};
   backdrop.querySelectorAll("[data-choose-aero]").forEach(button=>button.onclick=()=>{selected=button.dataset.chooseAero;refresh();});
@@ -1495,7 +1518,7 @@ function updateHUD() {
   const aeroChoice=race.nextAeroSpec || p.aeroSpec || "balanced",aeroChanged=aeroChoice!==p.aeroSpec;
   app.querySelectorAll("[data-pit-aero]").forEach(button=>{const active=button.dataset.pitAero===aeroChoice;button.classList.toggle("active",active);button.setAttribute("aria-pressed",active);button.disabled=!race.canSelectAero();});
   el("race-aero-note").textContent=`Aero: ${AERO_PACKAGES[aeroChoice].name}${aeroChanged ? " · +10s service" : ""}${p.pit?.stage==="service" ? " · "+p.pit.timer.toFixed(1)+"s left" : ""}`;
-  el("browse-race-aero").textContent=!aeroUnlocked(p.upgrades) ? "Aero locked" : aeroChanged ? "Aero · +10s" : "Choose aero";
+  el("browse-race-aero").textContent=!aeroUnlocked(p.upgrades,p.quickSetup) ? "Aero locked" : aeroChanged ? "Aero · +10s" : "Choose aero";
   el("browse-race-tyres").disabled=!!p.pit && !p.garage && !(race.qualifying && p.pit.stage==="service");
   if(mobileInput){
     el("pit-button").textContent=el("pit-button").textContent.replace(/ · (?:B|W \/ ↑)/g,"");
@@ -1542,7 +1565,7 @@ function pauseRace() {
     const b = document.createElement("div");
     b.className = "modal-backdrop";
     b.id = "pause-modal";
-    b.innerHTML = `<section class="modal"><div class="eyebrow">TAKE A BREATHER</div><h2>Race paused</h2><div class="pause-controls"><p><b>Driving</b><span>W / ↑ Accelerate · S / ↓ Brake, then reverse<br>A / D or ← / → Steer</span></p><p><b>Pit stops</b><span>B Request a stop, then steer into the pit road<br>${race.autoPitLimiter ? "Automatic speed, stop, service and exit" : "L Toggle limiter · R Reverse in the pit lane"}</span></p><p><b>Strategy</b><span>F Pace ← · G Pace → (Save / Balanced / Push)<br>T Tyre menu · O Aero menu<br>1–5 Select S / M / H / I / W<br>6 High downforce · 7 Balanced · 8 Low drag · +10s pit service</span></p><p><b>View & pause</b><span>M Change map view · P / Esc Resume</span></p></div>${engineerBriefHTML(race)}<button class="primary" id="resume">BACK TO THE RACE →</button><button class="ghost" id="retire" style="width:100%;margin-top:12px">Retire race</button><p class="hint">Career retirement records a DNF. No sponsor bonus.</p></section>`;
+    b.innerHTML = `<section class="modal"><div class="eyebrow">TAKE A BREATHER</div><h2>Race paused</h2><div class="pause-controls"><p><b>Driving</b><span>W / ↑ Accelerate · S / ↓ Brake, then reverse<br>A / D or ← / → Steer</span></p><p><b>Pit stops</b><span>B Request a stop, then steer into the pit road<br>${race.autoPitLimiter ? "Automatic speed, stop, service and exit" : "L Toggle limiter · R Reverse in the pit lane"}</span></p><p><b>Strategy</b><span>F Pace ← · G Pace → (Save / Balanced / Push)<br>T Tyre menu · O Aero menu<br>1–5 Select S / M / H / I / W<br>6 High downforce · 7 Balanced · 8 Low drag · +10s pit service</span></p><p><b>View & pause</b><span>M Change map view · I Racing line · P / Esc Resume</span></p></div>${engineerBriefHTML(race)}<button class="primary" id="resume">BACK TO THE RACE →</button><button class="ghost" id="retire" style="width:100%;margin-top:12px">Retire race</button><p class="hint">Career retirement records a DNF. No sponsor bonus.</p></section>`;
     if(mobileInput)b.querySelector(".pause-controls").innerHTML=`<p><b>Drive</b><span>Hold GAS · BRAKE slows then reverses.<br>${settings.mobileSteering==="arrows" ? "Use left/right arrows." : "Drag the steering pad; release to centre."}</span></p><p><b>Strategy</b><span>Tap a pace mode or Choose tyre set.<br>Tap Pit, then steer into the separate pit entrance.</span></p><p><b>Display</b><span>Timing opens the full board. Map shows the circuit.<br>Settings changes steering and tyre temperature.</span></p>`;
     app.appendChild(b);
     el("resume").onclick = pauseRace;
@@ -1782,7 +1805,7 @@ window.addEventListener("keydown", (e) => {
   if (!race || paused || landscapeGate.blocked || race.done) return;
   // Driving shortcuts return focus to the game instead of leaving a selected
   // toolbar button outlined (or ready to react to an unrelated Space/Enter).
-  if(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright","b","l","r","t","o","f","g","1","2","3","4","5","6","7","8"].includes(k) && e.target.closest("button"))e.target.closest("button").blur();
+  if(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright","b","l","r","t","o","i","f","g","1","2","3","4","5","6","7","8"].includes(k) && e.target.closest("button"))e.target.closest("button").blur();
   if (k === "b") {e.preventDefault();race.requestPit();updateHUD();}
   if (k === "l") {e.preventDefault();race.togglePitLimiter();updateHUD();}
   if (!mobileInput && ["1", "2", "3", "4", "5"].includes(k))
@@ -1790,6 +1813,9 @@ window.addEventListener("keydown", (e) => {
   if (!mobileInput && ["6","7","8"].includes(k)){race.selectAero({6:"downforce",7:"balanced",8:"lowDrag"}[k]);updateHUD();}
   if (!mobileInput && (k === "t" || k === "o")) {
     e.preventDefault();el(k === "t" ? "browse-race-tyres" : "browse-race-aero")?.click();return;
+  }
+  if (!mobileInput && k==="i"){
+    e.preventDefault();app.querySelector("[data-action=driving-guide]")?.click();return;
   }
   if (k === "m") overview = !overview;
   if (k === "f" || k === "g") {

@@ -15,7 +15,7 @@ export function raceSnapshot(race){
     fuel:car.fuel,lapStartFuel:car.lapStartFuel ?? car.fuel,bestLap:Number.isFinite(car.bestLap)?car.bestLap:null,
     state:pick(car,fields),penalty:outstandingPenalty(car),used:[...car.used],
     inventory:car.tyreInventory,tyreId:car.tyreSet?.id,
-    random:car.aiRandom.state(),ai:pick(car.ai,["pace","mode","nextDecision"]),
+    random:car.aiRandom.state(),ai:pick(car.ai,["pace","mode","nextDecision","pacePhase","paceHoldUntil","savingFuel","cooling"]),
     strategy:pick(car.ai.strategy,["lastStop","plannedMode"])
   }));
   return structuredClone({...pick(race,raceFields),cars,

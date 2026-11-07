@@ -15,9 +15,9 @@ export function corneringSpeed(grip,curvature,top,commitment=1,aero=null){
 }
 
 export const PACE_MODES = {
- save:{name:"Save",power:.88,top:.94,fuel:.90,wear:.82,response:2.8,description:"Gentler power. Save fuel and tyre life; recover hot tyres."},
- balanced:{name:"Balanced",power:1,top:1,fuel:1,wear:1,response:5,description:"Sustainable race pace with predictable power delivery."},
- push:{name:"Push",power:1.08,top:1.02,fuel:1.12,wear:1.20,response:7,description:"Stronger acceleration. Spend fuel and tyre life to attack."},
+ save:{name:"Save",color:"#6ee4a3",power:.88,top:.94,fuel:.90,wear:.82,response:2.8,description:"Gentler power. Save fuel and tyre life; recover hot tyres."},
+ balanced:{name:"Balanced",color:"#87c6ff",power:1,top:1,fuel:1,wear:1,response:5,description:"Sustainable race pace with predictable power delivery."},
+ push:{name:"Push",color:"#ffb374",power:1.08,top:1.02,fuel:1.12,wear:1.20,response:7,description:"Stronger acceleration. Spend fuel and tyre life to attack."},
 };
 export const paceMode=value=>PACE_MODES[typeof value==="string" ? value : value?.drive] || PACE_MODES.balanced;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));

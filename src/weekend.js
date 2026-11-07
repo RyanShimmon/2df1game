@@ -626,7 +626,10 @@ export class QualifyingRun extends Race {
       c.qState = this.stageStart+at < this.stage.duration ? "timed" : "in";
       c.qStart = c.qState === "timed" ? at : null;
       c.qInvalid = false;
-      if(c.qState==="timed")startSectorLap(c,at,line);
+      if(c.qState==="timed"){
+        if(!c.player)c.drive="push";
+        startSectorLap(c,at,line);
+      }
       if(c.player && c.qState === "in") {
         this.pitRequested=true;
         this.say("Chequered flag. Return to the pits; this out lap cannot start a timed lap.");

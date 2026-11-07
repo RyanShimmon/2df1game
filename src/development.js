@@ -41,10 +41,10 @@ export const tyreServiceSeconds=crew=>4.3-.5*Math.floor(clamp(Number(crew)||0,0,
 export const fuelMultiplier=upgrades=>1-level(upgrades,"efficiency")*.02;
 export const sponsorMultiplier=upgrades=>1+level(upgrades,"commercial")*.10;
 export const sponsorPayout=(upgrades,amount)=>Math.round(amount*sponsorMultiplier(upgrades));
-export const aeroUnlocked=upgrades=>level(upgrades,"aero")>=1;
-export function aeroPackage(upgrades,spec="balanced"){return aeroUnlocked(upgrades) && AERO_PACKAGES[spec] || AERO_PACKAGES.balanced;}
+export const aeroUnlocked=(upgrades,quickSetup=false)=>quickSetup || level(upgrades,"aero")>=1;
+export function aeroPackage(upgrades,spec="balanced",quickSetup=false){return aeroUnlocked(upgrades,quickSetup) && AERO_PACKAGES[spec] || AERO_PACKAGES.balanced;}
 export function aeroGrip(car){
- return aeroGripMultiplier(car.speed || 0,level(car.upgrades,"aero"),aeroPackage(car.upgrades,car.aeroSpec).corner);
+ return aeroGripMultiplier(car.speed || 0,level(car.upgrades,"aero"),aeroPackage(car.upgrades,car.aeroSpec,car.quickSetup).corner);
 }
 export function setAeroPackage(career,spec){
  if(!aeroUnlocked(career.weekend?.setup?.playerUpgrades || career.upgrades) || career.weekend && career.weekend.phase!=="R" || !AERO_PACKAGES[spec])return false;

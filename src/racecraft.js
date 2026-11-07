@@ -291,12 +291,23 @@ export function planRacingLane(car,line,traffic,{time=0,allowPass=true,yieldOffs
  if(state.phase==="launchFollow"&&launchLeader&&launchLeader.gap>0)
   followingSpeed=Math.max(0,launchLeader.car.speed+(launchLeader.spaceGap-60)*.7);
 
+ if(routeOffset!==null){
+  for(const other of nearby){
+   if(!(other.car.boxRequested || other.car.ai?.strategy?.pitRequested || other.car.qState==="in"))continue;
+   // Sort by road progress with a small head start for the pit-side lane.
+   // A car abreast on the inside proceeds; its neighbour slots in behind.
+   const priority=other.gap+(other.car.offset-car.offset)*.4;
+   if(other.gap<145 && (priority>0 || priority===0 && other.car.id<car.id))
+    followingSpeed=Math.min(followingSpeed,Math.max(0,other.car.speed+(other.spaceGap-66)*.9));
+  }
+ }
  if(routeOffset!==null && Math.abs(desired-routeOffset)>2){
   // A blocked pit-side move joins the queue behind the obstructing car.
   // Matching its speed side by side would keep both lanes occupied all the
   // way past the entrance; create one car-length gap before merging instead.
   const direction=Math.sign(routeOffset-car.offset);
-  for(const other of nearby)if(other.spaceGap>=0 && other.spaceGap<95 &&
+  for(const other of nearby)if(!(other.car.boxRequested || other.car.ai?.strategy?.pitRequested || other.car.qState==="in") &&
+   other.spaceGap>=0 && other.spaceGap<95 &&
    direction*(other.car.offset-car.offset)>6 &&
    direction*(other.car.offset-routeOffset)<34)
    followingSpeed=Math.min(followingSpeed,Math.max(0,other.car.speed+(other.spaceGap-62)*.85));

@@ -72,9 +72,12 @@ test('unfinished aero work is not granted by advancing, and completed work carri
  const w=next.weekend;w.phase='R';w.grid=Array.from({length:22},(_,i)=>i);w.raceStarted=false;
  const r=new Race(w.setup,next.player.upgrades,'career',profile);prepareRace(r,w,'M1');assert.equal(r.player.aeroSpec,'downforce');
 });
-test('factory cars cannot select aero in quick race or career qualifying',()=>{
+test('Quick Race supports adjustable aero while an unupgraded career car stays on Balanced',()=>{
  const quick=new Race({...setup,aeroSpec:'lowDrag'},{});
- assert.equal(quick.player.aeroSpec,'balanced');assert.equal(quick.canSelectAero(),false);assert.equal(quick.selectAero('lowDrag'),false);
+ assert.equal(quick.player.aeroSpec,'lowDrag');assert.ok(quick.canSelectAero());
+ const balanced={...quick.player,aeroSpec:'balanced'};
+ approx(cleanAirTopSpeed(quick.player),cleanAirTopSpeed(balanced)*1.10);
+ assert.ok(quick.selectAero('downforce'));
  const c=newCareer(profile),w=createWeekend(c,setup),q=new QualifyingRun(w,'S1',c.upgrades,profile);
  assert.equal(q.selectAero('downforce'),false);assert.equal(q.player.pit.timer,0);assert.equal(q.player.aeroSpec,'balanced');
  assert.equal(q.selectAero('invalid'),false);

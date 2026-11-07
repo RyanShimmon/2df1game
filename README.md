@@ -1,6 +1,6 @@
 # V10 — Grand Prix
 
-Version **1.13.1**.
+Version **1.14.0**.
 
 Refreshing the same tab resumes a race on the interrupted lap with a standing start and a fuel credit for the distance replayed. Restarting from the pause menu restores the original race setup and costs five grid places per restart. Each place beyond P22 adds one penalty second. Both features apply to Career and Quick Race, including Sprints. Skid trails now have smooth joins.
 

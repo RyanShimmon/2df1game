@@ -1,3 +1,6 @@
+import {drivingReferences} from "./driving-references.js";
+import {buildDrivingGuide,drawDrivingGuide} from "./driving-guide.js";
+import {paceMode} from "./performance.js";
 import {drawSkids} from "./skids.js";
 import {speedValue} from "./units.js";
 import {gridSlot,
@@ -74,6 +77,7 @@ export class Renderer {
   }
   rebuildTrack() {
     this.trackRef=TRACK;
+    this.guidePaths=null;
     this.road = new Path2D();
     TRACK.pts.forEach((p, i) =>
       i ? this.road.lineTo(p.x, p.y) : this.road.moveTo(p.x, p.y),
@@ -282,9 +286,14 @@ export class Renderer {
       );
     }
     if (race && !menu) {
+      const showGuide=this.showDrivingGuide && !race.mobile;
+      if(showGuide){
+        this.guidePaths ??= buildDrivingGuide(TRACK,drivingReferences[TRACK.id].points);
+        drawDrivingGuide(ctx,this.guidePaths[0]);
+      }
       drawSkids(ctx,race.skids,race.time);
       for(const c of race.cars) if((!c.garage || c.player) && !trackLayer(c.s)) this.car(ctx,interpolatedCar(c,alpha),c.player ? countdownPulse(race.countdown) : 0);
-      this.flyovers(ctx,race,alpha);
+      this.flyovers(ctx,race,alpha,showGuide);
       for(const c of race.cars) if((!c.garage || c.player) && trackLayer(c.s)) this.car(ctx,interpolatedCar(c,alpha),c.player ? countdownPulse(race.countdown) : 0);
     } else {
       this.flyovers(ctx,null);
@@ -320,7 +329,7 @@ export class Renderer {
     }
     if (race && !menu && !race.mobile) this.minimap(race);
   }
-  flyovers(ctx,race,alpha=1) {
+  flyovers(ctx,race,alpha=1,showGuide=false) {
     const view=underpassView(race?.player);
     const path=(a,b)=>{
       // Use the very same vertices as the main tarmac, avoiding mismatched
@@ -343,6 +352,7 @@ export class Renderer {
       ctx.strokeStyle=asphaltColour(race?.weather?.wetness);ctx.lineWidth=TRACK.width;ctx.stroke(road);
       ctx.restore();
     }
+    if(showGuide)drawDrivingGuide(ctx,this.guidePaths[1]);
     ctx.restore();
     if(view){
       // The base drawing contains both roads. Repaint the lower route inside
@@ -355,6 +365,7 @@ export class Renderer {
       ctx.strokeStyle="#c9c9b5";ctx.lineWidth=142;ctx.stroke(road);
       ctx.strokeStyle="#df655e";ctx.lineWidth=136;ctx.setLineDash([20,20]);ctx.lineDashOffset=-a;ctx.stroke(road);ctx.setLineDash([]);ctx.lineDashOffset=0;
       ctx.strokeStyle=asphaltColour(race.weather?.wetness);ctx.lineWidth=TRACK.width;ctx.stroke(road);
+      if(showGuide)drawDrivingGuide(ctx,this.guidePaths[0]);
       for(const c of race.cars)if(!c.garage&&!trackLayer(c.s))this.car(ctx,interpolatedCar(c,alpha));
       ctx.restore();
       ctx.save();ctx.globalAlpha=.65*view.alpha;ctx.strokeStyle="#d6fca1";ctx.lineWidth=2;ctx.setLineDash([7,7]);
@@ -430,11 +441,11 @@ export class Renderer {
     ctx.fillRect(8, -2, 10, 4);
     ctx.fillStyle = "#13212b";
     ctx.beginPath();
-    ctx.ellipse(-2, 0, 5, 3, 0, 0, Math.PI * 2);
+    ctx.ellipse(-2, 0, 5.5, 4.4, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "#e5eae6";
+    ctx.fillStyle = paceMode(c).color;
     ctx.beginPath();
-    ctx.arc(-1, 0, 2.2, 0, Math.PI * 2);
+    ctx.arc(-1.5, 0, 3.3, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = TYRES[c.tyre].color;
     ctx.fillRect(-9, -13, 2, 6);

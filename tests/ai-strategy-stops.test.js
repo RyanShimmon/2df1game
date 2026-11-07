@@ -117,3 +117,12 @@ test('a legal car with two dry laps left can race to the flag at zero tyre condi
  assert.equal(r.reviewAIStrategy(c,2),false);
  assert.equal(c.ai.strategy.projectedStopLaps,2);
 });
+
+test('a teammate booking the box does not send a committed car back across the pit entrance',()=>{
+ const r=race('northline'),c=r.cars[0],mate=r.cars[1];
+ fit(r,c,{tyre:'M',age:9,wear:.55});
+ c.s=9*TRACK.length+TRACK.pitEntry-150;c.ai.pitEntryS=c.s+150;
+ Object.assign(c.ai.strategy,{pitRequested:true,reason:'faster race strategy',choice:{compound:'H',wear:0}});
+ r.traffic=[{id:mate.id,team:c.team.name,boxRequested:true}];
+ assert.equal(r.reviewAIStrategy(c,22),true);
+});

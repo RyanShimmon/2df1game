@@ -1878,9 +1878,9 @@ body:not(.mobile-game) .pace-selector svg { width:18px; height:18px; fill:none; 
 body:not(.mobile-game) .pace-selector > button { display:flex; align-items:center; justify-content:center; }
 body:not(.mobile-game) .pace-current { display:flex; align-items:center; justify-content:center; border-radius:4px; border:1px solid currentColor; }
 body:not(.mobile-game) .pace-current svg { width:15px; height:15px; }
-body:not(.mobile-game) .pace-selector[data-mode=save] .pace-current { color:#6ee4a3; background:#266b454d; }
-body:not(.mobile-game) .pace-selector[data-mode=balanced] .pace-current { color:#87c6ff; background:#316a9e4d; }
-body:not(.mobile-game) .pace-selector[data-mode=push] .pace-current { color:#ffb374; background:#a44d204d; }
+body:not(.mobile-game) .pace-selector[data-mode=save] .pace-current { background:#266b454d; }
+body:not(.mobile-game) .pace-selector[data-mode=balanced] .pace-current { background:#316a9e4d; }
+body:not(.mobile-game) .pace-selector[data-mode=push] .pace-current { background:#a44d204d; }
 body:not(.mobile-game) .dashboard-controls .drive-modes button { width:24px; height:24px; min-height:24px; padding:3px; }
 body:not(.mobile-game) .fuel-low { color:#ffd17e; }
 .top-dashboard .dashboard-conditions {
