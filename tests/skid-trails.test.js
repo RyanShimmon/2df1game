@@ -13,9 +13,15 @@ test('a sustained high-speed curved slide leaves connected tracks with bounded s
  assert.ok(marks.length>=20 && marks.length<=30);
  assert.equal(marks.at(-1).x,car.x,'the live trail reaches the current tyre position');
  for(let i=1;i<marks.length;i++)assert.deepEqual(marks[i].from,{x:marks[i-1].x,y:marks[i-1].y,a:marks[i-1].a});
- const paths=[],ctx={save(){},restore(){},beginPath(){},moveTo(x,y){paths.push([x,y]);},lineTo(x,y){paths.push([x,y]);},stroke(){}};
+ const paths=[];let strokes=0;
+ const ctx={save(){},restore(){},beginPath(){},moveTo(x,y){paths.push([[x,y]]);},
+  lineTo(x,y){paths.at(-1).push([x,y]);},stroke(){strokes++;}};
  drawSkids(ctx,marks,2);
- for(let i=1;i<marks.length;i++)for(const side of [0,2])assert.deepEqual(paths[i*4+side],paths[(i-1)*4+side+1], 'both tyre tracks must join exactly');
+ assert.equal(ctx.lineCap,'butt');assert.equal(ctx.lineJoin,'round');
+ assert.ok(strokes<=3,'fade groups, not a separate translucent stroke per segment');
+ assert.equal(paths.length,strokes*2);
+ assert.equal(paths.reduce((n,path)=>n+path.length-1,0),marks.length*2);
+ for(let i=2;i<paths.length;i++)assert.deepEqual(paths[i][0],paths[i-2].at(-1));
 });
 
 test('different cars, interrupted slides, pit gaps and teleports never join trails',()=>{

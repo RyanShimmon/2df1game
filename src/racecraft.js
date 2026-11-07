@@ -8,7 +8,9 @@ const wrap=(v,n)=>((v%n)+n)%n;
 const angleDiff=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
 export function seededRandom(seed){
   let state=seed>>>0;
-  return ()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296;};
+  const random=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296;};
+  random.state=()=>state;
+  return random;
 }
 export function driverSeed(seed,id){return (Math.imul((seed>>>0)^0x9e3779b9,(id+1)*2+1)^0x85ebca6b)>>>0;}
 

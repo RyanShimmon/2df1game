@@ -480,12 +480,24 @@ export function bankingGrip(s) {
   return 1;
 }
 export const tyreServiceTime=tyreServiceSeconds;
+// A standing restart places cars just behind the line of their interrupted lap.
+export function completedRaceLaps(car){
+  return car.gridLap ?? Math.floor(Math.max(0,raceProgress(car))/TRACK.length);
+}
 export function raceProgress(car) {
+  if(car.gridLap!=null)return car.s;
   if(car.s<0 && !(car.completedLaps>0)) return car.s;
   const laps=Math.max(car.completedLaps || 0,Math.floor(Math.max(0,car.s)/TRACK.length));
   return laps*TRACK.length+wrap(car.s,TRACK.length);
 }
 export function updateRaceLaps(car,oldS) {
+  if(car.gridLap!=null){
+    if(car.s>=car.gridLap*TRACK.length){
+      car.completedLaps=car.gridLap;
+      delete car.gridLap;
+    }
+    return false;
+  }
   car.completedLaps=Math.max(car.completedLaps || 0,Math.floor(Math.max(0,oldS)/TRACK.length));
   if(oldS<0) return false;
   const before=wrap(oldS,TRACK.length), after=wrap(car.s,TRACK.length);
@@ -1281,7 +1293,8 @@ export class Race {
     for (const car of this.cars) {
       if (car.finished || car.dnf) continue;
       coolStoredSets(car,dt);
-      const oldS = car.s,oldProgress=raceProgress(car);
+      const oldS = car.s,oldProgress=raceProgress(car),fuelBefore=car.fuel;
+      car.lapStartFuel ??= fuelBefore;
       car.trackWetness = trackWater(
         this.weather,
         car.s,
@@ -1296,6 +1309,8 @@ export class Race {
       const sectorLap=advanceSectors(this.sectors,car,oldProgress,raceProgress(car),this.time-dt,this.time,TRACK.length);
       if (crossedLine) {
         const crossedAt=sectorLap?.at ?? this.time;
+        const fraction=clamp((crossedAt-this.time+dt)/dt,0,1);
+        car.lapStartFuel=fuelBefore+(car.fuel-fuelBefore)*fraction;
         const lapTime = crossedAt - car.lapStart;
         car.lastLap = lapTime;
         if(sectorLap?.valid)car.bestLap = Math.min(car.bestLap, lapTime);

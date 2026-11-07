@@ -1,3 +1,4 @@
+import {beginRaceSession,raceSnapshot,restartPenalty,restoreRaceSession} from "./race-session.js";
 import {seasonStandings} from "./championship.js";
 import {forecastHUD} from "./forecast-hud.js";
 import {isQualifyingSet} from "./tyre-stock.js";
@@ -39,6 +40,7 @@ import {
   tyreRuleMet,
   PIT_LANE,
   raceProgress,
+  completedRaceLaps,
   liveInterval,
 } from "./core.js";
 import {
@@ -134,10 +136,49 @@ function refreshSetup(){
   const scroller=app.querySelector(".scroll");if(scroller)scroller.scrollTop=top;
 }
 let draftTeam = 10;
+const sessionKey="v10.active-race";
+let activeSession=null;
 let selectedWeekendSet = null,
   weekendSaveClock = 0;
 const el = (id) => document.getElementById(id);
+function saveRaceCheckpoint(){
+  if(!activeSession || !race || race.done)return;
+  try {
+    activeSession.current=raceSnapshot(race);
+    sessionStorage.setItem(sessionKey,JSON.stringify(activeSession));
+  } catch {
+    race.say("Race checkpoint unavailable. Refresh may lose progress.");
+  }
+}
+function openRaceSession(){
+  settlement=null;paused=false;accumulator=0;weekendSaveClock=0;
+  resetDrivingInput();
+  raceUI();
+  saveRaceCheckpoint();
+}
+function resumeSavedRace(){
+  try {
+    const raw=sessionStorage.getItem(sessionKey);
+    if(!raw)return false;
+    const session=JSON.parse(raw);
+    const restored=restoreRaceSession(session,career);
+    if(restored){
+      activeSession=session;race=restored;screen=race.mode;
+      if(screen==="quick"){
+        for(const key of ["track","laps","startingPosition","tyre","fuel","weather","aeroSpec"])
+          if(session.setup[key]!=null)setup[key]=session.setup[key];
+      }
+      race.say("Standing restart · lap "+(completedRaceLaps(race.player)+1)+" of "+race.laps);
+      openRaceSession();
+      return true;
+    }
+  } catch { /* Incomplete or obsolete checkpoints fall back to race preparation. */ }
+  activeSession=null;
+  try {sessionStorage.removeItem(sessionKey);} catch {}
+  return false;
+}
 function save() {
+  if(activeSession && race && !race.done){saveRaceCheckpoint();return;}
   if(school){school.save(localStorage);return;}
   try {
     if(career.weekend?.setup.aeroSpec)career.aeroSpec=career.weekend.setup.aeroSpec;
@@ -168,7 +209,7 @@ function tyreLifeIndicator(selected={compound:setup.tyre,wear:0}) {
   return `<section class="tyre-life" aria-label="Estimated stint life"><div class="tyre-life-heading"><b>ESTIMATED STINT LIFE</b><span>Balanced pace · suitable conditions</span></div><div class="tyre-life-grid">${["S","M","H","I","W"].map(compound=>`<div style="--tyre:${TYRES[compound].color}"><i class="tyre-dot"></i><span>${TYRES[compound].name}</span><b>≈ ${estimatedTyreLife(compound,{upgrades}).toFixed(1).replace(/\.0$/,"")} laps</b></div>`).join("")}</div><p class="tyre-life-remaining">${selected.id ? selected.id+" · " : ""}${TYRES[selected.compound].name} selected <strong>≈ ${remaining.toFixed(1)} laps remaining</strong></p>${wetnessGuide(career.weekend && screen==="career" ? career.weekend.weather.wetness : null)}</section>`;
 }
 function header() {
-  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.13.0</div></header>`;
+  return `<header class="topbar"><div class="brand">V10<span>GRAND PRIX</span></div><div class="version"><i class="dot"></i> VERSION 1.13.1</div></header>`;
 }
 function tabs() {
   return `<div class="tabs"><button class="tab ${screen === "quick" ? "active" : ""}" data-screen="quick">Quick race</button><button class="tab ${screen === "career" ? "active" : ""}" data-screen="career">Career garage</button><button class="tab" data-action="school">Race School</button><button class="tab" data-action="help">How to drive ↗</button><button class="tab" data-action="settings">Settings</button></div>`;
@@ -721,13 +762,14 @@ function startRace(fromWeekend = false) {
     screen,
     screen === "career" ? career.profile : null,
   );
+  // Persist the pre-start weekend. Live inventory and progress are then
+  // checkpointed together, leaving a coherent fallback if storage is lost.
+  if(screen==="career")save();
   if (screen === "career")
     prepareRace(race, career.weekend, selectedWeekendSet);
   if(screen!=="career")delete setup.weatherSeed;
-  settlement = null;
-  paused = false;
-  accumulator = 0;
-  raceUI();
+  activeSession=beginRaceSession(race,career);
+  openRaceSession();
 }
 function raceUI() {
   race.mobile=mobileInput;
@@ -1230,7 +1272,7 @@ function updateHUD() {
     remaining = Math.max(0, race.laps - raceProgress(p) / TRACK.length);
   el("position").textContent = position + " / 22";
   el("lap").textContent =
-    Math.min(race.laps, Math.max(1, Math.floor(raceProgress(p) / TRACK.length) + 1)) +
+    Math.min(race.laps, completedRaceLaps(p)+1) +
     " / " +
     race.laps;
   el("clock").textContent = time(mobileInput ? race.time : currentLapTime(race) ?? Infinity);
@@ -1478,6 +1520,18 @@ function updateHUD() {
     .querySelectorAll("i")
     .forEach((l, i) => l.classList.toggle("on", race.countdown < 4 - i * 0.6));
 }
+function confirmRaceRestart(dialog){
+  const {grid,seconds}=restartPenalty(activeSession);
+  const original=activeSession.start.cars.find(c=>c.id===21).state.gridPosition;
+  const warning="Original grid P"+original+" → P"+grid+(seconds ? " · "+seconds+"s time penalty" : "");
+  dialog.innerHTML=`<section class="modal" role="alertdialog" aria-modal="true" aria-labelledby="restart-title" aria-describedby="restart-detail"><h2 id="restart-title">Restart from lap 1?</h2><p id="restart-detail">All ${race.laps} laps will be run again with the original tyres, fuel and weather. Each restart costs five grid places. Each place beyond P22 adds one second.</p><p><strong>${warning}</strong></p><button class="primary" id="cancel-restart">Keep racing</button><button class="ghost restart-race" id="confirm-restart">Restart from P${grid}${seconds ? " + "+seconds+"s" : ""}</button></section>`;
+  el("cancel-restart").onclick=pauseRace;
+  el("confirm-restart").onclick=()=>{
+    race=restoreRaceSession(activeSession,career,{restart:true});
+    openRaceSession();
+  };
+  el("cancel-restart").focus();
+}
 function pauseRace() {
   if (!race || race.done || app.querySelector(".modal-backdrop:not(#pause-modal)")) return;
   if(mobileInput && app.querySelector(".tower.mobile-open"))el("mobile-timing").click();
@@ -1492,6 +1546,13 @@ function pauseRace() {
     if(mobileInput)b.querySelector(".pause-controls").innerHTML=`<p><b>Drive</b><span>Hold GAS · BRAKE slows then reverses.<br>${settings.mobileSteering==="arrows" ? "Use left/right arrows." : "Drag the steering pad; release to centre."}</span></p><p><b>Strategy</b><span>Tap a pace mode or Choose tyre set.<br>Tap Pit, then steer into the separate pit entrance.</span></p><p><b>Display</b><span>Timing opens the full board. Map shows the circuit.<br>Settings changes steering and tyre temperature.</span></p>`;
     app.appendChild(b);
     el("resume").onclick = pauseRace;
+    if(activeSession && !race.qualifying && !school){
+      const restart=document.createElement("button");
+      restart.className="ghost restart-race";
+      restart.textContent="Restart race…";
+      restart.onclick=()=>confirmRaceRestart(b);
+      el("retire").before(restart);
+    }
     if(school) {el("retire").textContent="LEAVE RACE SCHOOL";el("retire").nextElementSibling.textContent="School checkpoints are saved. Career is unaffected.";}
     el("retire").onclick = () => {
       if(school){school.save(localStorage);menu();return;}
@@ -1555,6 +1616,8 @@ function showResults() {
     settlement = settleCareer(career, race.result);
     save();
   }
+  activeSession=null;
+  try {sessionStorage.removeItem(sessionKey);} catch {}
   const r = race.result;
   const b = document.createElement("div");
   b.className = "modal-backdrop";
@@ -1764,7 +1827,7 @@ function loop(now) {
         break;
       }
     }
-    if (race.weekend) {
+    if (!race.done && (activeSession || race.weekend)) {
       weekendSaveClock += dt;
       if (weekendSaveClock > 1) {
         save();
@@ -1792,6 +1855,7 @@ function loop(now) {
 }
 window.addEventListener("resize",updateMobileSession);
 window.matchMedia("(pointer: coarse)").addEventListener("change",e=>{mobileInput=e.matches;document.body.classList.toggle("mobile-game",mobileInput);if(race)mountMobileControls();else menu();updateMobileSession();});
-document.addEventListener("visibilitychange",()=>{if(document.hidden){resetDrivingInput();if(race && !paused && !race.done)pauseRace();}});
-menu();
+window.addEventListener("pagehide",saveRaceCheckpoint);
+document.addEventListener("visibilitychange",()=>{if(document.hidden){saveRaceCheckpoint();resetDrivingInput();if(race && !paused && !race.done)pauseRace();}});
+if(!resumeSavedRace())menu();
 requestAnimationFrame(loop);

@@ -1,6 +1,8 @@
 # V10 — Grand Prix
 
-Version **1.13.0**.
+Version **1.13.1**.
+
+Refreshing the same tab resumes a race on the interrupted lap with a standing start and a fuel credit for the distance replayed. Restarting from the pause menu restores the original race setup and costs five grid places per restart. Each place beyond P22 adds one penalty second. Both features apply to Career and Quick Race, including Sprints. Skid trails now have smooth joins.
 
 Fully worn tyres retain enough grip to race to the flag. Soft and Medium stints have more distinct pit windows, and the race timing board shows each driver’s completed stops. The career garage includes the full season standings. Qualifying departures vary by driver and weekend, with time budgeted for two timed runs.
 
