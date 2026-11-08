@@ -1,7 +1,8 @@
+import {tyreRuleMet} from "./race-rules.js";
 import {planRaceStrategy} from "./strategy.js";
-import {engineAcceleration,cornerAccelerationLimit,corneringSpeed,aeroGripMultiplier} from "./performance.js";
+import {tyreSurfaceGrip,engineAcceleration,cornerAccelerationLimit,corneringSpeed,aeroGripMultiplier} from "./performance.js";
 import {optimizeRacingLine,racingSplineCoefficients} from "./racing-line.js";
-import {tyreWeatherGrip, projectWeather, trackWater} from './weather.js';
+import {projectWeather, trackWater} from './weather.js';
 import {selectableSets,isQualifyingSet} from './tyre-stock.js';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const wrap=(v,n)=>((v%n)+n)%n;
@@ -449,22 +450,24 @@ export function availableAISets(car,qualifying=false){
   if(!car.tyreInventory)return car.tyrePhase ? [] : ['S','M','H','I','W'].map(compound=>({id:null,compound,wear:0}));
   return selectableSets(car.tyreInventory,car.tyrePhase || 'R',qualifying ? null : car.tyreSet?.id);
 }
-export function rankTyres(car,{tyres,remaining,water,futureWater,lapTime=35,pitLoss=18,qualifying=false,starting=false}){
+export function rankTyres(car,{tyres,remaining,water,futureWater,lapTime=35,pitLoss=18,qualifying=false,starting=false,requireNewCompound=false}){
+  const eligible=option=>!requireNewCompound || !car.used.has(option.set.compound);
   if(!qualifying && remaining<=60){
     const plans=planRaceStrategy(car,{tyres,sets:availableAISets(car,starting),remaining,water,futureWater,lapTime,pitLoss,starting});
-    if(plans.length)return plans;
+    const eligiblePlans=requireNewCompound ? plans.filter(eligible) : plans;
+    if(eligiblePlans.length)return eligiblePlans;
   }
   const strategy=car.ai.strategy;
   const estimate=clamp(water*.7+futureWater*.3+(Math.max(water,futureWater)>.02 ? strategy.forecastBias : 0),0,1);
-  const needDry=car.raceFormat!=="sprint" && !qualifying && !starting && !car.used.has('I')&&!car.used.has('W')&&['S','M','H'].filter(t=>car.used.has(t)).length<2;
+  const needsChange=!qualifying && !starting && !tyreRuleMet(car);
   return availableAISets(car,qualifying || starting).map(set=>{
     const tyre=tyres[set.compound];
-    const weatherGrip=tyreWeatherGrip(set.compound,estimate),g=tyre.grip*weatherGrip;
+    const g=tyre.grip*tyreSurfaceGrip(set.compound,estimate,set.wear,car.upgrades?.tyres);
     const dryWear=['I','W'].includes(set.compound) ? 1+Math.max(0,(set.compound==='W' ? .55 : .28)-estimate)*5 : 1;
     const usable=tyre.life*Math.max(.03,strategy.wearLimit-set.wear)/(dryWear*(1-(car.upgrades?.tyres || 0)*.07));
     const laps=Math.max(.25,remaining),stint=Math.min(laps,usable);
     const extraStops=qualifying ? 0 : Math.max(0,Math.ceil(laps/Math.max(.5,usable))-1);
-    const ruleCost=needDry && car.used.has(set.compound) && !['I','W'].includes(set.compound) ? pitLoss/laps : 0;
+    const ruleCost=needsChange && car.used.has(set.compound) ? pitLoss/laps : 0;
     const conditionLoss=set.wear*.1+Math.max(0,stint/(2*tyre.life))*.025;
     // Dedicated qualifying sets cannot be raced. Prefer them when competitive,
     // while allowing a genuinely worn set to lose out to fresh general stock.
@@ -472,5 +475,5 @@ export function rankTyres(car,{tyres,remaining,water,futureWater,lapTime=35,pitL
     const freshCost=qualifying && !set.used && !qualifyingSet ? .7+.5*car.driverStyle.tyreCare : 0;
     const score=freshCost-(qualifyingSet ? .35 : 0)+lapTime*(Math.pow(1/Math.max(.08,g),.32)+conditionLoss+(strategy.compoundBias[set.compound]||0))+extraStops*pitLoss/laps+ruleCost;
     return {set,score,usable,grip:g};
-  }).sort((a,b)=>a.score-b.score || a.set.wear-b.set.wear || String(a.set.id).localeCompare(String(b.set.id)));
+  }).filter(eligible).sort((a,b)=>a.score-b.score || a.set.wear-b.set.wear || String(a.set.id).localeCompare(String(b.set.id)));
 }

@@ -13,15 +13,18 @@ function randomFor(seed) {
   let value=seed>>>0;
   return ()=>{value=(value+0x6d2b79f5)>>>0;let n=value;n=Math.imul(n^(n>>>15),n|1);n^=n+Math.imul(n^(n>>>7),n|61);return ((n^(n>>>14))>>>0)/4294967296;};
 }
-const DRY_WEATHER_CHANCE=.65;
-// Career presets describe a circuit's weather tendency, not guaranteed rain.
-// Pick once for the weekend; quick-race explicit weather choices stay literal.
+const variedDryChance=.50;
+const wetScenarios=["intermediate","intermediate","intermediate","showers","showers","wetToDry","lateRain","sustainedRain"];
+function variedScenario(roll) {
+  if(roll<variedDryChance)return "dry";
+  return wetScenarios[Math.floor((roll-variedDryChance)/(1-variedDryChance)*wetScenarios.length)];
+}
+// Save the weekend scenario before qualifying so the race does not roll dry a second time.
 export function careerWeatherPattern(pattern,seed) {
-  if(pattern==="dry")return pattern;
-  // Commit a dry dynamic weekend once, so a second roll for the race cannot
-  // turn a dry qualifying plan into another chance of rain.
-  if(pattern==="dynamic")return randomFor(seed)()<DRY_WEATHER_CHANCE ? "dry" : pattern;
-  return randomFor((seed^0x5bd1e995)>>>0)()<DRY_WEATHER_CHANCE ? "dry" : pattern;
+  if(pattern==="dynamic")return variedScenario(randomFor(seed)());
+  const roll=randomFor((seed^0x5bd1e995)>>>0)();
+  if(pattern==="dry")return roll<.80 ? "dry" : "intermediate";
+  return roll<variedDryChance ? "dry" : pattern;
 }
 export const raceWeatherDuration=(laps,length)=>Math.max(240,(laps || 16)*Math.max(25,(length || 5260)/170));
 
@@ -29,10 +32,7 @@ export const raceWeatherDuration=(laps,length)=>Math.max(240,(laps || 16)*Math.m
 // and speeding up a session never roll the weather again.
 function buildFronts(pattern,seed,duration) {
   const random=randomFor(seed),between=(a,b)=>a+(b-a)*random();
-  const roll=pattern==="dynamic" ? random() : null;
-  const wetScenarios=["intermediate","intermediate","sustainedRain","showers","showers","wetToDry","lateRain"];
-  const scenario=roll===null ? pattern : roll<DRY_WEATHER_CHANCE ? "dry" :
-    wetScenarios[Math.floor((roll-DRY_WEATHER_CHANCE)/(1-DRY_WEATHER_CHANCE)*wetScenarios.length)];
+  const scenario=pattern==="dynamic" ? variedScenario(random()) : pattern;
   const damp=()=>between(.32,.43),heavy=()=>between(.86,.99);
   let rain=scenario==="wetToDry" || scenario==="sustainedRain" ? heavy() : scenario==="intermediate" ? damp() : 0;
   const initialWater=rain>.6 ? between(.72,.86) : rain>.1 ? between(.35,.47) : 0;
@@ -144,14 +144,20 @@ const slickWetnessCurves={
   M:[[0,1],[.05,.985],[.12,.845],[.4,.55],[1,.20]],
   H:[[0,1],[.12,.97],[.20,.935],[.4,.70],[1,.23]],
 };
-export function tyreWeatherGrip(compound, water) {
-  if (compound === "I")
-    return clamp(
-      0.68 + 0.40 * Math.sin(Math.PI * clamp(water / 0.85, 0, 1)) + .05*(1-clamp(water/.25,0,1)),
-      0.65,
-      1.08,
-    );
-  if (compound === "W") return 0.48 + 0.59 * clamp(water / 0.75, 0, 1) + .08*(1-clamp(water/.45,0,1));
+export function tyreWeatherGrip(compound, water, wear=0) {
+  if(compound==="I" || compound==="W"){
+    const inter=compound==="I";
+    const fresh=inter
+      ? clamp(.68+.40*Math.sin(Math.PI*clamp(water/.85,0,1))+.05*(1-clamp(water/.25,0,1)),.65,1.08)
+      : .48+.59*clamp(water/.75,0,1)+.08*(1-clamp(water/.45,0,1));
+    // Shallower grooves put more rubber on dry asphalt but displace less water.
+    // Mechanical wear and temperature are applied separately to both axles.
+    const lostGrooves=clamp(wear,0,1)**2;
+    const depth=clamp(water,0,1);
+    const drainageDemand=depth*(2-depth);
+    const worn=inter ? 1-.50*drainageDemand : .96-.38*drainageDemand;
+    return fresh+(worn-fresh)*lostGrooves;
+  }
   const curve=slickWetnessCurves[compound] || slickWetnessCurves.M,w=clamp(water,0,1);
   const end=curve.findIndex(([at])=>at>=w);
   if(end<=0)return curve[0][1];

@@ -3,8 +3,8 @@ import {recordSeasonResult} from "./championship.js";
 import {createSectorSession,startSectorLap,advanceSectors,stopSectorLap,invalidateSector} from "./sectors.js";
 import {recordTiming,intervalSeconds,createTimingReference,timingCoordinate} from "./timing.js";
 import {planRaceStrategy,strategyWearLimit} from "./strategy.js";
-import {engineAcceleration,paceMode,fuelPerLap,applyThrottle,tyreWearFactor,tyrePaceWear,wearPerLap,stintLaps,cornerAccelerationLimit} from "./performance.js";
-import {GRAND_PRIX_POINTS,racePoints,raceFormat,quickRaceFormat} from "./race-rules.js";
+import {engineAcceleration,paceMode,fuelPerLap,applyThrottle,tyreSurfaceGrip,tyrePaceWear,wearPerLap,stintLaps,cornerAccelerationLimit} from "./performance.js";
+import {GRAND_PRIX_POINTS,racePoints,raceFormat,quickRaceFormat,tyreRuleMet} from "./race-rules.js";
 import {SEASON_LENGTH,careerSchedule,shuffledSeasonOrder,ensureSeasonOrder} from "./calendar.js";
 import {SPONSORS,sponsorMet} from "./sponsors.js";
 export {SPONSORS} from "./sponsors.js";
@@ -508,6 +508,7 @@ export function updateRaceLaps(car,oldS) {
 }
 export function liveInterval(ahead,car) {
   if(car.dnf)return "DNF";
+  if(car.finished && !tyreRuleMet(car))return "DQ";
   const distance=Math.max(0,raceProgress(ahead)-raceProgress(car));
   const laps=Math.floor(distance/TRACK.length),seconds=intervalSeconds(ahead,car,raceProgress(car));
   const base=car===ahead ? "LEAD" : laps && !car.timing?.reference ? `+${laps} LAP${laps>1 ? "S" : ""}` :
@@ -539,14 +540,7 @@ function overspeedDrag(car){return Math.max(0,car.speed-cleanAirTopSpeed(car))*.
 // still limited independently by the current front-tyre grip.
 export const leavesSkidMarks=car=>car.speed>45 && Math.abs(angleDiff(car.motionAngle ?? car.angle,car.angle))>.07;
 export const slidingResistance=(speed,slide,slip)=>Math.max(0,speed)*(.012*slide+.015*Math.sin(slip)**2);
-export function tyreRuleMet(car) {
-  return (
-    car.raceFormat==="sprint" ||
-    car.used.has("I") ||
-    car.used.has("W") ||
-    ["S", "M", "H"].filter((t) => car.used.has(t)).length >= 2
-  );
-}
+export {tyreRuleMet};
 export function updateTrackLimits(car, dt, distance) {
   const qualifying=car.qualifyingRun || car.qStart!==undefined;
   const timed=qualifying && car.qState==="timed" && Number.isFinite(car.qStart);
@@ -622,20 +616,20 @@ export function interpolatedCar(car,alpha=1) {
     angle:old.angle+angleDiff(car.angle,old.angle)*t,
     s:old.s+(car.s-old.s)*t,speed:old.speed+(car.speed-old.speed)*t};
 }
+function axleWear(car,axis) {
+  const wheels=car.wheelWear;
+  return wheels?.length===4 && Math.abs(wheels.reduce((a,b)=>a+b,0)/4-car.wear)<.001
+    ? (axis==="front" ? (wheels[0]+wheels[1])/2 : axis==="rear" ? (wheels[2]+wheels[3])/2 : car.wear) : car.wear;
+}
 export function grip(car, axis="all") {
   const t = TYRES[car.tyre];
-
-  const wheels=car.wheelWear;
-  const wear=wheels?.length===4 && Math.abs(wheels.reduce((a,b)=>a+b,0)/4-car.wear)<.001
-    ? (axis==="front" ? (wheels[0]+wheels[1])/2 : axis==="rear" ? (wheels[2]+wheels[3])/2 : car.wear) : car.wear;
-  const condition=tyreWearFactor(car.tyre,wear,level(car.upgrades,"tyres"));
+  const surface=tyreSurfaceGrip(car.tyre,car.trackWetness || 0,axleWear(car,axis),level(car.upgrades,"tyres"));
   return (
     t.grip *
     bankingGrip(car.s || 0) *
     thermalGrip(car,axis) *
-    condition *
+    surface *
     aeroGrip(car) *
-    tyreWeatherGrip(car.tyre, car.trackWetness || 0) *
     // Surface grip falls for every compound; tyre suitability remains separate.
     (1-.28*clamp(car.trackWetness || 0,0,1)**.8) *
     (Math.abs(car.offset || 0) > TRACK.width / 2 - 7
@@ -654,7 +648,7 @@ export function accelerationGrip(car,rearGrip=grip(car,"rear")) {
   const lateral=rearGrip*(1+level(car.upgrades,"suspension")*.025);
   if(!["I","W"].includes(car.tyre)) return lateral;
   const water=clamp(car.trackWetness || 0,0,1);
-  const suitability=tyreWeatherGrip(car.tyre,water);
+  const suitability=tyreWeatherGrip(car.tyre,water,axleWear(car,"rear"));
   const dryBoost=1-clamp(water/(car.tyre === "W" ? .45 : .2),0,1);
   const longitudinal=suitability+Math.max(0,.96-suitability)*dryBoost;
   return lateral*longitudinal/suitability;
@@ -905,6 +899,8 @@ export class Race {
     this.autoPitLimiter = true;
     this.nextTyre = setup.tyre === "M" ? "H" : "M";
     this.nextAeroSpec = this.player.aeroSpec;
+    this.pitTyreChoice = null;
+    this.pitAeroChosen = false;
     for(const car of this.cars){car.tyreTemperatureEnabled=setup.tyreTemperatureEnabled!==false;prepareTyres(car,null,true);}
     this.tyreTemperatureEnabled=setup.tyreTemperatureEnabled!==false;
     this.message = "Get ready. Find your braking points.";
@@ -931,6 +927,8 @@ export class Race {
   timingOrder() {
     const scores=new Map(this.cars.map(c=>[c,timingCoordinate(c,raceProgress(c),this.time)]));
     return this.order().sort((a,b)=>{
+      const dqA=a.finished && !tyreRuleMet(a), dqB=b.finished && !tyreRuleMet(b);
+      if(dqA!==dqB)return dqA ? 1 : -1;
       if(a.dnf!==b.dnf)return a.dnf ? 1 : -1;
       if(a.finished&&b.finished)return a.finishTime-b.finishTime;
       const sa=scores.get(a),sb=scores.get(b);
@@ -939,12 +937,37 @@ export class Race {
   }
   classification() {
     return [...this.cars].sort((a,b)=>{
+      const dqA=a.finished && !tyreRuleMet(a), dqB=b.finished && !tyreRuleMet(b);
+      if(dqA!==dqB)return dqA ? 1 : -1;
       if(a.finished && b.finished) return a.finishTime-b.finishTime;
       if(a.finished) return -1;
       if(b.finished) return 1;
       if(a.dnf!==b.dnf) return a.dnf ? 1 : -1;
       return raceProgress(b)-raceProgress(a) || a.gridPosition-b.gridPosition;
     });
+  }
+  selectRacePitTyre(compound,setId,{keep=false}={}) {
+    const car=this.player;
+    if(this.qualifying || this.done || car.pit || !TYRES[compound])return false;
+    if(keep){
+      compound=car.tyre;
+      setId=car.tyreSet?.id || "quick-current";
+    }else if(car.tyreInventory){
+      const set=selectableSets(car.tyreInventory,"R",car.tyreSet?.id).find(t=>t.id===setId && t.compound===compound);
+      if(!set)return false;
+    }
+    this.pitTyreChoice=keep ? "keep" : "replace";
+    this.nextSetId=setId || "quick-"+compound;
+    this.nextTyre=compound;
+    return true;
+  }
+  keepRaceAero() {
+    if(this.qualifying || this.done || this.player.pit)return;
+    this.pitAeroChosen=true;
+    this.nextAeroSpec=this.player.aeroSpec;
+  }
+  confirmPitPlan() {
+    if(this.pitTyreChoice && this.pitAeroChosen && !this.pitRequested)this.requestPit();
   }
   requestPit() {
     if (this.player.pit) return;
@@ -986,6 +1009,7 @@ export class Race {
     const c=this.player,p=c.pit;
     c.qExitRequested=false;
     this.nextAeroSpec=spec;
+    if(!this.qualifying)this.pitAeroChosen=true;
     if(p && !p.serviced && p.stage!=="service")p.nextAeroSpec=spec;
     if(p && (p.stage==="service" || c.garage)) {
       if((p.nextAeroSpec || c.aeroSpec)===spec)return true;
@@ -1024,9 +1048,10 @@ export class Race {
   }
   // Service setup is called only after tryEnterPit validates a forward crossing.
   enterPit(car) {
-    let nextSet = null;
+    const keepTyres=car.player && !this.qualifying && this.pitTyreChoice==="keep";
+    let nextSet = keepTyres ? car.tyreSet : null;
     const aiChoice=!car.player ? (!this.qualifying && car.ai.strategy.choice) || this.chooseAITyres(car,this.qualifying ? 3 : undefined)[0]?.set : null;
-    if (car.tyreInventory) {
+    if (car.tyreInventory && !keepTyres) {
       const available = selectableSets(car.tyreInventory,car.tyrePhase || "R",this.qualifying ? null : car.tyreSet?.id);
       const desired = car.player ? this.nextSetId : aiChoice?.id || (this.qualifying && car.tyre === car.weatherTarget ? car.tyreSet?.id : null);
       nextSet =
@@ -1070,7 +1095,8 @@ export class Race {
       startS: car.s - entryProgress,
       entryOffset,entryShiftX,entryShiftY,
       speeding: false,
-      nextTyre:
+      keepTyres,
+      nextTyre: keepTyres ? car.tyre :
         nextSet?.compound ||
         (car.player
           ? this.nextTyre
@@ -1135,11 +1161,20 @@ export class Race {
             if(this.weekend)this.weekend.setup.aeroSpec=car.aeroSpec;
           }
         }
-        car.tyre = p.nextTyre;
-        car.used.add(car.tyre);
-        car.wear = p.nextSet?.wear || 0;
-        car.tyreSet = p.nextSet || null;
-        if (p.nextSet !== p.previousSet || (!this.qualifying && !p.nextSet) || !car.tyreTemperatures) {car.tyreAge = 0;prepareTyres(car,p.nextSet);}
+        if(!p.keepTyres){
+          car.tyre = p.nextTyre;
+          car.used.add(car.tyre);
+          car.wear = p.nextSet?.wear || 0;
+          car.tyreSet = p.nextSet || null;
+          if (p.nextSet !== p.previousSet || (!this.qualifying && !p.nextSet) || !car.tyreTemperatures) {car.tyreAge = 0;prepareTyres(car,p.nextSet);}
+        }
+        if(car.player && !this.qualifying){
+          this.pitTyreChoice=null;
+          this.pitAeroChosen=false;
+          this.nextSetId=null;
+          this.nextTyre=car.tyre;
+          this.nextAeroSpec=car.aeroSpec;
+        }
         car.stops++;
         car.history.push({
           lap: Math.max(1, Math.floor(car.s / TRACK.length) + 1),
@@ -1153,7 +1188,7 @@ export class Race {
         p.serviced = true;
         if (car.player)
           this.say(
-            (this.qualifying && p.nextSet === p.previousSet ? "Fitted tyres retained. Limiter " : "Tyres fitted. Limiter ") +
+            ((p.keepTyres || this.qualifying && p.nextSet === p.previousSet) ? "Fitted tyres retained. Limiter " : "Tyres fitted. Limiter ") +
               (this.pitLimiter
                 ? this.autoPitLimiter ? "ON — releases automatically at exit." : "ON — release with L after exit."
                 : "OFF — keep below 80 in the lane."),
@@ -1231,7 +1266,7 @@ export class Race {
       ) {
         p.stage = "service";
         car.speed = 0;
-        p.serviceDuration=this.qualifying && p.nextSet===p.previousSet ? 2.3 : tyreServiceTime(car.upgrades.crew);
+        p.serviceDuration=p.keepTyres ? 0 : this.qualifying && p.nextSet===p.previousSet ? 2.3 : tyreServiceTime(car.upgrades.crew);
         p.aeroRemaining=p.nextAeroSpec && p.nextAeroSpec!==car.aeroSpec ? 10 : 0;
         p.aeroServiceSeconds=p.aeroRemaining;
         p.penaltyRemaining=car.penalty;
@@ -1239,7 +1274,7 @@ export class Race {
         car.penalty = 0;
         if (car.player)
           this.say(
-            this.qualifying && p.nextSet === p.previousSet ? "Stopped in the box. Refuelling; keeping fitted tyres — hold position." : "Stopped in the box. Tyre change in progress — hold position.",
+            p.keepTyres ? "Stopped in the box. Keeping the fitted tyres." : this.qualifying && p.nextSet === p.previousSet ? "Stopped in the box. Refuelling; keeping fitted tyres — hold position." : "Stopped in the box. Tyre change in progress — hold position.",
           );
       } else if (
         car.player &&
@@ -1338,13 +1373,13 @@ export class Race {
         if(sectorLap?.valid)car.bestLap = Math.min(car.bestLap, lapTime);
         car.lapStart = crossedAt;
         if (car.player && !tyreRuleMet(car) && newLap >= this.laps - 2)
-          this.say("Use a second dry compound before the finish.");
+          this.say("Use a second tyre compound before the finish.");
       }
       if (raceProgress(car) >= this.laps * TRACK.length) {
         car.finished = true;
         stopSectorLap(car);
         car.trackFinishTime=this.time;
-        car.finishTime = this.time + car.penalty + (!tyreRuleMet(car) ? 60 : 0);
+        car.finishTime = this.time + car.penalty;
         car.speed = 0;
       }
       // Crossing the finish takes precedence over stopping with an empty tank.
@@ -1519,7 +1554,10 @@ export class Race {
     if(this.time<plan.nextReview)return plan.pitRequested;
     this.strategyReviewedAt=this.time;
     plan.nextReview=this.time+Math.max(5,plan.reaction)+c.aiRandom()*4;
-    const context=this.aiStrategyContext(c,remaining),ranked=rankTyres(c,context),best=ranked[0];
+    // Leave another entrance available if traffic prevents a safe turn-in.
+    const mustChange=!tyreRuleMet(c) && remaining<3.25+plan.risk*.5;
+    const context=this.aiStrategyContext(c,remaining);
+    const best=rankTyres(c,{...context,requireNewCompound:mustChange})[0];
     const staying=planRaceStrategy(c,{...context,sets:availableAISets(c),current:{compound:c.tyre,wear:c.wear,id:c.tyreSet?.id}})[0];
     if(staying)plan.plannedMode=staying.mode;
     const family=tyre=>["I","W"].includes(tyre)?tyre:"dry";
@@ -1529,10 +1567,8 @@ export class Race {
     const wearRate=wearPerLap(c.tyre,TYRES,{mode:c.drive,upgrades:c.upgrades,wetness:water,
       stress:1+tyreSlipLoad(c)*.5,thermal:thermalWear(c)});
     const toEntry=wrap(TRACK.pitEntry-c.s,TRACK.length)/TRACK.length;
-    // Leave another entrance available if traffic prevents a safe turn-in.
-    const mustChange=!tyreRuleMet(c) && remaining<3.25+plan.risk*.5;
-    const currentGrip=TYRES[c.tyre].grip*tyreWeatherGrip(c.tyre,water)*tyreWearFactor(c.tyre,c.wear,level(c.upgrades,"tyres"));
-    const replacementGrip=TYRES[best.set.compound].grip*tyreWeatherGrip(best.set.compound,water)*tyreWearFactor(best.set.compound,best.set.wear,level(c.upgrades,"tyres"));
+    const currentGrip=TYRES[c.tyre].grip*tyreSurfaceGrip(c.tyre,water,c.wear,level(c.upgrades,"tyres"));
+    const replacementGrip=TYRES[best.set.compound].grip*tyreSurfaceGrip(best.set.compound,water,best.set.wear,level(c.upgrades,"tyres"));
     const usefulReplacement=replacementGrip>currentGrip*1.015 && (best.set.compound!==c.tyre || c.wear-best.set.wear>.06);
     // A fresh-set search can find a better *later* stint split than the bounded
     // keep-tyres search. That is not evidence to throw away healthy tyres now.
@@ -1550,7 +1586,7 @@ export class Race {
     // Near the flag a worn set can finish. Compare the recoverable lap time
     // with the actual stop loss, while keeping weather and compound rules.
     const finishWear=Math.min(1,c.wear+wearRate*remaining/2);
-    const finishGrip=TYRES[c.tyre].grip*tyreWeatherGrip(c.tyre,water)*tyreWearFactor(c.tyre,finishWear,level(c.upgrades,"tyres"));
+    const finishGrip=TYRES[c.tyre].grip*tyreSurfaceGrip(c.tyre,water,finishWear,level(c.upgrades,"tyres"));
     const remainingGain=remaining*context.lapTime*(Math.max(.08,finishGrip)**-.32-Math.max(.08,replacementGrip)**-.32);
     const canFinish=remaining<=3 && remainingGain<context.pitLoss;
     const tyreLife=!canFinish && usefulReplacement && (c.wear+wearRate*toEntry>strategyWearLimit(c,c.tyre) || (c.wear+wearRate>.98 && remaining>1.1));
@@ -1559,7 +1595,7 @@ export class Race {
     // Damp conditions can favour a different slick as well as Intermediates.
     // The surface-grip advantage must still repay the stop, regardless of age.
     const weatherAdvantage=family(best.set.compound)!==family(c.tyre) ||
-      tyreWeatherGrip(best.set.compound,water)>tyreWeatherGrip(c.tyre,water)*1.15;
+      tyreWeatherGrip(best.set.compound,water,best.set.wear)>tyreWeatherGrip(c.tyre,water,c.wear)*1.15;
     const weather=weatherAdvantage && usefulReplacement &&
       ((currentGrip<.52 && replacementGrip>currentGrip*1.35) || gain>context.pitLoss*(1.15+plan.risk*.35));
     const committed=plan.pitRequested && c.ai.pitEntryS!=null && c.ai.pitEntryS-c.s>=-80 && c.ai.pitEntryS-c.s<=900;

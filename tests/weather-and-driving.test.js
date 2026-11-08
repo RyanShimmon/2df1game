@@ -48,11 +48,19 @@ test("slicks, intermediates and wets each have a useful grip window", () => {
   assert.ok(g("I", 0.4) > g("S", 0.4) && g("I", 0.4) > g("W", 0.4));
   assert.ok(g("W", 0.9) > g("I", 0.9) && g("W", 0.9) > g("S", 0.9));
 });
-test("wet tyre use waives the dry compound requirement", () => {
-  const r = make();r.player.raceFormat="grandPrix";
-  assert.equal(tyreRuleMet(r.player), false);
-  r.player.used.add("I");
-  assert.equal(tyreRuleMet(r.player), true);
+test("a wet Grand Prix requires two distinct compounds for player and AI finish positions", () => {
+  const race=make(), player=race.player, rival=race.cars.find(car=>!car.player);
+  race.cars=[rival,player];
+  for(const car of race.cars)Object.assign(car,{raceFormat:"grandPrix",used:new Set(["W"]),finished:true});
+  rival.finishTime=100;
+  player.finishTime=200;
+  for(const car of race.cars)assert.equal(tyreRuleMet(car),false);
+  player.used.add("I");
+  assert.equal(tyreRuleMet(player),true);
+  assert.equal(race.raceField()[0].id,player.id);
+  assert.equal(race.timingOrder()[0],player);
+  rival.used.add("H");
+  assert.equal(race.raceField()[0].id,rival.id);
 });
 test("pit service requires stopping in the box and holds the car until complete", () => {
   const r = make(),

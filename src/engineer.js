@@ -1,8 +1,7 @@
-import {fuelPerLap,stintLaps,tyreWearFactor} from "./performance.js";
+import {fuelPerLap,stintLaps,tyreSurfaceGrip} from "./performance.js";
 import {thermalWear} from "./tyre-temperature.js";
 import {fuelMultiplier,level,tyreServiceSeconds} from "./development.js";
 import {forecastWater} from "./racecraft.js";
-import {tyreWeatherGrip} from "./weather.js";
 import {selectableSets} from "./tyre-stock.js";
 export function engineerReport(race,{track,pitLane,tyres,progress,basePitLoss}){
  const p=race.player,lvl=level(p.upgrades,"engineer"),items=[];
@@ -19,9 +18,9 @@ export function engineerReport(race,{track,pitLane,tyres,progress,basePitLoss}){
   const family=t=>["I","W"].includes(t) ? t : "dry";
   let peak=water,driest=water;
   for(let seconds=0;seconds<=180;seconds+=10){
-   const w=forecastWater(race.weather,seconds),current=tyres[p.tyre].grip*tyreWeatherGrip(p.tyre,w);
+   const w=forecastWater(race.weather,seconds),current=tyres[p.tyre].grip*tyreSurfaceGrip(p.tyre,w,p.wear,level(p.upgrades,"tyres"));
    peak=Math.max(peak,w);driest=Math.min(driest,w);
-   const best=sets.map(set=>({set,grip:tyres[set.compound].grip*tyreWeatherGrip(set.compound,w)*tyreWearFactor(set.compound,set.wear,level(p.upgrades,"tyres"))})).sort((a,b)=>b.grip-a.grip)[0];
+   const best=sets.map(set=>({set,grip:tyres[set.compound].grip*tyreSurfaceGrip(set.compound,w,set.wear,level(p.upgrades,"tyres"))})).sort((a,b)=>b.grip-a.grip)[0];
    if(best && family(best.set.compound)!==family(p.tyre) && best.grip>current*1.16){crossover={seconds,compound:best.set.compound};break;}
   }
   const noWet=family(p.tyre)==="dry" && peak>.25 && !sets.some(s=>["I","W"].includes(s.compound));

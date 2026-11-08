@@ -1,8 +1,6 @@
-import {paceMode,fuelPerLap,wearPerLap,tyreWearFactor,usefulWear} from './performance.js';
-import {tyreWeatherGrip} from './weather.js';
+import {compoundBit,usedCompoundMask,meetsCompoundRule} from "./race-rules.js";
+import {paceMode,fuelPerLap,wearPerLap,tyreSurfaceGrip,usefulWear} from './performance.js';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const maskFor=compound=>({S:1,M:2,H:4,I:8,W:8}[compound] || 0);
-const legal=mask=>(mask&8)!==0 || ((mask&7)!==0 && ((mask&7)&((mask&7)-1))!==0);
 export const strategyWearLimit=(car,compound)=>Math.min(usefulWear(compound)+.04,car.ai?.strategy?.wearLimit ?? .86);
 // A bounded whole-race search. Every branch spends a physical set, fuel and
 // pit time; a compound's fresh-lap pace cannot stand in for a complete stint.
@@ -20,7 +18,7 @@ export function planRaceStrategy(car,{tyres,sets,remaining,water,futureWater,lap
   return openingPlans.get(key).map(p=>({...p,set:sets.find(s=>s.compound===p.set.compound),plan:p.plan.map(s=>({...s,set:sets.find(t=>t.compound===s.set.compound)})),score:p.score+(car.ai?.strategy?.compoundBias?.[p.set.compound] || 0)*lapTime})).sort((a,b)=>a.score-b.score);
  }
  const strategy=car.ai?.strategy || {},total=Math.max(.1,remaining),unlimited=!car.tyreInventory;
- const initialMask=starting ? 0 : [...(car.used || [])].reduce((mask,t)=>mask|maskFor(t),0);
+ const initialMask=starting ? 0 : usedCompoundMask(car.used);
  const horizon=Math.max(1,(strategy.forecastHorizon || 60)/lapTime);
  const projectedWater=lap=>clamp(water+(futureWater-water)*Math.min(1,lap/horizon),0,1);
  const baseFuel=Number.isFinite(car.fuel)?car.fuel:total*1.15;
@@ -55,7 +53,7 @@ export function planRaceStrategy(car,{tyres,sets,remaining,water,futureWater,lap
         const step=Math.min(1,duration-travelled),wet=projectedWater(state.done+travelled+step/2);
         const wearRate=wearPerLap(set.compound,tyres,{mode,upgrades:car.upgrades,wetness:wet});
         const midWear=wear+wearRate*step/2;
-        const g=tyres[set.compound].grip*tyreWeatherGrip(set.compound,wet)*tyreWearFactor(set.compound,midWear,car.upgrades?.tyres);
+        const g=tyres[set.compound].grip*tyreSurfaceGrip(set.compound,wet,midWear,car.upgrades?.tyres);
         const pace=paceMode(mode),modeTime=pace.power**-.18*pace.top**-.20;
         time+=step*lapTime*Math.max(.75,Math.pow(1/Math.max(.08,g),.32))*modeTime;
         fuel+=step*fuelPerLap(mode,car.upgrades);
@@ -66,9 +64,9 @@ export function planRaceStrategy(car,{tyres,sets,remaining,water,futureWater,lap
        const stop=state.stints.length ? pitLoss : 0;
        const preference=(strategy.compoundBias?.[set.compound] || 0)*lapTime*duration;
        const stints=[...state.stints,{set,mode,laps:duration,endWear:wear}];
-       const next={time:state.time+time+stop+preference,done:state.done+duration,fuel:state.fuel-fuel,mask:state.mask|maskFor(set.compound),available,stints};
+       const next={time:state.time+time+stop+preference,done:state.done+duration,fuel:state.fuel-fuel,mask:state.mask|compoundBit(set.compound),available,stints};
        if(finished){
-        if(car.raceFormat!=='sprint' && !legal(next.mask))continue;
+        if(!meetsCompoundRule(car.raceFormat,next.mask))continue;
         if(!best || next.time<best.time)best=next;
        }else if(available.length)expanded.push(next);
       }
@@ -81,7 +79,7 @@ export function planRaceStrategy(car,{tyres,sets,remaining,water,futureWater,lap
    beam=expanded.slice(0,6);
   }
   if(best)outputs.push({set:first,score:best.time/total,totalTime:best.time,stops:best.stints.length-1,plan:best.stints,
-   mode:best.stints[0].mode,stint:best.stints[0].laps,usable:Math.max(0,strategyWearLimit(car,first.compound)-(first.wear || 0))/wearPerLap(first.compound,tyres,{mode:best.stints[0].mode,upgrades:car.upgrades,wetness:water}),grip:tyres[first.compound].grip*tyreWeatherGrip(first.compound,water)});
+   mode:best.stints[0].mode,stint:best.stints[0].laps,usable:Math.max(0,strategyWearLimit(car,first.compound)-(first.wear || 0))/wearPerLap(first.compound,tyres,{mode:best.stints[0].mode,upgrades:car.upgrades,wetness:water}),grip:tyres[first.compound].grip*tyreSurfaceGrip(first.compound,water,first.wear,car.upgrades?.tyres)});
  }
  return outputs.sort((a,b)=>a.score-b.score || String(a.set.id).localeCompare(String(b.set.id)));
 }

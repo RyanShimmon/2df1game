@@ -13,8 +13,8 @@ test('new careers receive independent twelve-event orders, each retained across 
  for(let round=1;round<=12;round++){
   saved.round=round;assert.equal(careerSchedule(saved).track,a.seasonOrder[round-1]);
   const w=createWeekend(saved,{tyre:'M',aiSeed:42});migrateWeekend(w);
-  const event=WEEKENDS.find(e=>e.track===a.seasonOrder[round-1]);
-  assert.equal(w.setup.track,event.track);assert.equal(w.setup.laps,event.laps);assert.equal(w.setup.raceFormat,event.raceFormat || 'grandPrix');assert.ok(['dry',event.weather].includes(w.setup.weather));
+  const event=careerSchedule(saved);
+  assert.equal(w.setup.track,event.track);assert.equal(w.setup.laps,event.laps);assert.equal(w.setup.raceFormat,event.raceFormat || 'grandPrix');assert.equal(w.setup.laps,[2,6,10].includes(round)?12:24);
  }
 });
 test('a season rollover reshuffles once, with no duplicate or missing circuits',t=>{
@@ -28,6 +28,8 @@ test('a season rollover reshuffles once, with no duplicate or missing circuits',
 });
 test('legacy saves retain completed rounds and an active weekend while future rounds shuffle',()=>{
  const c=newCareer(profile,{seasonOrder:WEEKENDS.map(w=>w.track)});c.round=4;c.weekend=createWeekend(c,{tyre:'S',aiSeed:42});
+ Object.assign(c.weekend.setup,{laps:12,raceFormat:'sprint',fuel:14});
+ c.weekend.eventName='Harbour Sprint';
  const before=structuredClone(c.weekend);delete c.seasonOrder;delete c.calendarSeason;delete c.weekend.seasonOrder;
  const loaded=loadCareer({getItem:()=>JSON.stringify(c)});migrateWeekend(loaded.weekend);
  assert.ok(validSeasonOrder(loaded.seasonOrder));assert.deepEqual(loaded.seasonOrder.slice(0,4),WEEKENDS.slice(0,4).map(w=>w.track));

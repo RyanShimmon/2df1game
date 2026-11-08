@@ -27,7 +27,7 @@ function completeCareer(position,difficulty='normal'){
 test('a strong player completes all upgrades in about three seasons without sponsors',()=>{
  const podium=completeCareer(3),wins=completeCareer(1),points=completeCareer(10);
  assert.ok(podium.races>=34&&podium.races<=38,JSON.stringify(podium));
- assert.ok(wins.races>=33&&wins.races<=36,JSON.stringify(wins));
+ assert.ok(wins.races>=33&&wins.races<=37,JSON.stringify(wins));
  assert.ok(points.races>=40&&points.races<=44,JSON.stringify(points));
  assert.ok(podium.first>=2,'opening money buys useful early choices');
  assert.ok(podium.maxWait<=3,'late upgrades remain attainable within a few races');

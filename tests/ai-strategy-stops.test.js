@@ -81,12 +81,16 @@ test('a withdrawn speculative stop is cancelled before the approach, but a commi
  }
 });
 
-test('dry compound rules remain enforced for Grands Prix, without an unnecessary Sprint stop',()=>{
+test('a compulsory stop picks an unused compound in wet and dry Grands Prix, while Sprints can stay out',()=>{
  const r=race(),c=r.cars[0];
- for(const format of ['grandPrix','sprint']){
-  fit(r,c,{tyre:'H',age:10,wear:.4,fuel:3});c.raceFormat=format;
+ for(const [tyre,water] of [['H',0],['W',1],['I',.4]])for(const finite of [false,true])for(const format of ['grandPrix','sprint']){
+  fit(r,c,{tyre,water,age:10,wear:.4,fuel:3,finite});c.raceFormat=format;
   assert.equal(r.reviewAIStrategy(c,1.5),format==='grandPrix');
-  if(format==='grandPrix'){assert.equal(c.ai.strategy.reason,'compound rule');assert.notEqual(c.ai.strategy.choice.compound,'M');}
+  if(format==='grandPrix'){
+   assert.equal(c.ai.strategy.reason,'compound rule');
+   assert.notEqual(c.ai.strategy.choice.compound,tyre);
+   if(tyre==='W')assert.equal(c.ai.strategy.choice.compound,'I');
+  }
  }
 });
 

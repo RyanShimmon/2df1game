@@ -23,11 +23,11 @@ test('briefing distinguishes rainfall from the wet track that remains after rain
  assert.equal(f.segments[0].tyre,'W');assert.ok(f.segments.some(s=>s.tyre==='I'));
  assert.equal(f.segments.at(-1).tyre,'M');
 });
-test('Harbour briefing uses the same saved race weather that reaches the actual starting grid',()=>{
- const c=newCareer({driverName:'Forecast',teamIndex:2});c.round=4;const w=createWeekend(c,{tyre:'S',aiSeed:42});
+test('Sprint briefing uses the same saved race weather that reaches the actual starting grid',()=>{
+ const c=newCareer({driverName:'Forecast',teamIndex:2});c.round=2;const w=createWeekend(c,{tyre:'S',aiSeed:42});
  for(let stage=0;stage<3;stage++){for(const [i,id] of w.active.entries())recordLap(w,id,id===21?25:30+i,10+i);finishQualifyingStage(w,c.upgrades,c.profile);}
  startRaceWeather(w);const before=structuredClone(w.weather),brief=raceForecast(w.weather,{duration:w.setup.weatherDuration,laps:w.setup.laps});
- assert.ok(brief.segments.length);assert.equal(w.setup.laps,12);assert.ok(['dry','dynamic'].includes(w.setup.weather));
+ assert.ok(brief.segments.length);assert.equal(w.setup.laps,12);assert.equal(w.setup.weather,w.weather.scenario);
  const r=new Race(w.setup,c.upgrades,'career',c.profile);prepareRace(r,w,'M1');
  assert.deepEqual(r.weather,before);assert.deepEqual(raceForecast(r.weather,{duration:w.setup.weatherDuration,laps:w.setup.laps}),brief);
 });

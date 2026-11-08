@@ -6,7 +6,7 @@ import {outstandingPenalty} from "./timing.js";
 const fields=["gridPosition","tyre","wear","wheelWear","tyreTemperatures","tyreAge","aeroSpec","drive",
   "stops","history","contacts","penalties","penaltySecondsTotal","trackLimits","lastLap",
   "finished","dnf","finishTime","trackFinishTime","nonStartReason","weatherPitTime"];
-const raceFields=["time","weather","sectors","nextTyre","nextSetId","nextAeroSpec","pitRequested","difficulty"];
+const raceFields=["time","weather","sectors","nextTyre","nextSetId","nextAeroSpec","pitTyreChoice","pitAeroChosen","pitRequested","difficulty"];
 const pick=(object,keys)=>Object.fromEntries(keys.filter(key=>object[key]!==undefined).map(key=>[key,object[key]]));
 
 export function raceSnapshot(race){

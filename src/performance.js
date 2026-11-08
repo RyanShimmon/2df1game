@@ -1,3 +1,5 @@
+import {tyreWeatherGrip} from "./weather.js";
+
 // Shared by the physics, strategy planner and driver-facing estimates.
 // Mechanical grip dominates below 80 km/h. Aero builds smoothly through
 // medium-speed bends and reaches its full package effect at 280 km/h.
@@ -44,6 +46,9 @@ export function tyreWearFactor(compound,wear,engineering=0){
  const normalLoss=profile[0]*used**profile[1];
  const lateLoss=(.23-profile[0])*late*late*(3-2*late);
  return 1-normalLoss-lateLoss;
+}
+export function tyreSurfaceGrip(compound,water,wear=0,engineering=0){
+ return tyreWeatherGrip(compound,water,wear)*tyreWearFactor(compound,wear,engineering);
 }
 export const usefulWear=compound=>({S:.73,M:.86,H:.90,I:.86,W:.86}[compound] || .86);
 export function tyrePaceWear(compound,mode){

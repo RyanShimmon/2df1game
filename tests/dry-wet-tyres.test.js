@@ -13,6 +13,25 @@ test('dry intermediates and wets have strong longitudinal grip without gaining c
  for(const [tyre,water] of [['W',1],['I',.5],['S',0],['M',0],['H',0]])
   assert.equal(accelerationGrip(car(tyre,water)),grip(car(tyre,water)));
 });
+test('worn grooves lose water clearance progressively, while worn rain tyres stay usable on dry asphalt',()=>{
+ const g=(tyre,water,wear)=>grip({...car(tyre,water),wear,tyreTemperatureEnabled:false});
+ for(const tyre of ['I','W']){
+  for(const water of [.4,.8,1]){
+   let last=g(tyre,water,0);
+   for(let i=1;i<=100;i++){
+    const current=g(tyre,water,i/100);
+    assert.ok(current<=last && current>last-.025);
+    last=current;
+   }
+   assert.ok(last/g(tyre,water,0)<g('M',0,1)/g('M',0,0));
+  }
+  assert.ok(g(tyre,0,.8)>g(tyre,0,0));
+  assert.ok(g(tyre,0,1)>.70*g('M',0,0) && g(tyre,0,1)<g('M',0,0));
+ }
+ assert.ok(g('W',1,0)>g('I',1,0));
+ assert.ok(g('W',1,1)<g('I',1,0));
+ assert.ok(g('W',1,1)>g('I',1,1));
+});
 test('dry wet tyres accelerate close to mediums through actual player inputs',()=>{
  const speeds={};
  for(const tyre of ['M','I','W']) {
@@ -30,6 +49,6 @@ test('dry asphalt wears wets faster than intermediates and both faster than thei
  assert.ok(wear('I',0)>wear('I',.5)*2.3);
 });
 test('career calendar uses 24-lap Grands Prix and 12-lap Sprints and retains the sprint format',()=>{
- assert.equal(WEEKENDS.length,12);assert.equal(WEEKENDS.filter(w=>w.laps===24).length,11);
- assert.equal(WEEKENDS[0].laps,24);assert.equal(WEEKENDS[3].raceFormat,"sprint");
+ assert.equal(WEEKENDS.length,12);assert.equal(WEEKENDS.filter(w=>w.laps===24).length,9);
+ assert.equal(WEEKENDS[0].laps,24);assert.deepEqual(WEEKENDS.flatMap((w,i)=>w.laps===12 && w.raceFormat==="sprint" ? [i+1] : []),[2,6,10]);
 });

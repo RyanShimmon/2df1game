@@ -1,6 +1,6 @@
 # V10 — Grand Prix
 
-Version **1.14.0**.
+Version **1.15.0**.
 
 Refreshing the same tab resumes a race on the interrupted lap with a standing start and a fuel credit for the distance replayed. Restarting from the pause menu restores the original race setup and costs five grid places per restart. Each place beyond P22 adds one penalty second. Both features apply to Career and Quick Race, including Sprints. Skid trails now have smooth joins.
 
@@ -43,7 +43,7 @@ Soft tyres are fastest but last roughly 9 race laps; mediums 13; hards 19. Actua
 
 Fuel is expressed in fuel laps. Balanced driving uses approximately 1.1 per circuit lap. Save reduces pace, fuel use and wear; push trades resources for speed. Fuel weight reduces pace. There is no battery or race refuelling.
 
-Dry races require two different dry compounds. Using intermediate or wet tyres waives that requirement. Qualifying compounds do not count toward race tyre usage.
+Every Grand Prix requires two different tyre compounds. A stint on Wets and another on Intermediates counts, even if it rains the whole race. Qualifying compounds do not count toward race tyre usage.
 
 ## Weather
 
@@ -75,8 +75,8 @@ Career race distance is fixed by the weekend, not selected by the player:
 
 | Format | Career laps | Tyre rule |
 | --- | --- | --- |
-| Grand Prix | 24 | Two dry compounds, unless Intermediates or Wets are used |
-| Harbour Sprint | 12 | No compulsory tyre change |
+| Grand Prix | 24 | Two different tyre compounds in all conditions |
+| Sprint (rounds 2, 6 and 10) | 12 | No compulsory tyre change |
 
 Quick Race offers 12, 16, 24, 32 and 40 laps.
 
@@ -253,7 +253,7 @@ Grand Prix preparation includes a Weather forecast popup covering the expected r
 
 ### Pace and race strategy
 
-Career Grands Prix are fixed at 24 laps; Harbour Sprint runs 12 laps with dynamically varied weather. Quick Race offers 12 (Sprint), 16, 24, 32 and 40 laps. Sprints award 8–1 points to the first eight and do not require a compound change. Grand Prix points and dry-compound rules remain in force elsewhere. Saved weekends migrate to the fixed distance while preserving qualifying classification and physical tyre wear.
+Career Grands Prix are fixed at 24 laps; rounds 2, 6 and 10 are 12-lap Sprints with varied weather. Quick Race offers 12 (Sprint), 16, 24, 32 and 40 laps. Sprints award 8–1 points to the first eight and do not require a compound change. Grand Prix points and two-compound rules remain in force elsewhere. Saved weekends migrate to the fixed distance while preserving qualifying classification and physical tyre wear.
 
 `performance.js` defines the shared power maps, fuel estimates and compound-specific wear curves. Save/Balanced/Push have power multipliers 0.88/1/1.08, speed ceilings 0.94/1/1.02, fuel multipliers 0.90/1/1.12 and base wear multipliers 0.82/1/1.20. Pace ceilings apply after the engine ceiling, before aero and drafting; upgrades cannot erase their differences. Smooth throttle ramps differ by mode, lifting is immediate, and heat comes from delivered power and driving loads. Temperature-off still preserves power, fuel and wear effects.
 
@@ -299,7 +299,7 @@ Leaving the player parked on the Northline grid can cause an AI queue as cars re
 
 Three unlabelled sector bars form the bottom row of the top telemetry. Engineer radio messages have their own box immediately below it. Sector times appear over their bar for 3.5 seconds at a crossing without reserving an empty row; the coloured results persist through qualifying in/out laps, garage work and saved outings until another timed sector replaces them. Each qualifying stage and the race keep independent records. A track-limit breach greys only the affected sector; later clean sectors still show purple (session best), green (personal improvement) or yellow (no improvement), while the invalid lap remains excluded from best laps and qualifying results.
 
-Varied quick races have a 65% fully dry chance. Career weather tendencies also receive a 65% dry override, giving roughly three quarters of scheduled weekends fully dry conditions; dynamic dry weekends are decided once before qualifying and stay dry for the race. Explicit wet quick-race choices and existing saved forecasts keep their conditions.
+Varied Quick Races have an even chance of rain. Light rain is the most common individual wet scenario. Career circuits with a dry tendency have a 20% chance of intermediate conditions. Other career events have a 50% chance of rain. The forecast is seeded before qualifying.
 
 The bottom forecast shows a continuous projected track-wetness curve for the next six minutes, with weather icons above it and a current wetness/trend summary. Rainfall and surface water remain distinct: icons show rain while the curve follows the same water accumulation and drying model used by the race.
 

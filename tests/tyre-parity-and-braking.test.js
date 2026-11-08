@@ -153,5 +153,5 @@ test('real wet-weather braking follows suitability and wear for Intermediate and
  assert.ok(stop({tyre:'I',water:.35}).distance<stop({tyre:'W',water:.35}).distance);
  assert.ok(stop({tyre:'W',water:.85}).distance<stop({tyre:'I',water:.85}).distance);
  for(const [tyre,water] of [['I',.35],['W',.85]])
-  {const ratio=stop({tyre,water,wear:.97}).distance/stop({tyre,water}).distance;assert.ok(ratio>1.2 && ratio<1.35);}
+  {const ratio=stop({tyre,water,wear:.97}).distance/stop({tyre,water}).distance;assert.ok(ratio>1.5 && ratio<2.6, tyre+' wet stopping distance ratio '+ratio);}
 });

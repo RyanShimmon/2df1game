@@ -30,7 +30,9 @@ test(`${better}/${worse} at ${water*100}% water: same-condition corner, braking 
  const a=limits(better),b=limits(worse);for(const key of Object.keys(a))assert.ok(a[key]>b[key],key);
  c.tyre=better;c.wear=.98;c.wheelWear=Array(4).fill(.98);
  const worn=brakingDeceleration(c);
- assert.ok(worn<a.brake*.85 && worn>a.brake*.75,'worn tyre retains controlled braking in its own conditions');
+ const retained=worn/a.brake;
+ if(water)assert.ok(retained>.40 && retained<.65,'worn grooves lose braking grip in water');
+ else assert.ok(retained>.75 && retained<.85,'a worn dry slick retains mechanical braking grip');
  if(!water)assert.ok(worn<b.brake,'fresh harder slick beats the worn softer slick');
 });
 function velocityLap(tyre){

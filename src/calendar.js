@@ -1,19 +1,28 @@
-// Event definitions stay attached to their circuit when a season is shuffled.
-export const WEEKENDS = [
-  {name:"Northline Opener", track:"northline", laps:24, weather:"showers"},
-  {name:"Velocity Trophy", track:"velocity", laps:24, weather:"wetToDry"},
-  {name:"Sunset Grand Prix", track:"sunset", laps:24, weather:"dry"},
-  {name:"Harbour Sprint", raceFormat:"sprint", track:"harbour", laps:12, weather:"dynamic"},
-  {name:"Crossover Challenge", track:"crossover", laps:24, weather:"dynamic"},
-  {name:"Alpine Grand Prix", track:"alpine", laps:24, weather:"sustainedRain"},
-  {name:"Dunes Grand Prix", track:"dunes", laps:24, weather:"dry"},
-  {name:"Forest Run", track:"forest", laps:24, weather:"intermediate"},
-  {name:"Riviera Grand Prix", track:"riviera", laps:24, weather:"dry"},
-  {name:"Metro Grand Prix", track:"metro", laps:24, weather:"showers"},
-  {name:"Canyon Grand Prix", track:"canyon", laps:24, weather:"dynamic"},
-  {name:"Aurora Finale", track:"aurora", laps:24, weather:"dynamic"},
+// Circuit order is shuffled. The format is set by the round in the season.
+const events = [
+  {name:"Northline Opener", track:"northline", weather:"showers"},
+  {name:"Velocity Trophy", track:"velocity", weather:"wetToDry"},
+  {name:"Sunset Grand Prix", track:"sunset", weather:"dry"},
+  {name:"Harbour Grand Prix", track:"harbour", weather:"dynamic"},
+  {name:"Crossover Challenge", track:"crossover", weather:"dynamic"},
+  {name:"Alpine Grand Prix", track:"alpine", weather:"sustainedRain"},
+  {name:"Dunes Grand Prix", track:"dunes", weather:"dry"},
+  {name:"Forest Run", track:"forest", weather:"intermediate"},
+  {name:"Riviera Grand Prix", track:"riviera", weather:"dry"},
+  {name:"Metro Grand Prix", track:"metro", weather:"showers"},
+  {name:"Canyon Grand Prix", track:"canyon", weather:"dynamic"},
+  {name:"Aurora Finale", track:"aurora", weather:"dynamic"},
 ];
-export const SEASON_LENGTH=WEEKENDS.length;
+export const SEASON_LENGTH=events.length;
+const sprintRounds=new Set([2,6,10]);
+export function weekendSchedule(round,order,formatOverride) {
+ const index=(round-1)%SEASON_LENGTH;
+ const event=events.find(candidate=>candidate.track===order?.[index]) || events[index];
+ const format=formatOverride ?? (sprintRounds.has(index+1) ? "sprint" : "grandPrix");
+ if(format==="sprint")return {...event,name:event.name.split(" ")[0]+" Sprint",raceFormat:format,laps:12,weather:"dynamic"};
+ return {...event,raceFormat:format,laps:24};
+}
+export const WEEKENDS=events.map((event,index)=>weekendSchedule(index+1));
 export const validSeasonOrder=order=>Array.isArray(order) && order.length===SEASON_LENGTH && new Set(order).size===SEASON_LENGTH && order.every(id=>WEEKENDS.some(w=>w.track===id));
 export function shuffledSeasonOrder(previous=[],random=Math.random){
  const order=WEEKENDS.map(w=>w.track);
@@ -37,8 +46,7 @@ export function ensureSeasonOrder(career){
  }
  career.calendarSeason=career.season;return career.seasonOrder;
 }
-export const weekendSchedule=(round,order)=>WEEKENDS.find(w=>w.track===order?.[(round-1)%SEASON_LENGTH]) || WEEKENDS[(round-1)%SEASON_LENGTH];
-export const careerSchedule=career=>weekendSchedule(career.round,ensureSeasonOrder(career));
+export const careerSchedule=career=>weekendSchedule(career.round,ensureSeasonOrder(career),career.weekend?.setup?.raceFormat);
 export const careerRound=career=>(career.season-1)*SEASON_LENGTH+career.round;
 export function migrateCalendar(career){
   ensureSeasonOrder(career);

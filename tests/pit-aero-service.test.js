@@ -145,3 +145,31 @@ test('Aurora: a full-field outing, aero change and one departure click clear the
  for(let i=0;i<1800&&p.pit;i++)q.step(1/60,{});
  assert.equal(p.garage,false);assert.equal(p.pit,null);assert.equal(p.qState,'out');
 });
+
+for(const mode of ['quick','career'])test(mode+': an aero-only race stop retains the fitted tyres and clears both choices after service',()=>{
+ const r=new Race(setup,{aero:1},mode,profile),p=r.player;
+ if(mode==='career'){
+  const career=newCareer(profile);career.upgrades.aero=1;
+  const w=createWeekend(career,setup);w.phase='R';w.grid=w.active.slice();prepareRace(r,w,'S1');
+ }
+ r.cars=[p];
+ const current=p.tyreSet;
+ p.wear=.48;p.wheelWear.fill(.48);if(current)current.wear=.48;
+ r.selectAero('lowDrag');r.confirmPitPlan();assert.equal(r.pitRequested,false);
+ r.selectRacePitTyre(p.tyre,null,{keep:true});r.confirmPitPlan();assert.equal(r.pitRequested,true);
+ box(r);assert.equal(p.pit.timer,10);
+ const wear=p.wear,wheels=p.wheelWear.slice(),age=p.tyreAge;
+ wait(r,10.01);
+ assert.equal(p.tyreSet,current);assert.equal(p.wear,wear);assert.deepEqual(p.wheelWear,wheels);assert.equal(p.tyreAge,age);
+ assert.equal(p.used.size,1);assert.equal(p.aeroSpec,'lowDrag');assert.equal(p.stops,1);
+ assert.equal(r.pitTyreChoice,null);assert.equal(r.pitAeroChosen,false);
+});
+test('locked career aero can be kept while fitting another set of the same compound',()=>{
+ const career=newCareer(profile),w=createWeekend(career,setup);
+ w.phase='R';w.grid=w.active.slice();
+ const r=new Race(w.setup,career.upgrades,'career',profile);prepareRace(r,w,'S1');r.cars=[r.player];
+ assert.equal(r.selectAero('downforce'),false);
+ assert.ok(r.selectRacePitTyre('S','S2'));r.keepRaceAero();r.confirmPitPlan();
+ assert.ok(r.pitRequested);box(r);approx(r.player.pit.timer,4.3);
+ wait(r,4.31);assert.equal(r.player.tyreSet.id,'S2');assert.equal(r.player.used.size,1);
+});

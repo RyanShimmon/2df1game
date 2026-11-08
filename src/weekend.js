@@ -21,15 +21,17 @@ export {WEEKENDS,weekendSchedule,careerSchedule} from "./calendar.js";
 export function migrateWeekend(w) {
   if (!w) return;
   if(w.setup && !w.setup.track) w.setup.track="northline";
+  // A weekend already in progress keeps its format, distance and forecast.
+  // Before formats were saved, Harbour was the only Sprint.
+  if(w.setup)w.setup.raceFormat ??= w.setup.track==="harbour" ? "sprint" : "grandPrix";
   if(w.setup && w.distanceVersion!==3){
     const ratio=Math.max(.85,Math.min(1.35,(w.setup.fuel || 0)/(w.setup.laps || 24)));
-    const laps=weekendSchedule(w.round,w.seasonOrder).laps;
+    const laps=w.setup.raceFormat==="sprint" ? 12 : 24;
     w.setup.laps=laps;w.setup.fuel=+(laps*ratio).toFixed(1);
     w.setup.weatherDuration=raceWeatherDuration(w.setup.laps,makeTrack(circuitById(w.setup.track)).length);
     if(w.phase==="R")w.raceWeatherReady=false;
     w.distanceVersion=3;
   }
-  if(w.setup)w.setup.raceFormat=weekendSchedule(w.round,w.seasonOrder).raceFormat || "grandPrix";
   if(w.setup?.playerUpgrades && !aeroUnlocked(w.setup.playerUpgrades))w.setup.aeroSpec="balanced";
   if(w.setup) w.setup.difficulty=normalizeDifficulty(w.setup.difficulty);
   if(w.setup && !Number.isInteger(w.setup.aiSeed)) w.setup.aiSeed=Math.floor(Math.random()*2147483646)+1;
@@ -45,7 +47,7 @@ export function migrateWeekend(w) {
       }
   w.tyreModelVersion = 2;
   if (!w.eventName) {
-    const schedule = weekendSchedule(w.round,w.seasonOrder);
+    const schedule = weekendSchedule(w.round,w.seasonOrder,w.setup?.raceFormat);
     const ratio = Math.max(
       0.85,
       Math.min(1.35, (w.setup?.fuel || 0) / (w.setup?.laps || schedule.laps)),

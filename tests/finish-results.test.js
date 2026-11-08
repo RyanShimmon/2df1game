@@ -16,6 +16,7 @@ test('coasting across the finish with zero fuel is a legal win, never a DNF',()=
 });
 test('zero-fuel finish waits for time penalties and retains the corrected classification',()=>{
  const r=nearFinish({penalty:5}),p=r.player,other=new Race({track:'northline',laps:1,fuel:2,tyre:'M'}).cars[0];
+ other.used=new Set(["M","H"]);
  r.cars=[p,other];r.step(1/60,{});assert.ok(p.finished);assert.equal(p.dnf,false);assert.equal(r.done,false);
  Object.assign(other,{finished:true,finishTime:r.time+2,trackFinishTime:r.time+2,s:TRACK.length});
  for(let i=0;i<310&&!r.done;i++)r.step(1/60,{});

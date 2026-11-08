@@ -2011,3 +2011,10 @@ body:not(.mobile-game) .tower:not(.qualifying-tower) :is(.gap,.stop-count,.compo
 .difficulty-status { color:var(--lime); font-size:12px; margin:12px 0 0; }
 
 .restart-race { width:100%; margin-top:12px; }
+
+.pit-plan-modal { width:min(440px,92vw); }
+.pit-plan-row { display:grid; grid-template-columns:1fr auto; gap:8px; margin:12px 0; }
+.pit-plan-row button:first-child { display:grid; gap:3px; text-align:left; }
+.pit-plan-row small { color:var(--muted); }
+.pit-plan-row [aria-pressed="true"] { border-color:var(--accent); }
+.pit-plan-modal .primary { width:100%; margin-top:8px; }
