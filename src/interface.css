@@ -32,7 +32,7 @@ body:not(.mobile-game) .tabs .tab.active { background:#ff644e13; border-color:#f
 body:not(.mobile-game) .tabs .tab.active .ui-icon { color:var(--accent); }
 body:not(.mobile-game) :is(.ghost,.tab) { background:var(--surface); color:#e1e3e9; border:1px solid #ffffff1c; border-radius:6px; font-size:12px; }
 body:not(.mobile-game) :is(.ghost,.tab):hover { background:var(--surface-hover); border-color:#ffffff45; }
-body:not(.mobile-game) .primary { min-height:44px; padding:13px 20px; border-radius:6px; background:var(--accent); color:#100f10; letter-spacing:.5px; font-size:12px; font-weight:800; }
+body:not(.mobile-game) .primary { justify-content:center; text-align:center; gap:8px; min-height:44px; padding:13px 20px; border-radius:6px; background:var(--accent); color:#100f10; letter-spacing:.5px; font-size:12px; font-weight:800; }
 body:not(.mobile-game) .primary:hover:not(:disabled) { background:#ff8a73; box-shadow:0 4px 20px #ff644e22; }
 body:not(.mobile-game) :is(.panel,.race-card) { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:24px; }
 body:not(.mobile-game) .quick-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(400px,540px); gap:clamp(24px,4vw,70px); align-items:start; max-width:1500px; width:100%; margin:0 auto; }
@@ -199,19 +199,19 @@ body:not(.mobile-game) .engineer-radio > span { color:var(--telemetry); }
 body:not(.mobile-game) .sector-strip { gap:5px; }
 body:not(.mobile-game) .sector-time { background:#191e29; font-size:13px; padding:2px 8px; }
 body:not(.mobile-game) .race-top { top:16px; right:18px; left:auto; }
-body:not(.mobile-game) .race-actions { display:grid; grid-template-columns:repeat(3,36px); gap:6px; }
+body:not(.mobile-game) .race-actions { display:grid; grid-template-columns:repeat(3,36px); grid-auto-rows:36px; max-width:none; gap:6px; }
 body:not(.mobile-game) .race-actions .hud-icon { background:#171d27f5; border-color:#ffffff25; color:#dce0e8; border-radius:6px; }
 body:not(.mobile-game) .race-actions .hud-icon:hover { background:#303949; }
 body:not(.mobile-game) .race-actions .hud-icon.active { color:var(--telemetry); border-color:#7edbe680; }
-body:not(.mobile-game) .race-actions #qualifying-speed { width:36px; gap:0; flex-direction:column; padding:3px; }
+body:not(.mobile-game) .race-actions #qualifying-speed { width:36px; min-width:36px; gap:0; flex-direction:column; padding:3px; line-height:1; }
 body:not(.mobile-game) #qualifying-speed svg { width:14px; height:14px; }
 body:not(.mobile-game) #qualifying-speed small { font-size:9px; }
 body:not(.mobile-game) .race-bottom { right:18px; left:auto; bottom:118px; }
 body:not(.mobile-game) .pit-panel { width:286px; min-width:286px; padding:12px; }
 body:not(.mobile-game) .pit-panel .eyebrow { font-size:9px; color:#b5bdcd; letter-spacing:1.6px; }
 body:not(.mobile-game) .pit-panel .compound-row { gap:5px; }
-body:not(.mobile-game) .pit-panel .compound { padding:6px; font-size:10px; }
-body:not(.mobile-game) .pit-panel .tyre-dot { width:13px; height:13px; border-width:3px; }
+body:not(.mobile-game) .pit-panel .compound { padding:6px 3px; gap:3px; font-size:10px; }
+body:not(.mobile-game) .pit-panel .tyre-dot { flex:none; width:13px; height:13px; border-width:3px; }
 body:not(.mobile-game) .pit-panel .aero-shortcut { background:#ffffff04; color:#c2c9d6; min-height:28px; height:28px; }
 body:not(.mobile-game) .pit-panel .aero-shortcut.active { background:#7edbe614; border-color:#7edbe680; color:var(--telemetry); }
 body:not(.mobile-game) .pit-picker-buttons button { background:#242b37; border-color:#ffffff20; }
@@ -385,7 +385,7 @@ body:not(.mobile-game) .session-aero { margin:0; }
 body:not(.mobile-game) .session-aero .ui-icon { color:var(--lime); }
 body:not(.mobile-game) .session-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:12px; }
 body:not(.mobile-game) .session-actions button { margin:0; min-height:42px; padding:11px 10px; font-size:10px; line-height:1.4; }
-body:not(.mobile-game) .session-actions > :only-child,body:not(.mobile-game) .session-actions > .race-forecast-trigger,body:not(.mobile-game) .session-actions > [data-action=weekend-race] { grid-column:1/-1; }
+body:not(.mobile-game) .session-actions > :only-child,body:not(.mobile-game) .session-actions > .race-forecast-trigger,body:not(.mobile-game) .session-actions > [data-action=weekend-race],body:not(.mobile-game) .session-actions > [data-action=preparation-garage] { grid-column:1/-1; }
 body:not(.mobile-game) .weekend-results { margin-top:16px; }
 body:not(.mobile-game) .quick-options #laps small { display:none; }
 

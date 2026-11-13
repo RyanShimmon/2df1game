@@ -1497,11 +1497,18 @@ function updateHUD() {
     .join("");
   if (race.qualifying) {
     const finish=el("finish-qualifying-run");
-    finish.disabled=!race.canEndSession();
+    const disabled=!race.canEndSession();
+    if(finish.disabled!==disabled)finish.disabled=disabled;
     const action=race.sessionAction();
     const advanceLabel=race.stage.name==="Q3" || action.startsWith("End qualifying") ? "→ Grid" : "→ "+(race.stage.name==="Q1" ? "Q2" : "Q3");
-    finish.textContent=mobileInput ? action : advanceLabel;
-    finish.title=action+". Remaining AI runs still count toward the final classification.";finish.setAttribute("aria-label",action);
+    const label=mobileInput ? action : advanceLabel;
+    // Keep the hit target intact between pointer-down and click. Replacing
+    // its text every HUD tick can cancel a press in browsers such as Safari.
+    if(finish.textContent!==label)finish.textContent=label;
+    if(finish.getAttribute("aria-label")!==action){
+      finish.title=action+". Remaining AI runs still count toward the final classification.";
+      finish.setAttribute("aria-label",action);
+    }
     const speed=el("qualifying-speed"),speedLabel=`Qualifying speed ${race.timeScale} times; cycle speed`;
     if(mobileInput)speed.textContent=`Time ${race.timeScale}×`;
     else if(speed.dataset.scale!==String(race.timeScale)){
