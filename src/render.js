@@ -468,19 +468,19 @@ export class Renderer {
       x = this.w - w - 24,
       y = small ? 280 : 105;
     ctx.save();
-    ctx.fillStyle = "#101c22d9";
+    ctx.fillStyle = "#11151ef2";
     ctx.beginPath();
     ctx.roundRect(x - 10, y - 10, w + 20, h + 25, 12);
     ctx.fill();
     ctx.translate(x, y);
     const b=TRACK.bounds,scale=Math.min(w/(b.maxX-b.minX),h/(b.maxY-b.minY));
     ctx.scale(scale,scale);ctx.translate(-b.minX,-b.minY);
-    ctx.strokeStyle = "#7e918d";
+    ctx.strokeStyle = "#8f9aae";
     ctx.lineWidth = 25;
     ctx.stroke(this.road);
     for (const c of race.cars) {
       if (c.dnf) continue;
-      ctx.fillStyle = c.player ? "#dbffa6" : c.team.color;
+      ctx.fillStyle = c.player ? "#ffffff" : c.team.color;
       ctx.beginPath();
       ctx.arc(c.x, c.y, c.player ? 43 : 23, 0, Math.PI * 2);
       ctx.fill();

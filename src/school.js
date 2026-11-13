@@ -5,8 +5,8 @@ import {createWeather} from './weather.js';
 import {WEEKENDS} from './calendar.js';
 export const SCHOOL_KEY='v10.race-school.v1';
 export const SCHOOL_INTRO=[
- {title:'Your Grand Prix weekend',text:'Q1 trims 22 drivers to 16, Q2 keeps 10, and Q3 decides the front of the grid. Your best valid lap counts.\nEach outing has an out lap, one timed lap and an in lap. Return to the pits before another timed lap can count.\nAI cars stay off the racing line on out and in laps, giving way to cars on timed laps. They hold their chosen side as a faster car passes.\nAt the final corner of an out lap, AI cars rejoin the racing line to prepare for their timed lap, but wait if a timed car is approaching.\nOn timed laps, AI cars use the racing line and push for their quickest lap.'},
- {title:'Choose pace or tyre life',text:'Softs: quickest, but wear fastest.\nMediums: balance pace and tyre life.\nHards: last longest.\nIntermediates: for damp roads.\nWets: for standing water.\nAs Intermediates and Wets wear, their shallower grooves lose grip in water but work better on drying asphalt.\nEase throttle and steer smoothly in the wet.\nEach compound has one qualifying-only set, shared across Q1–Q3 with wear retained. These sets cannot be used in the race.\nGeneral-use sets keep their wear throughout the weekend.\nT opens the tyre selector; O opens the aero selector. The session pauses until you confirm or close.\n1–5 still chooses a compound directly; 6–8 chooses an unlocked aero package.\nCareer tyre engineering extends stints; development locks when qualifying starts.'},
+ {title:'Your Grand Prix weekend',text:'Q1 trims 22 drivers to 16, Q2 keeps 10, and Q3 decides the front of the grid. Your best valid lap counts.\nEach outing has an out lap, one timed lap and an in lap. Return to the pits before another timed lap can count.\nAI cars stay off the racing line on out and in laps, giving way to cars on timed laps. They hold their chosen side as a faster car passes.\nAt the final corner of an out lap, AI cars rejoin the racing line to prepare for their timed lap, but wait if a timed car is approaching.\nOn timed laps, AI cars use the racing line and push for their quickest lap.\nUse Push for your timed lap too: press G to step toward Push, or click the pace icon until the orange lightning bolt appears. F steps back toward Save.'},
+ {title:'Choose pace or tyre life',text:'Softs: quickest, but wear fastest.\nMediums: balance pace and tyre life.\nHards: last longest.\nIntermediates: for damp roads.\nWets: for standing water.\nAs Intermediates and Wets wear, their shallower grooves lose grip in water but work better on drying asphalt.\nEase throttle and steer smoothly in the wet.\nEach compound has one qualifying-only set, shared across Q1–Q3 with wear retained. These sets cannot be used in the race.\nGeneral-use sets keep their wear throughout the weekend.\nA wet race forecast adds one race-only Intermediate set and one Wet set.\nT opens the tyre selector; O opens the aero selector. The session pauses until you confirm or close.\n1–5 still chooses a compound directly; 6–8 chooses an unlocked aero package.\nCareer tyre engineering extends stints; development locks when qualifying starts.'},
  {title:'Manage tyre temperature',bullets:true,text:'Four wheels at the top show individual tyre temperatures.\nBlue = cold · green = ready · yellow = ideal · orange/red = too hot.\nCold tyres have less grip; overheated tyres slide and wear faster.\nBraking heats fronts; acceleration heats rears; corners heat outside tyres.\nSmooth driving helps manage heat; rain cools tyres.\nTurn it on/off in Settings → Tyre temperature simulation.\nOff: tyres stay ideal and the indicator disappears. Wear and weather grip still apply.'},
  {title:'Fuel is part of your strategy',text:'W / ↑ accelerates, S / ↓ brakes then reverses, and A/D or ←/→ steer. Brake before corners, then build throttle on exit.\nF moves left toward Save; G moves right toward Push.\nSave: gentler power, less fuel and wear; useful to extend a stint or cool hot tyres.\nBalanced: sustainable race pace.\nHelmet colours show each driver’s pace: green for Save, blue for Balanced and orange for Push.\nPush: stronger acceleration and higher top speed, with more fuel use and tyre wear.\nFollow a car on the straight for a slipstream: reduced drag gives stronger acceleration, especially at high speed. Extra top speed carries briefly after pulling out.\nQualifying gets fixed fuel for three laps; race fuel must last the distance, with no refuelling.'},
  {title:'Keep your race legal',text:'Three track-limit warnings precede a 5-second penalty.\nRace positions and gaps include unserved time penalties. Gaps estimate racing time between cars along the circuit, including through pit stops.\nServing a penalty in the pits counts it once; it is not added again at the finish.\nEvery Grand Prix requires two different tyre compounds. Wets and Intermediates count separately.\nSprints have no compulsory tyre change; the first eight score 8–1 points.\nPress B to plan a race stop. Confirm tyres and aero, or choose Keep current for either. Select Box, then enter the pit road at the orange marking. Automatic pits handle 80 km/h, stopping, service and exit.\nTyre service takes 4.3 seconds, reduced by 0.5 seconds per pit-crew upgrade to 2.3 seconds. Aero changes, penalties and waiting for a teammate add time.\nQualifying in-laps arm entry automatically and keep you parked after service.'},
@@ -31,16 +31,17 @@ export class RaceSchool {
    if(c.player)q.timeScale=1;
    return launch(c);
   };
-  this.lastStops=q.player.stops;this.lastState='garage';this.outingPending=false;
+  this.lastStops=q.player.stops;this.lastState='garage';this.outingPending=false;this.lastLessonStage=this.lessonStage(q);
   if(!this.state.weekend)this.state.weekend=JSON.parse(JSON.stringify(w));
   return q;
  }
  createPractice(){
   this.state.phase='race';this.requestSeen=false;this.modeSeen=false;this.launchSeen=false;
-  const r=new Race({track:'northline',laps:3,fuel:4,tyre:'M',weather:'dry',difficulty:'easy',startingPosition:1,aiSeed:17});r.school=true;r.autoPitLimiter=true;return r;
+  const r=new Race({track:'northline',laps:3,fuel:4,tyre:'M',weather:'dry',difficulty:'easy',startingPosition:1,aiSeed:17});r.school=true;r.autoPitLimiter=true;this.lastLessonStage=this.lessonStage(r);return r;
  }
  observe(r){
   const p=r.player;
+  if(['qualifyingComplete','complete'].includes(this.state.phase))return null;
   if(r.qualifying){
    if(this.lastState==='timed' && p.qState==='in') {this.outingPending=true;this.pendingValid=!p.qInvalid;this.pendingLap=p.lastLap;}
    this.lastState=p.qState;
@@ -50,7 +51,7 @@ export class RaceSchool {
      this.outingPending=false;this.state.lapTimes.push(this.pendingLap);this.state.lapValid.push(this.pendingValid);this.state.wear.push(p.wear);this.state.outings++;
      this.state.weekend=JSON.parse(JSON.stringify(r.weekend));
      if(this.state.outings>=2){this.state.phase='qualifyingComplete';return 'qualifyingComplete';}
-     return 'tyreChange';
+     this.lastLessonStage=this.lessonStage(r);return 'tyreChange';
     }
    }
   } else {
@@ -59,7 +60,28 @@ export class RaceSchool {
    if(p.drive!=='balanced')this.modeSeen=true;
    if(this.launchSeen && this.requestSeen && this.modeSeen && p.stops>0 && !p.pit){this.state.phase='complete';return 'practiceComplete';}
   }
+  const stage=this.lessonStage(r);
+  if(stage!==this.lastLessonStage){this.lastLessonStage=stage;return 'stageChanged';}
   return null;
+ }
+ lessonStage(r){
+  const p=r.player;
+  if(r.qualifying){
+   const prefix=`qualifying:${this.state.outings}:`;
+   if(p.pit?.stage==='service')return prefix+'service';
+   if(p.garage){
+    const choosing=p.tyre!==(this.state.outings===0?'S':'M') || (this.state.outings===1 && !this.state.mediumChosen);
+    return prefix+(choosing?'chooseTyres':'garage');
+   }
+   if(p.pit)return prefix+'pit:'+p.pit.stage;
+   return prefix+p.qState;
+  }
+  if(r.countdown>0)return 'race:lights';
+  if(!this.launchSeen)return 'race:launch';
+  if(!this.modeSeen)return 'race:pace';
+  if(!this.requestSeen)return 'race:request';
+  if(p.pit)return 'race:pit:'+p.pit.stage;
+  return 'race:entry';
  }
  chooseMedium(r,id){
   if(this.state.outings!==1 || !this.state.pickerOpened)return false;
@@ -73,8 +95,8 @@ export class RaceSchool {
    if(r.countdown>0)return {title:'Race start',text:'Wait for lights out, then accelerate with W / ↑. Control the throttle and leave room for the other cars.'};
    if(!this.launchSeen)return {title:'Launch from the grid',text:'Press W / ↑ to accelerate away from the start. Brake with S / ↓ and steer with A/D. Once you are moving, we will try pace modes and a requested pit stop.'};
    if(!this.modeSeen)return {title:'Try a pace mode',text:'F moves left toward Save; G moves right toward Push. Save protects fuel and tyres; Push trades them for pace.',highlight:'.drive-modes'};
-   if(!this.requestSeen)return {title:'Request a race stop',text:'Press B to request your race pit stop.\n1 = Soft · 2 = Medium · 3 = Hard · 4 = Intermediate · 5 = Wet.\nOr click Choose tyre set to pick a specific set.\nThen steer into the pit entrance.',highlight:'[data-action=pit]'};
-   if(p.pit)return {title:p.pit.stage==='service'?'Your race pit stop':'Follow the pit road',text:'The crew holds the car during service, then drives it out automatically. Race stops do not leave you parked like qualifying.'};
+   if(!this.requestSeen)return {title:'Request a race stop',text:'Press B to open the pit plan.\nChoose tyres and aero, or Keep current for either. Confirm with Box.\nOr click Choose tyre set before pressing B to pick your tyres in advance.\nThen steer into the orange pit entrance.',highlight:'[data-action=pit]'};
+   if(p.pit)return {title:p.pit.stage==='service'?'Your race pit stop':p.pit.stage==='exit'?'Return to the race':'Follow the pit road',text:p.pit.stage==='exit'?'Pit service is complete. Assistance takes you to the exit. Rejoin safely and resume racing.':'The crew holds the car during service, then drives it out automatically. Race stops do not leave you parked like qualifying.'};
    return {title:'Drive into the pit entrance',text:'Keep B requested. Brake before the orange PIT ENTRY marking and steer off the circuit into the separate road. Assistance starts only once you enter.'};
   }
   const n=this.state.outings+1;
@@ -83,9 +105,10 @@ export class RaceSchool {
   if(p.garage && this.state.outings===1 && (!this.state.mediumChosen || p.tyre!=='M'))return {title:'Outing 2: choose Mediums',text:'Click Choose tyre set.\nClick a yellow Medium set in the popup.\nWait for service, then leave the box.',highlight:'#browse-race-tyres',arrow:true};
   if(p.garage && p.pit && r.cars.some(c=>c!==p && !c.garage && c.pit && Math.abs(c.pit.distance-p.pit.distance)<65))return {title:'Wait for a clear pit lane',text:'The pit road is busy.\nHold W / ↑ to leave as soon as a gap opens.',highlight:r.mobile ? '[data-touch=throttle]' : '[data-action=pit]'};
   if(p.garage)return {title:`Outing ${n}: leave when ready`,text:`${this.state.outings===0 ? 'Softs fitted.' : 'Mediums fitted.'}\nPress W / ↑ or click Leave pit box.\nAutomatic assistance takes you to pit exit.`,highlight:'[data-action=pit]',arrow:this.state.outings===1};
+  if(p.pit)return {title:p.pit.stage==='exit'?'Leaving the garage':'Enter the garage',text:p.pit.stage==='exit'?'Automatic assistance follows the pit road to the exit.\nYour out lap begins as you rejoin the circuit.':'You crossed the pit entry. Assistance takes you to your box.\nWait for service before your next outing.'};
   if(p.qState==='out')return {title:`Outing ${n}: out lap`,text:'W / ↑ accelerates · S / ↓ brakes · A/D steers.\nF moves left toward Save; G moves right toward Push.\nBrake before corners; build throttle on exit.\nCross the finish line to start timing.'};
-  if(p.qState==='timed')return {title:`Outing ${n}: timed lap`,text:p.qInvalid?'Lap deleted: track limits.\nComplete your in lap and return to service.\nThe school exercise still counts; the qualifying time does not.':'Stay within the track edges.\nWatch your lap time and P16 cutoff.\nAim for smooth exits.'};
-  return {title:`Outing ${n}: in lap`,text:'Timed lap complete; extra laps are untimed.\nSteer into the orange pit entrance — no B needed.\nService holds you in the box.'};
+  if(p.qState==='timed')return {title:`Outing ${n}: timed lap`,text:p.qInvalid?'Lap deleted: track limits.\nComplete your in lap and return to service.\nThe school exercise still counts; the qualifying time does not.':'Use Push to set your fastest time.\nPress G to step from Balanced to Push; from Save, press G twice. F steps back.\nOr click the pace icon until it shows the orange lightning bolt.\nStay within the track edges and aim for smooth exits.',highlight:'.drive-modes'};
+  return {title:`Outing ${n}: in lap`,text:'Timed lap complete; extra laps are untimed.\nPress F to return to Balanced or Save and protect your tyres.\nSteer into the orange pit entrance — no B needed.\nService holds you in the box.'};
  }
  recover(r){const p=r.player;if(p.pit || p.garage)return;const loc=sample(p.s);Object.assign(p,{x:loc.x,y:loc.y,angle:loc.angle,motionAngle:loc.angle,speed:0,sideSpeed:0,offset:0,recoveryDistance:0});invalidateSector(p);if(r.qualifying && p.qState==='timed')p.qInvalid=true;}
  complete(){this.state.phase='complete';}

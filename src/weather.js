@@ -107,6 +107,14 @@ export function rainAt(state,t=state.elapsed) {
   const a=points[lo],b=points[hi],f=clamp((t-a[0])/(b[0]-a[0]),0,1);
   return a[1]+(b[1]-a[1])*f;
 }
+// Include late fronts and water left from qualifying, not just rain at the grid.
+export function hasWetRaceConditions(state){
+ if(!state)return false;
+ const duration=state.duration || 0;
+ return state.wetness>0 || state.sectors?.some(water=>water>0) ||
+  rainAt(state,0)>0 || rainAt(state,duration)>0 ||
+  state.points?.some(([at,rain])=>at>=0 && at<=duration && rain>0) || false;
+}
 export function advanceWeather(state,dt) {
   if(!state || !Number.isFinite(dt) || dt<=0)return;
   migrateWeather(state);

@@ -4,7 +4,7 @@ import {TRACK,sample} from '../src/core.js';
 import {newCareer} from './career-fixture.js';
 import {driveQualifyingOuting} from './qualifying-driver.js';
 const storage=()=>({items:new Map(),getItem(k){return this.items.get(k)||null;},setItem(k,v){this.items.set(k,v);}});
-function observe(s,q){const step=q.step.bind(q);q.step=(...args)=>{step(...args);s.observe(q);};return q;}
+function observe(s,q){q.lessonStages=[];const step=q.step.bind(q);q.step=(...args)=>{step(...args);if(s.observe(q)==='stageChanged')q.lessonStages.push(s.lessonStage(q));};return q;}
 test('two real qualifying outings require a Medium change and retain both laps and used sets',()=>{
  const s=new RaceSchool(),q=observe(s,s.createQualifying());q.cars=[q.player];
  driveQualifyingOuting(q,240);assert.equal(s.state.outings,1);assert.equal(q.player.qState,'garage');assert.ok(q.player.tyreSet.wear>.05);
@@ -13,6 +13,12 @@ test('two real qualifying outings require a Medium change and retain both laps a
  q.step(1/60,{});driveQualifyingOuting(q,240);assert.equal(s.state.outings,2);assert.equal(s.state.phase,'qualifyingComplete');
  assert.equal(s.state.lapTimes.length,2);assert.ok(s.state.lapTimes.every(t=>t>20));assert.equal(q.player.tyre,'M');
  assert.ok(q.player.tyreInventory.find(t=>t.id==='S1').wear>0);assert.ok(q.player.tyreSet.wear>0);
+ for(const outing of [0,1]){
+  const stages=q.lessonStages.filter(stage=>stage.startsWith(`qualifying:${outing}:`));
+  for(const phase of ['out','timed','in','service'])assert.ok(stages.includes(`qualifying:${outing}:${phase}`),`missing ${phase} popup on outing ${outing+1}`);
+  assert.equal(stages.filter(stage=>stage.endsWith(':timed')).length,1,'one timed-lap popup per outing');
+ }
+
 });
 test('garage checkpoint resumes completed first outing and keeps career untouched',()=>{
  const career=newCareer({driverName:'Real Driver',teamIndex:3}),before=JSON.stringify(career),s=new RaceSchool(),q=observe(s,s.createQualifying());q.cars=[q.player];driveQualifyingOuting(q,240);
@@ -46,4 +52,22 @@ test('after a deleted first lap the required popup Medium selection can depart a
  assert.equal(q.launch(p),false,'compound selection alone must not bypass the physical-set exercise');
  assert.equal(s.chooseMedium(q,'M1'),false,'open the popup first');s.state.pickerOpened=true;assert.equal(s.chooseMedium(q,'M1'),true);
  p.qNeedsRelease=false;assert.equal(q.launch(p),true);assert.equal(p.qState,'out');assert.equal(s.state.outings,1);
+});
+
+test('lesson transitions fire once and traffic or track-limit messages do not repeat a popup',()=>{
+ const s=new RaceSchool(),q=s.createQualifying(),p=q.player;
+ assert.equal(s.observe(q),null);
+ Object.assign(p,{garage:false,pit:null,qState:'out'});assert.equal(s.observe(q),'stageChanged');assert.equal(s.observe(q),null);
+ p.qState='timed';assert.equal(s.observe(q),'stageChanged');assert.match(s.guide(q).text,/Use Push/);assert.match(s.guide(q).text,/Press G/);assert.match(s.guide(q).text,/orange lightning/);
+ p.qInvalid=true;assert.equal(s.observe(q),null);
+ p.qState='in';p.lastLap=34;assert.equal(s.observe(q),'stageChanged');assert.equal(s.observe(q),null);
+});
+test('race practice announces each new objective without repeating a completed lesson',()=>{
+ const s=new RaceSchool(),r=s.createPractice(),p=r.player;
+ assert.equal(s.observe(r),null);r.countdown=0;assert.equal(s.observe(r),'stageChanged');assert.equal(s.guide(r).title,'Launch from the grid');
+ Object.assign(r,{time:1});Object.assign(p,{speed:30,s:100});assert.equal(s.observe(r),'stageChanged');assert.equal(s.guide(r).title,'Try a pace mode');
+ p.drive='push';assert.equal(s.observe(r),'stageChanged');assert.equal(s.guide(r).title,'Request a race stop');
+ r.pitRequested=true;assert.equal(s.observe(r),'stageChanged');assert.equal(s.guide(r).title,'Drive into the pit entrance');
+ p.pit={stage:'entry'};assert.equal(s.observe(r),'stageChanged');p.pit.stage='service';assert.equal(s.observe(r),'stageChanged');p.pit.stage='exit';assert.equal(s.observe(r),'stageChanged');
+ p.pit=null;p.stops=1;assert.equal(s.observe(r),'practiceComplete');assert.equal(s.observe(r),null);
 });

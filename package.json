@@ -1,6 +1,6 @@
 {
   "name": "v10-grand-prix",
-  "version": "1.15.1",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "scripts": {

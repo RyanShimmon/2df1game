@@ -2,11 +2,12 @@ import {createSectorSession,startSectorLap,stopSectorLap,advanceSectors,recordSe
 import {fuelPerLap} from "./performance.js";
 import {aeroUnlocked,developTeams,developmentSnapshot,fuelMultiplier,normalizeUpgrades} from "./development.js";
 import {seededRandom,driverSeed} from "./racecraft.js";
-import {tyreAllocation,selectableSets,limitWeekendStock,numberSoftSets,addQualifyingSets,isQualifyingSet} from "./tyre-stock.js";
+import {tyreAllocation,selectableSets,limitWeekendStock,numberSoftSets,addQualifyingSets,addWetRaceSets,isQualifyingSet} from "./tyre-stock.js";
 export {tyreAllocation,selectableSets,WEEKEND_SET_IDS} from "./tyre-stock.js";
 import {prepareTyres,updateTyreTemperatures,coolStoredSets} from "./tyre-temperature.js";
 import {
   createWeather,
+  hasWetRaceConditions,
   careerWeatherPattern,
   migrateWeather,
   raceWeatherDuration,
@@ -100,14 +101,19 @@ export function migrateWeekend(w) {
   w.setup.weatherDuration ??= raceWeatherDuration(w.setup.laps,makeTrack(circuitById(w.setup.track)).length);
   if (!w.weather) w.weather = createWeather(w.setup.weather || weekendSchedule(w.round,w.seasonOrder).weather,{seed:w.setup.weatherSeed,duration:qualifyingWeatherDuration(w)});
   migrateWeather(w.weather,{seed:w.setup.weatherSeed,duration:qualifyingWeatherDuration(w)});
+  if(w.phase==="R" && w.raceWeatherReady && hasWetRaceConditions(w.weather))for(const inv of w.inventories || [])addWetRaceSets(inv);
 }
 export function startRaceWeather(w) {
-  if (w.raceWeatherReady) return;
+  if (w.raceWeatherReady) {
+    if(hasWetRaceConditions(w.weather))for(const inv of w.inventories || [])addWetRaceSets(inv);
+    return;
+  }
   migrateWeekend(w);
   const next=createWeather(w.setup.weather,{seed:(w.setup.weatherSeed^0xa511e9b3)>>>0,duration:w.setup.weatherDuration,
     wetness:w.weather.wetness,sectors:w.weather.sectors,initialRain:w.weather.rain});
   Object.assign(w.weather,next);
   w.raceWeatherReady = true;
+  if(hasWetRaceConditions(w.weather))for(const inv of w.inventories || [])addWetRaceSets(inv);
 }
 export const Q_STAGES = [
   { name: "Q1", keep: 16 },
@@ -210,7 +216,8 @@ export function validWeekend(w, c) {
     w.inventories.every(
       (inv) =>
         Array.isArray(inv) &&
-        inv.length === 20 &&
+        (inv.length===20 || inv.length===21 && inv.some(t=>t.id==="W3" && t.compound==="W" && t.raceOnly)) &&
+        new Set(inv.map(t=>t.id)).size===inv.length &&
         inv.every(
           (t) =>
             typeof t.id === "string" &&
@@ -364,6 +371,7 @@ export function prepareRace(r, w, startId) {
     throw Error("Qualifying must be completed first");
   const requestedSet=w.inventories?.[21]?.find(t=>t.id===startId);
   migrateWeekend(w);
+  startRaceWeather(w);
   const start = selectableSets(w.inventories[21], "R").find(
     (t) => t.id === (requestedSet?.id ?? startId),
   );

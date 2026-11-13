@@ -1,3 +1,5 @@
+import {addWetRaceSets} from "./tyre-stock.js";
+import {hasWetRaceConditions} from "./weather.js";
 import {Race,TRACK,gridSlot,sample,raceProgress,completedRaceLaps} from "./core.js";
 import {seededRandom} from "./racecraft.js";
 import {restoreSectorDisplay,startSectorLap} from "./sectors.js";
@@ -68,6 +70,7 @@ export function restoreRaceSession(session,career,{restart=false}={}){
     if(weekend){
       car.tyrePhase="R";
       car.tyreInventory=weekend.inventories[car.id]=saved.inventory;
+      if(hasWetRaceConditions(race.weather))addWetRaceSets(car.tyreInventory);
       car.tyreSet=car.tyreInventory.find(t=>t.id===saved.tyreId) || null;
     }
     car.aiRandom=seededRandom(saved.random);

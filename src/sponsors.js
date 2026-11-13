@@ -7,12 +7,41 @@ export const SPONSORS=[
  {id:"top5",name:"REDLINE ENERGY",desc:"Bring it home in the top 5 with legal tyre usage.",amount:1900,tier:"ambitious"},
  {id:"podium",name:"SUMMIT WATCHES",desc:"Finish legally on the podium: P1, P2 or P3.",amount:2400,tier:"ambitious"},
  {id:"win",name:"CROWN MOTORSPORT",desc:"Win the race with legal tyre usage.",amount:3000,tier:"ambitious"},
- {id:"gain3",name:"FORWARD DYNAMICS",desc:"Finish legally at least 3 places ahead of your grid position.",amount:1200,tier:"challenge"},
- {id:"gain6",name:"OVERTAKE LABS",desc:"Finish legally at least 6 places ahead of your grid position.",amount:1600,tier:"ambitious"},
+ {id:"gain3",name:"FORWARD DYNAMICS",desc:"Gain 3 places, or win if starting in the top 3.",amount:750,tier:"challenge"},
+ {id:"gain6",name:"OVERTAKE LABS",desc:"Gain 6 places, or win if starting in the top 6.",amount:950,tier:"ambitious"},
  {id:"noContact",name:"PRISTINE AUTO",desc:"Finish legally with zero contacts.",amount:1100,tier:"reliable"},
  {id:"noPenalty",name:"TRUE LINE",desc:"Finish legally without receiving any penalties.",amount:800,tier:"reliable"},
  {id:"oneStop",name:"ENDURANCE FUELS",desc:"Finish legally with exactly one pit stop.",amount:1000,tier:"challenge"},
 ];
+// Climbing contracts resolve against the actual grid, including restart penalties.
+// Reward the required finish, not the number printed in the contract name.
+function positionReward(position){
+ const ladder=[[1,3000],[3,2400],[5,1900],[10,1400],[15,1000],[22,600]];
+ for(let i=1;i<ladder.length;i++){
+  const [front,high]=ladder[i-1],[back,low]=ladder[i];
+  if(position<=back)return Math.round((high+(low-high)*(position-front)/(back-front))/50)*50;
+ }
+ return 600;
+}
+export function sponsorTerms(contract,{gridPosition,raceFormat}={}){
+ const sponsor=typeof contract==='string' ? SPONSORS.find(s=>s.id===contract) : contract;
+ if(!sponsor)return null;
+ const gain=sponsor.id==='gain3'?3:sponsor.id==='gain6'?6:0;
+ if(gain){
+  const known=Number.isInteger(gridPosition) && gridPosition>=1 && gridPosition<=22;
+  const targetPosition=known ? Math.max(1,gridPosition-gain) : null;
+  return {...sponsor,targetPosition,
+   amount:known ? positionReward(targetPosition) : positionReward(22-gain),
+   amountMax:known ? positionReward(targetPosition) : positionReward(1),
+   desc:known ? `${targetPosition===1 ? 'Win' : `Finish P${targetPosition} or better`} from P${gridPosition}. Legal tyre usage required.` : `Finish legally: gain ${gain} places, or win if starting in the top ${gain}. Reward follows your final grid position.`,
+  };
+ }
+ if(sponsor.id==='points'){
+  const targetPosition=raceFormat==='sprint'?8:10,amount=positionReward(targetPosition);
+  return {...sponsor,targetPosition,amount,amountMax:amount,desc:`Finish in the top ${targetPosition} with legal tyre usage.`};
+ }
+ return {...sponsor,amountMax:sponsor.amount};
+}
 export function sponsorMet(id,row){
  if(row.dnf || row.legal===false || !(row.position>=1 && row.position<=22))return false;
  switch(id){
@@ -25,8 +54,10 @@ export function sponsorMet(id,row){
   case 'clean':return row.penalties===0 && row.contacts<=2;
   case 'noContact':return row.contacts===0;
   case 'noPenalty':return row.penalties===0;
-  case 'gain3':return Number.isInteger(row.gridPosition) && row.gridPosition-row.position>=3;
-  case 'gain6':return Number.isInteger(row.gridPosition) && row.gridPosition-row.position>=6;
+  case 'gain3':case 'gain6':{
+   const target=sponsorTerms(id,row).targetPosition;
+   return target!==null && row.position<=target;
+  }
   case 'oneStop':return row.stops===1;
   default:return false;
  }

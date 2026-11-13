@@ -1,7 +1,7 @@
 import {circuitById,circuitAnchors} from "./tracks.js";
 import {aeroGripMultiplier} from "./performance.js";
 import {careerRound,migrateCalendar} from "./calendar.js";
-import {sponsorMet,SPONSORS} from "./sponsors.js";
+import {sponsorMet,sponsorTerms,SPONSORS} from "./sponsors.js";
 export {sponsorMet} from "./sponsors.js";
 // Shared prices and effects: player and AI buy the same parts. The full
 // £272,320 ladder takes about three podium-finishing seasons without sponsors.
@@ -34,6 +34,7 @@ export function aeroPackageSummary(spec){
  const change=value=>(value>=1?"+":"−")+percentage((value-1)*100)+"%";
  return "Up to "+change(pack.corner)+" cornering speed · "+change(pack.top)+" top speed";
 }
+export const fullUpgrades=()=>Object.fromEntries(Object.entries(UPGRADES).map(([key,upgrade])=>[key,upgrade.max]));
 export const emptyUpgrades=()=>Object.fromEntries(Object.keys(UPGRADES).map(k=>[k,0]));
 export const level=(upgrades,key)=>clamp(Number(upgrades?.[key])||0,0,UPGRADES[key]?.max || 0);
 export function normalizeUpgrades(upgrades={}){return Object.fromEntries(Object.keys(UPGRADES).map(k=>[k,Math.floor(level(upgrades,k))]));}
@@ -150,7 +151,7 @@ export function fundTeams(career,result,sponsors=SPONSORS,difficultyBonus=0){
   const contract=sponsors.find(s=>s.id===team.contractId) || teamSponsor(team,round,career.developmentSeed,sponsors);
   const incomes=rows.map(row=>{
    const prize=racePrize({...row,raceFormat:row.raceFormat || result.raceFormat},difficultyBonus);
-   return {prize:prize.base+prize.bonus,sponsor:contract && sponsorMet(contract.id,{...row,raceFormat:row.raceFormat || result.raceFormat}) ? sponsorPayout(team.upgrades,contract.amount) : 0};
+   return {prize:prize.base+prize.bonus,sponsor:contract && sponsorMet(contract.id,{...row,raceFormat:row.raceFormat || result.raceFormat}) ? sponsorPayout(team.upgrades,sponsorTerms(contract,{...row,raceFormat:row.raceFormat || result.raceFormat}).amount) : 0};
   });
   const average=key=>incomes.length ? Math.round(incomes.reduce((sum,row)=>sum+row[key],0)/incomes.length) : key==='prize'?racePrize({dnf:true,raceFormat:result.raceFormat}).base:0;
   const prize=average('prize'),sponsor=average('sponsor'),earned=prize+sponsor;

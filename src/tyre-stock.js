@@ -13,6 +13,7 @@ export function tyreAllocation(){
 }
 export function selectableSets(inventory,phase,currentId=null){
   return inventory.filter(t=>!t.returned && t.wear<1.05 && t.id!==currentId &&
+    (!t.raceOnly || phase==="R") &&
     (!isQualifyingSet(t) || ["Q1","Q2","Q3"].includes(phase)));
 }
 export function limitWeekendStock(inventory,selectedIds=[]){
@@ -20,7 +21,7 @@ export function limitWeekendStock(inventory,selectedIds=[]){
   // quota for everyone. Excess sets are returned, never deleted or refreshed.
   const priority=t=>selectedIds.includes(t.id) ? 0 : t.used || t.wear>0 || t.distance>0 ? 1 : 2;
   for(const [compound,quota] of Object.entries(WEEKEND_QUOTA)){
-    const sets=inventory.filter(t=>t.compound===compound && !t.returned && !isQualifyingSet(t))
+    const sets=inventory.filter(t=>t.compound===compound && !t.returned && !isQualifyingSet(t) && !t.raceOnly)
       .sort((a,b)=>priority(a)-priority(b) || a.wear-b.wear || Number(!WEEKEND_SET_IDS.has(a.id))-Number(!WEEKEND_SET_IDS.has(b.id)) || a.id.localeCompare(b.id));
     for(const set of sets.slice(quota))set.returned=true;
   }
@@ -53,4 +54,14 @@ export function numberSoftSets(inventory){
  const ids=new Map(soft.map(t=>[t.id,assigned.get(t)]));
  for(const t of soft)t.id=assigned.get(t);
  return ids;
+}
+
+// Forecast reserves are additional physical race sets, never qualifying stock.
+// Repeated menu opens/reloads must not create fresh tyres or erase used wear.
+export function addWetRaceSets(inventory){
+ for(const [compound,id] of [["I","I4"],["W","W3"]]){
+  let set=inventory.find(t=>t.id===id);
+  if(!set){set={id,compound,wear:0,distance:0,used:false,returned:false};inventory.push(set);}
+  if(!set.raceOnly){set.returned=false;set.raceOnly=true;set.qualifyingOnly=false;set.reserved=false;}
+ }
 }

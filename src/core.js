@@ -6,10 +6,10 @@ import {planRaceStrategy,strategyWearLimit} from "./strategy.js";
 import {engineAcceleration,paceMode,fuelPerLap,applyThrottle,tyreSurfaceGrip,tyrePaceWear,wearPerLap,stintLaps,cornerAccelerationLimit} from "./performance.js";
 import {GRAND_PRIX_POINTS,racePoints,raceFormat,quickRaceFormat,tyreRuleMet} from "./race-rules.js";
 import {SEASON_LENGTH,careerSchedule,shuffledSeasonOrder,ensureSeasonOrder} from "./calendar.js";
-import {SPONSORS,sponsorMet} from "./sponsors.js";
+import {SPONSORS,sponsorMet,sponsorTerms} from "./sponsors.js";
 export {SPONSORS} from "./sponsors.js";
 import {engineerReport} from "./engineer.js";
-import {UPGRADES,AERO_PACKAGES,emptyUpgrades,normalizeUpgrades,level,upgradePrice,tyreServiceSeconds,fuelMultiplier,sponsorPayout,aeroUnlocked,aeroPackage,aeroGrip,setAeroPackage,createTeamDevelopment,migrateDevelopment,developTeams,developmentSnapshot,fundTeams,racePrize} from "./development.js";
+import {UPGRADES,AERO_PACKAGES,fullUpgrades,emptyUpgrades,normalizeUpgrades,level,upgradePrice,tyreServiceSeconds,fuelMultiplier,sponsorPayout,aeroUnlocked,aeroPackage,aeroGrip,setAeroPackage,createTeamDevelopment,migrateDevelopment,developTeams,developmentSnapshot,fundTeams,racePrize} from "./development.js";
 export {UPGRADES,AERO_PACKAGES,fuelMultiplier,sponsorPayout,setAeroPackage,developTeams,developmentSnapshot};
 import {selectableSets} from "./tyre-stock.js";
 import {seededRandom,driverSeed,buildRacingLine,racingPoint,qualifyingLane,planRacingLane,laneGeometry,projectedPaceAdvantage,brakingTarget,updateSlipstream,forecastWater,createStrategy,rankTyres,availableAISets} from "./racecraft.js";
@@ -154,8 +154,8 @@ export function settleCareer(career, result) {
   const sponsor = SPONSORS.find((s) => s.id === career.sponsor);
   const gridPosition=result.gridPosition ?? ((career.weekend?.grid?.indexOf(21) ?? -1)+1);
   const met=legal && sponsor && sponsorMet(sponsor.id,{...result,raceFormat:format,gridPosition});
-  const sponsorBaseBonus=met ? sponsor.amount : 0;
-  const bonus=met ? sponsorPayout(career.upgrades,sponsor.amount) : 0;
+  const sponsorBaseBonus=met ? sponsorTerms(sponsor,{gridPosition,raceFormat:format}).amount : 0;
+  const bonus=met ? sponsorPayout(career.upgrades,sponsorBaseBonus) : 0;
   const commercialBonus=bonus-sponsorBaseBonus;
   fundTeams(career,{...result,raceFormat:format},SPONSORS,DIFFICULTIES[difficulty].prizeBonus);
   career.cash += prize + bonus;
@@ -750,7 +750,7 @@ function createCar(i, setup, upgrades, mode) {
       : team.pace * (0.99 + (i % 2) * 0.008),
     upgrades: player
       ? { ...upgrades }
-      : { engine: 0, aero: 0, tyres: 0, crew: 0 },
+      : mode==="quick" && setup.fullDevelopment ? fullUpgrades() : { engine: 0, aero: 0, tyres: 0, crew: 0 },
     used: new Set([tyre]),
     stops: 0,
     pit: null,
@@ -817,6 +817,7 @@ export function steerCar(c,dt,{steer=0,throttle=0,brake=0,off=false,front=grip(c
 export class Race {
   constructor(setup, upgrades = {}, mode = "quick", profile = null) {
     if(mode==="career" && setup.playerUpgrades)upgrades=setup.playerUpgrades;
+    if(mode==="quick" && setup.fullDevelopment)upgrades=fullUpgrades();
     setup={...setup,raceFormat:setup.raceFormat ?? (mode==="quick" ? quickRaceFormat(setup.laps) : "grandPrix")};
     selectTrack(setup.track);
     this.setup = {...setup,track:TRACK.id};
