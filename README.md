@@ -1,6 +1,6 @@
 # V10 — Grand Prix
 
-Version **1.15.0**.
+Version **1.15.1**.
 
 Refreshing the same tab resumes a race on the interrupted lap with a standing start and a fuel credit for the distance replayed. Restarting from the pause menu restores the original race setup and costs five grid places per restart. Each place beyond P22 adds one penalty second. Both features apply to Career and Quick Race, including Sprints. Skid trails now have smooth joins.
 
@@ -108,7 +108,7 @@ The garage has nine development paths. Each purchase opens a review with measure
 | Race engineer | £1,600 | 3 | Fuel/tyre estimates, then weather windows, then estimated pit rejoin traffic |
 | Commercial development | £1,800 | 3 | 10% more income per level on successfully completed sponsor contracts |
 
-Aerodynamics level 1 unlocks Balanced, High downforce and Low drag. Package cornering support is speed-dependent: neutral below 80 km/h, rising smoothly to the full mirrored ±10% reference cornering-speed effect at 280 km/h. High downforce reduces the top-speed ceiling by 10%; Low drag raises it by 10%. Power tapers progressively near the selected ceiling, preserving corner-exit response and engine/Push/slipstream advantages throughout acceleration. AI braking, passing projections and development previews use the same speed-dependent grip curve as the player.
+Aerodynamics level 1 unlocks Balanced, High downforce and Low drag. Package cornering support is speed-dependent: neutral below 80 km/h, rising smoothly to full effect at 280 km/h. High downforce gives up to +6% reference cornering speed with a 5% lower top-speed ceiling; Low drag trades up to 3% cornering speed for a 10% higher ceiling. These correspond to +12.36% and −5.91% package grip at high speed. The smaller low-drag grip penalty accounts for its effect on braking and corner-exit traction as well as corner speed. Balanced has no package bonus or penalty. Power tapers progressively near the selected ceiling, preserving corner-exit response and engine/Push/slipstream advantages throughout acceleration. AI braking, passing projections and development previews use the same speed-dependent grip curve as the player.
 
 Performance previews use a deterministic solo test car on the selected circuit, with ideal Medium tyres, six fuel laps and Balanced pace. The high-speed engine comparison uses Push at 75–95% of the package ceiling. Engine upgrades add 7% power per level across the entire speed range without adding drag. They are comparisons, not promised lap times. Tyre-life and fuel figures use the same resource formulas as the game. Tyre engineering still extends life and softens the grip cliff with temperature simulation disabled; crew service improvements also remain active.
 

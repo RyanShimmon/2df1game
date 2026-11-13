@@ -16,7 +16,14 @@ for(const track of CIRCUITS)test(`${track.name}: arcade lap length and stable dr
   // without requiring this driver to exploit the package like an Expert.
   assert.ok(row.results.lowDrag.lap<reference.lap*.98,'the oval should reward low drag over Balanced too');
  }
- if(['northline','alpine'].includes(track.id))assert.ok(row.results.downforce.lap<row.results.lowDrag.lap*.97);
+ if(track.id==='velocity'){
+  assert.ok(row.results.lowDrag.lap<reference.lap-.25,'low drag must pay off on a fast road circuit, not only the oval');
+  assert.ok(row.results.lowDrag.lap<row.results.downforce.lap);
+ }
+ if(['northline','alpine'].includes(track.id)){
+  assert.ok(row.results.downforce.lap<row.results.lowDrag.lap*.98);
+  assert.ok(row.results.downforce.lap<reference.lap-.3,'downforce must reward sustained cornering');
+ }
  // A technical track may favour downforce in every measured section.
  // Circuit identity matters; neither package must win a section everywhere.
 });

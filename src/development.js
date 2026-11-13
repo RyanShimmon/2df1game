@@ -19,12 +19,13 @@ export const UPGRADES={
  commercial:{name:"Commercial development",desc:"10% more sponsor income per level. Contract conditions still have to be met.",cost:1800,max:3,group:"Team business"},
 };
 // Corner speed scales with the square root of lateral grip. Derive force and
-// drag from the advertised speed changes so the two packages really mirror.
+// drag from the advertised speed changes. Grip affects several phases of a
+// corner, so its penalty is smaller than the straight-line speed benefit.
 const packageSpec=(name,desc,corner,top)=>({name,desc,corner,top,drag:top**-1.3});
 export const AERO_PACKAGES={
  balanced:packageSpec("Balanced","An all-round package for mixed circuits.",1,1),
- downforce:packageSpec("High downforce","More support as corner speed rises; lower straight-line speed. Little effect in slow bends.",1.10,.90),
- lowDrag:packageSpec("Low drag","Stronger high-speed acceleration and a higher speed ceiling; less support in fast bends.",.90,1.10),
+ downforce:packageSpec("High downforce","More support as corner speed rises; lower straight-line speed. Little effect in slow bends.",1.06,.95),
+ lowDrag:packageSpec("Low drag","Stronger high-speed acceleration and a higher speed ceiling; less support in fast bends.",.97,1.10),
 };
 const percentage=value=>Math.abs(value).toFixed(1).replace(/\.0$/,"");
 export function aeroPackageSummary(spec){

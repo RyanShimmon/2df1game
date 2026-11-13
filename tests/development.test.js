@@ -26,14 +26,17 @@ test('all purchases use quoted escalating costs and caps, and development cannot
  }
  const fresh=newCareer(profile);fresh.weekend={phase:'Q1'};const before=JSON.stringify(fresh);assert.equal(buyUpgrade(fresh,'engine'),false);assert.equal(JSON.stringify(fresh),before);assert.equal(buyUpgrade(fresh,'unknown'),false);
 });
-test('V10 development improves measured acceleration and aero packages suit different circuits',()=>{
+test('V10 development improves acceleration and aero previews retain the actual trade-offs',()=>{
  const before=developmentBench(emptyUpgrades()),after=developmentBench({...emptyUpgrades(),engine:1});
  assert.ok(after.accelerate<before.accelerate*.96);
  const c=newCareer(profile);c.upgrades.aero=1;assert.equal(setAeroPackage(c,'lowDrag'),true);assert.equal(loadCareer({getItem:()=>JSON.stringify(c)}).aeroSpec,'lowDrag');c.upgrades.aero=3;c.upgrades.engine=2;
- // The mirrored ±10% balance rewards Low drag on the fast oval; mixed
- // circuits can favour Balanced or High downforce despite their straights.
+ // The oval rewards speed. Previewed corner support and high-speed targets
+ // must also reflect the actual package, irrespective of the fastest lap.
  selectTrack('sunset');assert.ok(developmentBench(c.upgrades,'lowDrag').lap<developmentBench(c.upgrades,'downforce').lap);
- selectTrack('harbour');assert.ok(developmentBench(c.upgrades,'downforce').lap<developmentBench(c.upgrades,'lowDrag').lap);
+ selectTrack('harbour');
+ const downforce=developmentBench(c.upgrades,'downforce'),balanced=developmentBench(c.upgrades,'balanced'),lowDrag=developmentBench(c.upgrades,'lowDrag');
+ assert.ok(downforce.corner>balanced.corner&&balanced.corner>lowDrag.corner);
+ assert.ok(lowDrag.rollEnd>balanced.rollEnd&&balanced.rollEnd>downforce.rollEnd);
  assert.equal(setAeroPackage(c,'downforce'),true);c.weekend={};assert.equal(setAeroPackage(c,'lowDrag'),false);
  assert.equal(loadCareer({getItem:()=>JSON.stringify(c)}).aeroSpec,'downforce');
 });

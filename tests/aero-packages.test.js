@@ -7,19 +7,22 @@ import {aeroGripMultiplier} from '../src/performance.js';
 const approx=(actual,expected)=>assert.ok(Math.abs(actual-expected)<1e-9,`${actual} ≠ ${expected}`);
 const car=(aeroSpec='balanced',extra={})=>({aeroSpec,upgrades:{...emptyUpgrades(),aero:3,engine:2},tyre:'M',wear:0,wheelWear:[0,0,0,0],speed:220,fuel:10,pace:.94,drive:'balanced',trackWetness:0,s:0,offset:0,tyreTemperatureEnabled:false,...extra});
 test.afterEach(()=>selectTrack('northline'));
-test('aero choices advertise equal and opposite cornering and top-speed changes',()=>{
- approx(AERO_PACKAGES.downforce.corner-1,1-AERO_PACKAGES.lowDrag.corner);
- approx(1-AERO_PACKAGES.downforce.top,AERO_PACKAGES.lowDrag.top-1);
- assert.equal(aeroPackageSummary('downforce'),'Up to +10% cornering speed · −10% top speed');
- assert.equal(aeroPackageSummary('lowDrag'),'Up to −10% cornering speed · +10% top speed');
+test('aero choices advertise their measured cornering and top-speed trade-offs',()=>{
+ approx(AERO_PACKAGES.downforce.corner,1.06);
+ approx(AERO_PACKAGES.lowDrag.corner,.97);
+ assert.equal(aeroPackageSummary('downforce'),'Up to +6% cornering speed · −5% top speed');
+ assert.equal(aeroPackageSummary('lowDrag'),'Up to −3% cornering speed · +10% top speed');
  assert.equal(aeroPackageSummary('balanced'),'Even balance');
 });
-test('package cornering support is symmetric and builds from mechanical grip to the full high-speed effect',()=>{
+test('package cornering support builds progressively with a smaller low-drag grip penalty',()=>{
  for(const speed of [80,180,280,330])for(const [tyre,trackWetness,wear] of [['M',0,0],['S',0,.8],['W',1,.2],['I',.3,.4]]){
   const extra={speed,tyre,trackWetness,wear,wheelWear:Array(4).fill(wear)};
   const gain=Math.sqrt(grip(car('downforce',extra))/grip(car('balanced',extra)))-1;
   const loss=1-Math.sqrt(grip(car('lowDrag',extra))/grip(car('balanced',extra)));
-  approx(gain,loss);if(speed<=80)approx(gain,0);else if(speed>=280)approx(gain,.10);else assert.ok(gain>0&&gain<.10);
+  approx(gain,loss*2);
+  if(speed<=80){approx(gain,0);approx(loss,0);}
+  else if(speed>=280){approx(gain,.06);approx(loss,.03);}
+  else {assert.ok(gain>0&&gain<.06);assert.ok(loss>0&&loss<.03);}
  }
 });
 test('AI braking resolves the target corner speed using the same aero curve as the player',()=>{
@@ -31,11 +34,11 @@ test('AI braking resolves the target corner speed using the same aero curve as t
   assert.ok(Math.abs(target-Math.sqrt(225*grip(atCorner)/.01))<.08,'straight-line downforce must fall as the car slows');
  }
 });
-test('package top-speed ratios remain symmetric with fuel, drive mode and engine development',()=>{
+test('package top-speed trade-offs persist with fuel, drive mode and engine development',()=>{
  for(const engine of [0,2,5])for(const fuel of [1,30])for(const drive of ['save','balanced','push']){
   const extra={fuel,drive,upgrades:{...emptyUpgrades(),aero:1,engine}};
   const balanced=cleanAirTopSpeed(car('balanced',extra));
-  approx(cleanAirTopSpeed(car('downforce',extra))/balanced,.90);
+  approx(cleanAirTopSpeed(car('downforce',extra))/balanced,.95);
   approx(cleanAirTopSpeed(car('lowDrag',extra))/balanced,1.10);
  }
  const factory={upgrades:emptyUpgrades()};
@@ -43,7 +46,7 @@ test('package top-speed ratios remain symmetric with fuel, drive mode and engine
  approx(grip(car('lowDrag',factory))/grip(car('balanced',factory)),1);
 });
 test('actual player acceleration reaches each package ceiling without a hidden 330 cap',()=>{
- for(const [aeroSpec,expected] of [['balanced',330],['downforce',297],['lowDrag',363]]){
+ for(const [aeroSpec,expected] of [['balanced',330],['downforce',313.5],['lowDrag',363]]){
   const r=new Race({track:'northline',laps:16,fuel:19,tyre:'M',weather:'dry',aiSeed:42,tyreTemperatureEnabled:false},{aero:1,engine:5});
   const c=r.player;r.cars=[c];c.aeroSpec=aeroSpec;c.speed=0;const loc=sample(350);
   for(let i=0;i<3600;i++){
