@@ -447,7 +447,6 @@ export class QualifyingRun extends Race {
     this.freezeWeather=!!options.freezeWeather;
     this.targetAttempts=options.targetAttempts ?? Infinity;
     this.profile=profile;
-    this.timeScale=1;
     this.weather = w.weather;
     this.weekend = w;
     this.stage = qualifyingStage(w);
@@ -569,9 +568,6 @@ export class QualifyingRun extends Race {
     c.qNeedsRelease=true;
     this.say("Tyres selected. Minimum service wait, then press W / ↑ when ready to leave.");
     return true;
-  }
-  cycleTimeScale() {
-    const speeds=[1,2,4,8];this.timeScale=speeds[(speeds.indexOf(this.timeScale)+1)%speeds.length];return this.timeScale;
   }
   canEndSession() { return this.weekend.phase===this.stage.name && this.weekend.active.includes(21) && qualifyingReady(this.weekend); }
   sessionAction() {

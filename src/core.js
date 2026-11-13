@@ -828,6 +828,7 @@ export class Race {
     this.raceSeed=this.aiSeed;
     this.weather = createWeather(setup.weather || "dry",{seed:setup.weatherSeed ?? (this.raceSeed^0x9e3779b9)>>>0,duration:raceWeatherDuration(this.laps,TRACK.length)});
     this.time = 0;
+    this.timeScale = 1;
     this.countdown = 4;
     this.cars = Array.from({ length: 22 }, (_, i) =>
       createCar(i, setup, upgrades, mode),
@@ -911,6 +912,9 @@ export class Race {
     this.skids = [];
     this.result = null;
     this.settled = false;
+  }
+  cycleTimeScale() {
+    const speeds=[1,2,4,8];this.timeScale=speeds[(speeds.indexOf(this.timeScale)+1)%speeds.length];return this.timeScale;
   }
   say(msg) {
     this.message = msg;

@@ -893,10 +893,12 @@ function raceUI() {
   aeroShortcuts.querySelectorAll("[data-pit-aero]").forEach(button=>button.onclick=()=>{race.selectAero(button.dataset.pitAero);updateHUD();});
   const aeroNote=document.createElement("p");aeroNote.id="race-aero-note";aeroNote.className="hint";
   app.querySelector(".pit-panel .compound-row").after(aeroShortcuts,pitChoices,aeroNote);
-  if (race.qualifying) {
+  if (race.qualifying || !mobileInput) {
     const speed=document.createElement("button");speed.className="ghost";speed.id="qualifying-speed";
     speed.textContent="Time 1×";speed.onclick=()=>{race.cycleTimeScale();updateHUD();};
     app.querySelector(".race-actions").prepend(speed);
+  }
+  if (race.qualifying) {
     const finish = document.createElement("button");
     finish.className = "ghost end-session";
     finish.title="Complete remaining AI runs in the current weather and track conditions. Positions can still change.";
@@ -1368,6 +1370,15 @@ function updateSectorHUD() {
 }
 function updateHUD() {
   if (!race || !el("position")) return;
+  const speed=el("qualifying-speed");
+  if(speed){
+    const speedLabel=`${race.qualifying ? "Qualifying" : "Race"} speed ${race.timeScale} times; cycle speed`;
+    if(mobileInput)speed.textContent=`Time ${race.timeScale}×`;
+    else if(speed.dataset.scale!==String(race.timeScale)){
+      hudIcon(speed,"fastForward",speedLabel);speed.insertAdjacentHTML("beforeend",`<small>${race.timeScale}×</small>`);speed.dataset.scale=race.timeScale;
+    }
+    speed.setAttribute("aria-label",speedLabel);speed.title=speedLabel;
+  }
   if(school && el("school-guide")) updateSchoolGuide();
   el("browse-race-tyres").disabled=!!race.player.pit && !race.player.garage && !(race.qualifying && race.player.pit.stage==="service");
   const p = race.player,
@@ -1509,12 +1520,6 @@ function updateHUD() {
       finish.title=action+". Remaining AI runs still count toward the final classification.";
       finish.setAttribute("aria-label",action);
     }
-    const speed=el("qualifying-speed"),speedLabel=`Qualifying speed ${race.timeScale} times; cycle speed`;
-    if(mobileInput)speed.textContent=`Time ${race.timeScale}×`;
-    else if(speed.dataset.scale!==String(race.timeScale)){
-      hudIcon(speed,"fastForward",speedLabel);speed.insertAdjacentHTML("beforeend",`<small>${race.timeScale}×</small>`);speed.dataset.scale=race.timeScale;
-    }
-    speed.setAttribute("aria-label",speedLabel);speed.title=speedLabel;
     el("fuel-status").textContent = "Qualifying fuel load";
     el("fuel-status").style.color = "";
     const stateLabel=p.qState==="timed" && p.qInvalid ? "INVALID" : ({garage:"PITS",out:"OUT LAP",timed:"TIMED",in:"IN LAP",stranded:"NO FUEL"})[p.qState] || "PIT";
@@ -1955,7 +1960,7 @@ function loop(now) {
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
   if (race && !paused && !landscapeGate.blocked && !race.done) {
-    accumulator += dt*(race.qualifying ? race.timeScale : 1);
+    accumulator += dt*race.timeScale;
     const input = {
       reverse: keys.has("r") || touch.reverse,
       throttle: keys.has("w") || keys.has("arrowup") || touch.throttle,
