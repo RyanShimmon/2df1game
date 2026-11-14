@@ -106,8 +106,16 @@ export function buyUpgrade(career, key) {
 }
 export function loadCareer(storage) {
   try {
-    const c = JSON.parse(storage.getItem("v10-career-v1"));
+    const raw = storage.getItem("v10-career-v1");
+    const c = JSON.parse(raw);
     if (!c || c.version !== 1) return newCareer();
+    const unavailable = id => id && !CIRCUITS.some(track => track.id === id);
+    if ((c.calendarId && c.calendarId !== "original") || unavailable(c.weekend?.setup?.track) ||
+        (Array.isArray(c.seasonOrder) && c.seasonOrder.some(unavailable))) {
+      // Retain the complete save before another championship can use this slot.
+      storage.setItem("v10-career-v1.parked", raw);
+      return newCareer();
+    }
     if (
       !Number.isFinite(c.cash) ||
       c.cash < 0 ||
@@ -523,7 +531,7 @@ export function cleanAirTopSpeed(car){
 export function estimatedPitLoss(car){
  const service=tyreServiceTime(level(car.upgrades,"crew"));
  const straightSpeed=Math.min(cleanAirTopSpeed(car),300);
- return Math.max(8,PIT_LANE.length/PIT_SPEED-(TRACK.length-TRACK.pitEntry+TRACK.pitExit)/Math.max(160,straightSpeed)+service);
+ return Math.max(8,PIT_LANE.length/PIT_SPEED-PIT_LANE.span/Math.max(160,straightSpeed)+service);
 }
 export function maximumSpeed(car){return cleanAirTopSpeed(car)+18*(car.slipstream?.carry || 0);}
 function engineModel(car){
@@ -603,7 +611,10 @@ export function nearest(x, y,hintS) {
   // the anti-shortcut guard rejects that several-thousand-metre jump.
   // Retain continuity throughout the recoverable verge; distant recoveries
   // still use the global projection and the existing travelled-distance guard.
-  return TRACK.bridges.length && localOut && localBest<160**2 ? localOut : out;
+  const route=TRACK.bridges.length && localOut && localBest<160**2 ? localOut : out;
+  const differentLevel=route!==out && trackLayer(route.s)!==trackLayer(out.s);
+  route.surfaceDistance=differentLevel ? route.dist : out.dist;
+  return route;
 }
 export function capturePoses(cars) {
   for(const c of cars) c.previousPose={x:c.x,y:c.y,angle:c.angle,s:c.s,speed:c.speed};
@@ -836,7 +847,7 @@ export class Race {
     this.sectors=createSectorSession();
     for(const car of this.cars)startSectorLap(car,0);
     this.timingReference=createTimingReference(TRACK.length,s=>{
-      const p=racingPoint(AI_LINE,s),i=Math.floor(wrap(s,TRACK.length)/AI_LINE.step);
+      const p=racingPoint(AI_LINE,s),i=Math.min(AI_LINE.points.length-1,Math.floor(wrap(s,TRACK.length)/AI_LINE.step));
       return {...p,speed:AI_LINE.points[i].speed};
     });
     this.setup.aiSeed=this.raceSeed;
@@ -1440,7 +1451,7 @@ export class Race {
     // Read water at the physical car position, including during off-track recovery.
     c.offset=n.offset;
     c.trackWetness=trackWater(this.weather,n.s,TRACK.length,n.offset);
-    const g=grip(c,"front"),rearGrip=grip(c,"rear"),off=n.dist>TRACK.width/2;
+    const g=grip(c,"front"),rearGrip=grip(c,"rear"),off=n.surfaceDistance>TRACK.width/2;
     if(c.speed<-.1 || ((input.brake || input.reverse) && c.speed<.5)) {
       this.stepReverse(c,dt,input,n);
       return;
@@ -1472,20 +1483,24 @@ export class Race {
     if (delta < -TRACK.length / 2) delta += TRACK.length; // Reject teleporting across nearby track sections.
     const travelled=Math.hypot(dx,dy);
     if(off || next.dist>TRACK.width/2) c.recoveryDistance=(c.recoveryDistance || 0)+travelled;
-    const rejoining=next.dist<TRACK.width/2-3 && (c.recoveryDistance || 0)>0;
-    if((Math.abs(delta)<Math.max(35,c.speed*dt*3) && next.dist<190) ||
-      (rejoining && Math.abs(delta)<c.recoveryDistance+35)) c.s+=delta;
-    if(rejoining) c.recoveryDistance=0;
+    const rejoining=next.surfaceDistance<TRACK.width/2-3 && (c.recoveryDistance || 0)>0;
+    // The projection can stick to the abandoned branch after the driver
+    // rejoins a folded section. Restore distance only when the car really
+    // travelled far enough off line to account for that change in progress.
+    const continuous=Math.abs(delta)<Math.max(35,c.speed*dt*3) && next.dist<190;
+    const recovered=rejoining && next.dist<TRACK.width/2 && Math.abs(delta)<c.recoveryDistance+35;
+    if(continuous || recovered)c.s+=delta;
+    if(rejoining && (continuous || recovered))c.recoveryDistance=0;
     c.offset = next.offset;
     const entranceApproach = this.pitRequested && crossesPitEntry(previousPosition,c,entryS);
-    const limits = updateTrackLimits(c, dt, entranceApproach ? 0 : next.dist);
+    const limits = updateTrackLimits(c, dt, entranceApproach ? 0 : next.surfaceDistance);
     if (limits) this.say(limits);
     const distance = Math.hypot(dx, dy),
       effort = drivingTyreEffort(c,{qualifying:!!this.qualifying,brake,steer});
     resources(c, dt, distance, effort,{throttle,brake,corner:Math.sign(steer)*clamp(c.speed*turning/225,0,1.3),wheelspin:throttle*clamp(1-traction+(paceMode(c).power-1)*2,0,1)});
     this.tyreAdvice(c);
     recordSkid(c,this.skids,this.time,leavesSkidMarks(c));
-    if (n.dist < 120 && next.dist >= 120 && c.contactCooldown === 0) {
+    if (n.surfaceDistance < 120 && next.surfaceDistance >= 120 && c.contactCooldown === 0) {
       c.contacts++;
       c.contactCooldown = 2;
       c.speed *= 0.7;
@@ -1507,7 +1522,7 @@ export class Race {
     const delta=wrap(next.s-n.s+TRACK.length/2,TRACK.length)-TRACK.length/2;
     if(Math.abs(delta)<Math.max(35,distance*3) && next.dist<190) c.s+=delta;
     c.offset=next.offset;
-    const limits=updateTrackLimits(c,dt,next.dist);if(limits) this.say(limits);
+    const limits=updateTrackLimits(c,dt,next.surfaceDistance);if(limits) this.say(limits);
     resources(c,dt,distance,.72);
   }
   setTyreTemperature(enabled){

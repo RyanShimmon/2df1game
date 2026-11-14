@@ -398,3 +398,11 @@ body:not(.mobile-game) .school-pace-demo kbd { border:1px solid #ffffff40; paddi
 body:not(.mobile-game) .school-forecast-preview { padding:14px; margin:0 0 22px; background:var(--surface); border-radius:8px; }
 body:not(.mobile-game) .school-forecast-preview > svg { display:block; width:100%; }
 body:not(.mobile-game) .school-forecast-preview text { font:9px "DM Sans",sans-serif; fill:var(--muted); }
+
+
+body:not(.mobile-game) .track-picker-modal{overflow-y:auto}
+body:not(.mobile-game) .track-picker-modal > *{flex-shrink:0}
+body:not(.mobile-game) .track-picker-modal .track-picker-grid{overflow:visible}
+.track-search{width:100%;margin:0 0 24px;padding:14px 18px}
+.track-picker-modal [hidden]{display:none!important}
+body:not(.mobile-game) .track-search{background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:6px;font:inherit;font-size:14px}

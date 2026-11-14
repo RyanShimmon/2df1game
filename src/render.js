@@ -25,6 +25,22 @@ export function asphaltColour(wetness=0){
  const water=Math.max(0,Math.min(1,Number(wetness)||0))*.4;
  return "rgb("+[52,61,66].map((dry,i)=>Math.round(dry+([110,150,177][i]-dry)*water)).join(",")+")";
 }
+function bridgeRails(start,end){
+ const rails=new Path2D(),posts=new Path2D();
+ for(const side of [-1,1]){
+   const edge=(s,extra)=>{
+     const p=sample(s),offset=side*(TRACK.width/2+extra);
+     return [p.x-Math.sin(p.angle)*offset,p.y+Math.cos(p.angle)*offset];
+   };
+   rails.moveTo(...edge(start,8));
+   for(let s=start+5;s<end;s+=5)rails.lineTo(...edge(s,8));
+   rails.lineTo(...edge(end,8));
+   for(let s=start+8;s<end-5;s+=20){
+     posts.moveTo(...edge(s,7));posts.lineTo(...edge(s,14));
+   }
+ }
+ return {rails,posts};
+}
 // Reveal the road below only around the driver, with an explicit underpass
 // outline. Both roads and their cars retain their real collision layers.
 export function underpassView(car){
@@ -93,10 +109,11 @@ export class Renderer {
         side===1 && i===0 ? outsideRoad.moveTo(x,y) : outsideRoad.lineTo(x,y);
       });
     outsideRoad.closePath();
+    this.bridgeRails = TRACK.bridges.map(([start,end])=>bridgeRails(start,end));
     this.outsideRoad = outsideRoad;
     // Leave a proper opening in the kerbs wherever pit asphalt meets the circuit.
     const outsidePitRoad=new Path2D();
-    outsidePitRoad.rect(-5000,-5000,10000,10000);
+    outsidePitRoad.rect(bounds.minX-1000,bounds.minY-1000,bounds.maxX-bounds.minX+2000,bounds.maxY-bounds.minY+2000);
     const edges=PIT_LANE.surfacePts.map((p,i,pts)=>{
       const before=pts[Math.max(0,i-1)],after=pts[Math.min(pts.length-1,i+1)];
       return {...p,angle:Math.atan2(after.y-before.y,after.x-before.x)};
@@ -160,13 +177,13 @@ export class Renderer {
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.strokeStyle = "#153029";
-    ctx.lineWidth = 174;
+    ctx.lineWidth = TRACK.width+48;
     ctx.stroke(this.road);
     ctx.strokeStyle = "#c9c9b5";
-    ctx.lineWidth = 142;
+    ctx.lineWidth = TRACK.width+16;
     ctx.stroke(this.road);
     ctx.strokeStyle = "#df655e";
-    ctx.lineWidth = 136;
+    ctx.lineWidth = TRACK.width+10;
     ctx.setLineDash([20, 20]);
     ctx.stroke(this.road);
     ctx.setLineDash([]);
@@ -339,17 +356,22 @@ export class Renderer {
       road.lineTo(end.x,end.y);return road;
     };
     ctx.save();
-    if(view){const mask=new Path2D();mask.rect(-10000,-10000,20000,20000);mask.moveTo(view.x+view.radius,view.y);mask.arc(view.x,view.y,view.radius,0,Math.PI*2);ctx.clip(mask,"evenodd");}
-    for(const [a,b] of TRACK.bridges) {
+    if(view){const mask=new Path2D();mask.rect(TRACK.bounds.minX-1000,TRACK.bounds.minY-1000,TRACK.bounds.maxX-TRACK.bounds.minX+2000,TRACK.bounds.maxY-TRACK.bounds.minY+2000);mask.moveTo(view.x+view.radius,view.y);mask.arc(view.x,view.y,view.radius,0,Math.PI*2);ctx.clip(mask,"evenodd");}
+    for(const [index,[a,b]] of TRACK.bridges.entries()) {
       const road=path(a,b);
       ctx.save();ctx.lineCap="butt";ctx.lineJoin="round";
       // Inset the shadow so it cannot cast a transverse dark seam onto the
       // continuing road at either end. The full road paint covers its ends.
       ctx.shadowColor="#0009";ctx.shadowBlur=20;ctx.shadowOffsetY=18;
-      ctx.strokeStyle="#c9c9b5";ctx.lineWidth=142;ctx.stroke(path(a+55,b-55));
+      const inset=Math.min(55,(b-a)*.2);
+      ctx.strokeStyle="#849397";ctx.lineWidth=TRACK.width+18;ctx.stroke(path(a+inset,b-inset));
       ctx.shadowBlur=0;ctx.shadowOffsetY=0;ctx.stroke(road);
-      ctx.strokeStyle="#df655e";ctx.lineWidth=136;ctx.setLineDash([20,20]);ctx.lineDashOffset=-a;ctx.stroke(road);ctx.setLineDash([]);ctx.lineDashOffset=0;
+      ctx.strokeStyle="#404c53";ctx.lineWidth=TRACK.width+10;ctx.stroke(road);
       ctx.strokeStyle=asphaltColour(race?.weather?.wetness);ctx.lineWidth=TRACK.width;ctx.stroke(road);
+      const {rails,posts}=this.bridgeRails?.[index] ?? bridgeRails(a,b);
+      ctx.strokeStyle="#242d34";ctx.lineWidth=11;ctx.stroke(rails);
+      ctx.strokeStyle="#77858b";ctx.lineWidth=5;ctx.stroke(posts);
+      ctx.strokeStyle="#aebbbd";ctx.lineWidth=4;ctx.stroke(rails);
       ctx.restore();
     }
     if(showGuide)drawDrivingGuide(ctx,this.guidePaths[1]);
@@ -361,9 +383,9 @@ export class Renderer {
       ctx.fillStyle=TRACK.theme==="city" ? "#364247" : "#2a443c";
       ctx.fillRect(view.x-view.radius,view.y-view.radius,view.radius*2,view.radius*2);
       const s=wrap(race.player.s,TRACK.length),a=Math.max(0,s-240),b=Math.min(TRACK.length,s+240),road=path(a,b);
-      ctx.lineCap="butt";ctx.lineJoin="round";ctx.strokeStyle="#153029";ctx.lineWidth=174;ctx.stroke(road);
-      ctx.strokeStyle="#c9c9b5";ctx.lineWidth=142;ctx.stroke(road);
-      ctx.strokeStyle="#df655e";ctx.lineWidth=136;ctx.setLineDash([20,20]);ctx.lineDashOffset=-a;ctx.stroke(road);ctx.setLineDash([]);ctx.lineDashOffset=0;
+      ctx.lineCap="butt";ctx.lineJoin="round";ctx.strokeStyle="#153029";ctx.lineWidth=TRACK.width+48;ctx.stroke(road);
+      ctx.strokeStyle="#c9c9b5";ctx.lineWidth=TRACK.width+16;ctx.stroke(road);
+      ctx.strokeStyle="#df655e";ctx.lineWidth=TRACK.width+10;ctx.setLineDash([20,20]);ctx.lineDashOffset=-a;ctx.stroke(road);ctx.setLineDash([]);ctx.lineDashOffset=0;
       ctx.strokeStyle=asphaltColour(race.weather?.wetness);ctx.lineWidth=TRACK.width;ctx.stroke(road);
       if(showGuide)drawDrivingGuide(ctx,this.guidePaths[0]);
       for(const c of race.cars)if(!c.garage&&!trackLayer(c.s))this.car(ctx,interpolatedCar(c,alpha));

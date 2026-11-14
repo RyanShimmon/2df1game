@@ -41,7 +41,7 @@ export function buildRacingLine(track,sample,apexes){
   racingLines.set(key,line);return line;
 }
 export function racingPoint(line,s){
-  const f=wrap(s,line.length)/line.step,i=Math.floor(f),t=f-i,a=line.points[i],b=line.points[(i+1)%line.points.length];
+  const f=wrap(s,line.length)/line.step,i=Math.min(line.points.length-1,Math.floor(f)),t=f-i,a=line.points[i],b=line.points[(i+1)%line.points.length];
   if(!line.centers)return {slope:(a.slope || 0)+((b.slope || 0)-(a.slope || 0))*t,offset:a.offset+(b.offset-a.offset)*t,angle:a.angle+angleDiff(b.angle,a.angle)*t,curvature:a.curvature+(b.curvature-a.curvature)*t,distanceScale:a.distanceScale+(b.distanceScale-a.distanceScale)*t};
   // Interpolate the actual world-space racing arc. Interpolating lateral
   // offsets alone introduces steering reversals as the centreline bends below
@@ -354,7 +354,7 @@ function paceRoad(line){
 }
 export function paceGeometry(line,s,shift=0){
  if(!line.centers)return laneGeometry(line,s,shift);
- const pos=wrap(s,line.length),f=pos/line.step,i=Math.floor(f),t=f-i,{x,y}=paceRoad(line)[i];
+ const pos=wrap(s,line.length),f=pos/line.step,i=Math.min(line.points.length-1,Math.floor(f)),t=f-i,{x,y}=paceRoad(line)[i];
  const dx=x[1]+t*(2*x[2]+3*t*x[3]),dy=y[1]+t*(2*y[2]+3*t*y[3]);
  const ddx=2*x[2]+6*t*x[3],ddy=2*y[2]+6*t*y[3],speed=Math.hypot(dx,dy);
  const k=(dx*ddy-dy*ddx)/Math.max(1,speed**3);

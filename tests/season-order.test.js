@@ -35,3 +35,13 @@ test('legacy saves retain completed rounds and an active weekend while future ro
  assert.ok(validSeasonOrder(loaded.seasonOrder));assert.deepEqual(loaded.seasonOrder.slice(0,4),WEEKENDS.slice(0,4).map(w=>w.track));
  assert.equal(loaded.weekend.setup.track,before.setup.track);assert.equal(loaded.weekend.setup.laps,12);assert.equal(loaded.weekend.setup.raceFormat,'sprint');assert.deepEqual(loaded.weekend.inventories,before.inventories);
 });
+
+test('an unavailable championship is parked intact before a new career can be started',()=>{
+ const saved=newCareer(profile);
+ saved.calendarId='other-calendar';saved.round=17;
+ const raw=JSON.stringify(saved),slots=new Map([['v10-career-v1',raw]]);
+ const result=loadCareer({getItem:key=>slots.get(key),setItem:(key,value)=>slots.set(key,value)});
+ assert.equal(result.profile,null);
+ assert.equal(slots.get('v10-career-v1.parked'),raw);
+ assert.equal(slots.get('v10-career-v1'),raw);
+});

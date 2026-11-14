@@ -31,9 +31,9 @@ test('underpass visibility opens only below a bridge and fades before leaving it
 test('bridge shadows stop short of the tarmac joins',()=>{
  const Original=globalThis.Path2D;globalThis.Path2D=class{points=[];moveTo(x,y){this.points.push([x,y]);}lineTo(x,y){this.points.push([x,y]);}};
  try{
-  selectTrack('metro');const strokes=[],ctx={save(){},restore(){},setLineDash(){},stroke(path){strokes.push({path,shadow:this.shadowBlur});}};
+  selectTrack('metro');const strokes=[],ctx={save(){},restore(){},setLineDash(){},stroke(path){strokes.push({path,shadow:this.shadowBlur,width:this.lineWidth});}};
   Renderer.prototype.flyovers.call({},ctx,null);
-  const shadow=strokes.find(s=>s.shadow>0),surface=strokes.at(-1),start=sample(TRACK.bridges[0][0]);
+  const shadow=strokes.find(s=>s.shadow>0),surface=strokes.find(s=>s.width===TRACK.width),start=sample(TRACK.bridges[0][0]);
   assert.ok(Math.hypot(shadow.path.points[0][0]-start.x,shadow.path.points[0][1]-start.y)>45);
   assert.deepEqual(surface.path.points[0],[start.x,start.y]);
  }finally{globalThis.Path2D=Original;selectTrack('northline');}

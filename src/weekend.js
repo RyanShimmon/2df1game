@@ -410,7 +410,7 @@ export function prepareRace(r, w, startId) {
 }
 // Fuel covers one out lap, one push lap and one in lap, including the pit detour.
 export function getQualifyingFuel(upgrades={}) {
-  const laps=3+(PIT_LANE.length-(TRACK.length-TRACK.pitEntry+TRACK.pitExit))/TRACK.length;
+  const laps=3+(PIT_LANE.length-PIT_LANE.span)/TRACK.length;
   return +(laps*fuelPerLap("push",upgrades)+.12).toFixed(2);
 }
 export const QUALIFYING_FUEL=getQualifyingFuel();

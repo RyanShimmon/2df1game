@@ -78,3 +78,9 @@ for(const mode of ['quick','career'])for(const start of [8,20,22])test(mode+' re
 test('an old career checkpoint cannot resume into the next round',()=>{
  const {career,session}=weekend('career');career.round++;assert.equal(restoreRaceSession(session,career),null);
 });
+
+test('a quick race checkpoint for an unavailable track cannot resume on a substitute circuit',()=>{
+ const {session}=weekend('quick');
+ session.setup.track='unavailable-circuit';
+ assert.equal(restoreRaceSession(session,null),null);
+});

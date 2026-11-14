@@ -1,6 +1,6 @@
 import {addWetRaceSets} from "./tyre-stock.js";
 import {hasWetRaceConditions} from "./weather.js";
-import {Race,TRACK,gridSlot,sample,raceProgress,completedRaceLaps} from "./core.js";
+import {Race,CIRCUITS,TRACK,gridSlot,sample,raceProgress,completedRaceLaps} from "./core.js";
 import {seededRandom} from "./racecraft.js";
 import {restoreSectorDisplay,startSectorLap} from "./sectors.js";
 import {outstandingPenalty} from "./timing.js";
@@ -39,6 +39,7 @@ export function restartPenalty(session,count=session.restarts+1){
 export function restoreRaceSession(session,career,{restart=false}={}){
   if(session?.version!==1 || !["career","quick"].includes(session.mode) ||
     !Number.isSafeInteger(session.restarts) || session.restarts<0)return null;
+  if(session.setup?.track && !CIRCUITS.some(track=>track.id===session.setup.track))return null;
   const weekend=session.mode==="career" ? career?.weekend : null;
   if(session.mode==="career" && (weekend?.phase!=="R" || career.round!==session.round ||
     career.season!==session.season || weekend.setup.aiSeed!==session.setup.aiSeed ||
